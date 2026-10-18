@@ -1,0 +1,201 @@
+issue_id,title,category,severity,reported_by,latitude,longitude,status,notes
+ISS_001,Low pressure during morning supply hours (1),water_shortage,medium,resident_interview,19.3796613,72.8258163,reported,Observed grievance #1
+ISS_002,Overflowing runoff into pedestrian lane (2),drainage,high,resident_interview,19.3806575,72.8227689,under_inspection,Observed grievance #2
+ISS_003,Hand pump handle jammed/broken (3),water_shortage,low,resident_interview,19.3851407,72.8248708,in_progress,Observed grievance #3
+ISS_004,Broken road edge near culvert (4),road_damage,high,resident_interview,19.3796671,72.8306382,resolved,Observed grievance #4
+ISS_005,Lack of waste bin causing scattered litter (5),waste_heap,medium,field_observed,19.3862598,72.8234858,reported,Observed grievance #5
+ISS_006,Hand pump handle jammed/broken (6),water_shortage,high,field_observed,19.3818207,72.822338,in_progress,Observed grievance #6
+ISS_007,Broken road edge near culvert (7),road_damage,high,field_observed,19.3787834,72.8251858,under_inspection,Observed grievance #7
+ISS_008,Stagnant drain puddle breeding mosquitoes (8),drainage,medium,field_observed,19.3853417,72.8289034,reported,Observed grievance #8
+ISS_009,Lack of waste bin causing scattered litter (9),waste_heap,medium,field_observed,19.3813616,72.8268215,reported,Observed grievance #9
+ISS_010,Non-functional streetlight pole (10),dark_zone,high,resident_interview,19.3827385,72.8278097,in_progress,Observed grievance #10
+ISS_011,Open drain blocked by plastic & silt (11),drainage,medium,resident_interview,19.3790107,72.8228969,reported,Observed grievance #11
+ISS_012,Overflowing runoff into pedestrian lane (12),drainage,medium,field_observed,19.3780233,72.8271895,reported,Observed grievance #12
+ISS_013,Exposed wiring at lamp post (13),dark_zone,low,field_observed,19.3837419,72.824235,reported,Observed grievance #13
+ISS_014,Stagnant drain puddle breeding mosquitoes (14),drainage,high,field_observed,19.3826366,72.829343,in_progress,Observed grievance #14
+ISS_015,Severe asphalt erosion after rains (15),road_damage,high,resident_interview,19.3833418,72.827293,in_progress,Observed grievance #15
+ISS_016,Non-functional streetlight pole (16),dark_zone,high,field_observed,19.3851437,72.8229886,in_progress,Observed grievance #16
+ISS_017,Deep pothole cluster on main road (17),road_damage,medium,field_observed,19.3838195,72.8216462,reported,Observed grievance #17
+ISS_018,Stagnant drain puddle breeding mosquitoes (18),drainage,high,field_observed,19.379573,72.8214263,reported,Observed grievance #18
+ISS_019,Broken road edge near culvert (19),road_damage,medium,resident_interview,19.381247,72.8247141,under_inspection,Observed grievance #19
+ISS_020,Unpaved muddy stretch slowing transit (20),road_damage,medium,field_observed,19.386153,72.8236585,under_inspection,Observed grievance #20
+ISS_021,Severe asphalt erosion after rains (21),road_damage,medium,field_observed,19.3849295,72.8274609,reported,Observed grievance #21
+ISS_022,Debris dumped alongside field edge (22),waste_heap,medium,field_observed,19.3830097,72.8259933,under_inspection,Observed grievance #22
+ISS_023,Deep pothole cluster on main road (23),road_damage,low,field_observed,19.3803008,72.8236602,resolved,Observed grievance #23
+ISS_024,Deep pothole cluster on main road (24),road_damage,medium,field_observed,19.3807185,72.8224924,in_progress,Observed grievance #24
+ISS_025,Broken road edge near culvert (25),road_damage,low,resident_interview,19.3845876,72.822272,in_progress,Observed grievance #25
+ISS_026,Stagnant drain puddle breeding mosquitoes (26),drainage,medium,resident_interview,19.3856606,72.8296466,resolved,Observed grievance #26
+ISS_027,Exposed wiring at lamp post (27),dark_zone,low,field_observed,19.3840428,72.8234348,reported,Observed grievance #27
+ISS_028,Open drain blocked by plastic & silt (28),drainage,low,resident_interview,19.3852858,72.8275171,under_inspection,Observed grievance #28
+ISS_029,Stagnant drain puddle breeding mosquitoes (29),drainage,high,resident_interview,19.3848999,72.8291069,resolved,Observed grievance #29
+ISS_030,Debris dumped alongside field edge (30),waste_heap,low,field_observed,19.3793473,72.8271408,reported,Observed grievance #30
+ISS_031,Overflowing runoff into pedestrian lane (31),drainage,high,field_observed,19.3818155,72.8295957,in_progress,Observed grievance #31
+ISS_032,Deep pothole cluster on main road (32),road_damage,medium,resident_interview,19.3793769,72.8249239,under_inspection,Observed grievance #32
+ISS_033,Unpaved muddy stretch slowing transit (33),road_damage,high,resident_interview,19.3801171,72.8305622,under_inspection,Observed grievance #33
+ISS_034,Broken road edge near culvert (34),road_damage,high,resident_interview,19.3858233,72.8223315,under_inspection,Observed grievance #34
+ISS_035,Overflowing runoff into pedestrian lane (35),drainage,high,field_observed,19.382256,72.8220215,resolved,Observed grievance #35
+ISS_036,Stagnant drain puddle breeding mosquitoes (36),drainage,medium,resident_interview,19.3828182,72.8275869,in_progress,Observed grievance #36
+ISS_037,Lack of waste bin causing scattered litter (37),waste_heap,low,field_observed,19.379606,72.8304283,reported,Observed grievance #37
+ISS_038,Severe asphalt erosion after rains (38),road_damage,high,field_observed,19.3808104,72.8290888,in_progress,Observed grievance #38
+ISS_039,Overflowing runoff into pedestrian lane (39),drainage,medium,field_observed,19.3800722,72.8217642,reported,Observed grievance #39
+ISS_040,Hand pump handle jammed/broken (40),water_shortage,high,field_observed,19.3798557,72.8237937,reported,Observed grievance #40
+ISS_041,Stagnant drain puddle breeding mosquitoes (41),drainage,low,resident_interview,19.3837416,72.8303032,under_inspection,Observed grievance #41
+ISS_042,Unattended domestic garbage dump (42),waste_heap,medium,resident_interview,19.380312,72.8235306,under_inspection,Observed grievance #42
+ISS_043,Stagnant drain puddle breeding mosquitoes (43),drainage,high,field_observed,19.3836881,72.8288117,reported,Observed grievance #43
+ISS_044,Broken road edge near culvert (44),road_damage,medium,resident_interview,19.3785261,72.8292513,resolved,Observed grievance #44
+ISS_045,Low pressure during morning supply hours (45),water_shortage,medium,resident_interview,19.379276,72.8259545,in_progress,Observed grievance #45
+ISS_046,Open drain blocked by plastic & silt (46),drainage,medium,resident_interview,19.3804709,72.8248635,under_inspection,Observed grievance #46
+ISS_047,Overflowing runoff into pedestrian lane (47),drainage,high,field_observed,19.3833734,72.8255012,reported,Observed grievance #47
+ISS_048,Open drain blocked by plastic & silt (48),drainage,low,field_observed,19.3840826,72.8232696,resolved,Observed grievance #48
+ISS_049,Overflowing runoff into pedestrian lane (49),drainage,high,resident_interview,19.3819845,72.8298939,resolved,Observed grievance #49
+ISS_050,Unattended domestic garbage dump (50),waste_heap,high,resident_interview,19.3820121,72.8255062,in_progress,Observed grievance #50
+ISS_051,Severe asphalt erosion after rains (51),road_damage,medium,field_observed,19.3845207,72.8298246,reported,Observed grievance #51
+ISS_052,Severe asphalt erosion after rains (52),road_damage,high,resident_interview,19.3781424,72.8220569,reported,Observed grievance #52
+ISS_053,Deep pothole cluster on main road (53),road_damage,low,field_observed,19.3810698,72.8308828,reported,Observed grievance #53
+ISS_054,Lack of waste bin causing scattered litter (54),waste_heap,low,field_observed,19.3853684,72.8254327,reported,Observed grievance #54
+ISS_055,Broken road edge near culvert (55),road_damage,low,field_observed,19.383429,72.8214783,reported,Observed grievance #55
+ISS_056,Lack of waste bin causing scattered litter (56),waste_heap,low,field_observed,19.381035,72.8213802,resolved,Observed grievance #56
+ISS_057,Stagnant drain puddle breeding mosquitoes (57),drainage,high,resident_interview,19.3861497,72.8284621,under_inspection,Observed grievance #57
+ISS_058,Debris dumped alongside field edge (58),waste_heap,low,resident_interview,19.3849536,72.8275904,reported,Observed grievance #58
+ISS_059,Non-functional streetlight pole (59),dark_zone,medium,field_observed,19.3803841,72.8290213,reported,Observed grievance #59
+ISS_060,Unattended domestic garbage dump (60),waste_heap,low,resident_interview,19.3838076,72.8220537,reported,Observed grievance #60
+ISS_061,Unattended domestic garbage dump (61),waste_heap,medium,field_observed,19.3833618,72.8213557,reported,Observed grievance #61
+ISS_062,Open drain blocked by plastic & silt (62),drainage,medium,field_observed,19.3816107,72.8260858,reported,Observed grievance #62
+ISS_063,Overflowing runoff into pedestrian lane (63),drainage,high,field_observed,19.3813026,72.824876,reported,Observed grievance #63
+ISS_064,Unpaved muddy stretch slowing transit (64),road_damage,medium,resident_interview,19.381092,72.8256195,in_progress,Observed grievance #64
+ISS_065,Unpaved muddy stretch slowing transit (65),road_damage,high,resident_interview,19.3835544,72.8309159,resolved,Observed grievance #65
+ISS_066,Overflowing runoff into pedestrian lane (66),drainage,low,field_observed,19.3819817,72.8307075,reported,Observed grievance #66
+ISS_067,Overflowing runoff into pedestrian lane (67),drainage,medium,field_observed,19.3854868,72.8304232,reported,Observed grievance #67
+ISS_068,Unpaved muddy stretch slowing transit (68),road_damage,high,field_observed,19.3840264,72.8288384,in_progress,Observed grievance #68
+ISS_069,Overflowing runoff into pedestrian lane (69),drainage,low,resident_interview,19.3786294,72.8245484,reported,Observed grievance #69
+ISS_070,Lack of waste bin causing scattered litter (70),waste_heap,medium,resident_interview,19.3837615,72.8251213,reported,Observed grievance #70
+ISS_071,Stagnant drain puddle breeding mosquitoes (71),drainage,high,resident_interview,19.3804403,72.8264962,in_progress,Observed grievance #71
+ISS_072,Hand pump handle jammed/broken (72),water_shortage,medium,resident_interview,19.3833353,72.8293053,reported,Observed grievance #72
+ISS_073,Debris dumped alongside field edge (73),waste_heap,medium,field_observed,19.3841212,72.8216871,under_inspection,Observed grievance #73
+ISS_074,Pitch dark curve near village school (74),dark_zone,low,field_observed,19.3800775,72.825243,under_inspection,Observed grievance #74
+ISS_075,Community tap pipe leakage (75),water_shortage,medium,field_observed,19.3821117,72.8218262,reported,Observed grievance #75
+ISS_076,Unattended domestic garbage dump (76),waste_heap,low,field_observed,19.3797129,72.8261466,reported,Observed grievance #76
+ISS_077,Pitch dark curve near village school (77),dark_zone,high,field_observed,19.378471,72.829989,in_progress,Observed grievance #77
+ISS_078,Exposed wiring at lamp post (78),dark_zone,medium,resident_interview,19.3814063,72.8288248,reported,Observed grievance #78
+ISS_079,Severe asphalt erosion after rains (79),road_damage,medium,resident_interview,19.3812665,72.8232784,reported,Observed grievance #79
+ISS_080,Stagnant drain puddle breeding mosquitoes (80),drainage,high,resident_interview,19.3869593,72.8307599,in_progress,Observed grievance #80
+ISS_081,Unpaved muddy stretch slowing transit (81),road_damage,high,field_observed,19.3820172,72.8276735,under_inspection,Observed grievance #81
+ISS_082,Broken road edge near culvert (82),road_damage,medium,resident_interview,19.3810021,72.8211043,reported,Observed grievance #82
+ISS_083,Hand pump handle jammed/broken (83),water_shortage,medium,field_observed,19.3832243,72.8235541,in_progress,Observed grievance #83
+ISS_084,Community tap pipe leakage (84),water_shortage,medium,field_observed,19.3787989,72.8236071,reported,Observed grievance #84
+ISS_085,Lack of waste bin causing scattered litter (85),waste_heap,medium,field_observed,19.386655,72.8216925,in_progress,Observed grievance #85
+ISS_086,Severe asphalt erosion after rains (86),road_damage,medium,resident_interview,19.3837146,72.8305983,in_progress,Observed grievance #86
+ISS_087,Unattended domestic garbage dump (87),waste_heap,medium,field_observed,19.3847935,72.8257826,under_inspection,Observed grievance #87
+ISS_088,Low pressure during morning supply hours (88),water_shortage,medium,resident_interview,19.3795343,72.8299581,under_inspection,Observed grievance #88
+ISS_089,Community tap pipe leakage (89),water_shortage,low,resident_interview,19.3816853,72.8242222,resolved,Observed grievance #89
+ISS_090,Pitch dark curve near village school (90),dark_zone,medium,field_observed,19.3818042,72.8222523,reported,Observed grievance #90
+ISS_091,Hand pump handle jammed/broken (91),water_shortage,high,resident_interview,19.3853963,72.8257434,in_progress,Observed grievance #91
+ISS_092,Severe asphalt erosion after rains (92),road_damage,high,field_observed,19.3780111,72.8221396,reported,Observed grievance #92
+ISS_093,Lack of waste bin causing scattered litter (93),waste_heap,low,field_observed,19.3807077,72.8258602,reported,Observed grievance #93
+ISS_094,Overflowing runoff into pedestrian lane (94),drainage,medium,field_observed,19.3868311,72.830203,reported,Observed grievance #94
+ISS_095,Deep pothole cluster on main road (95),road_damage,medium,field_observed,19.382274,72.8262077,resolved,Observed grievance #95
+ISS_096,Debris dumped alongside field edge (96),waste_heap,medium,field_observed,19.3814427,72.827165,resolved,Observed grievance #96
+ISS_097,Broken road edge near culvert (97),road_damage,high,resident_interview,19.3790785,72.8225664,reported,Observed grievance #97
+ISS_098,Unattended domestic garbage dump (98),waste_heap,high,resident_interview,19.3867675,72.8214374,reported,Observed grievance #98
+ISS_099,Stagnant drain puddle breeding mosquitoes (99),drainage,high,field_observed,19.3781802,72.8221081,in_progress,Observed grievance #99
+ISS_100,Unattended domestic garbage dump (100),waste_heap,medium,field_observed,19.3846346,72.8269853,reported,Observed grievance #100
+ISS_101,Broken road edge near culvert (101),road_damage,medium,resident_interview,19.3849174,72.8219501,reported,Observed grievance #101
+ISS_102,Non-functional streetlight pole (102),dark_zone,high,field_observed,19.3801929,72.8247599,under_inspection,Observed grievance #102
+ISS_103,Unattended domestic garbage dump (103),waste_heap,medium,field_observed,19.384044,72.8265009,under_inspection,Observed grievance #103
+ISS_104,Deep pothole cluster on main road (104),road_damage,medium,resident_interview,19.3788364,72.8248865,resolved,Observed grievance #104
+ISS_105,Overflowing runoff into pedestrian lane (105),drainage,high,field_observed,19.3803134,72.8226368,reported,Observed grievance #105
+ISS_106,Exposed wiring at lamp post (106),dark_zone,medium,resident_interview,19.3850911,72.8237379,reported,Observed grievance #106
+ISS_107,Stagnant drain puddle breeding mosquitoes (107),drainage,high,field_observed,19.3857822,72.8302832,under_inspection,Observed grievance #107
+ISS_108,Deep pothole cluster on main road (108),road_damage,low,field_observed,19.3834764,72.8277598,in_progress,Observed grievance #108
+ISS_109,Stagnant drain puddle breeding mosquitoes (109),drainage,high,resident_interview,19.3825615,72.8259605,under_inspection,Observed grievance #109
+ISS_110,Stagnant drain puddle breeding mosquitoes (110),drainage,medium,field_observed,19.3794337,72.8211271,under_inspection,Observed grievance #110
+ISS_111,Low pressure during morning supply hours (111),water_shortage,medium,resident_interview,19.378568,72.8309242,reported,Observed grievance #111
+ISS_112,Hand pump handle jammed/broken (112),water_shortage,medium,field_observed,19.3790588,72.8277145,in_progress,Observed grievance #112
+ISS_113,Overflowing runoff into pedestrian lane (113),drainage,medium,field_observed,19.3800462,72.8241692,reported,Observed grievance #113
+ISS_114,Broken road edge near culvert (114),road_damage,medium,field_observed,19.3810751,72.8297927,reported,Observed grievance #114
+ISS_115,Low pressure during morning supply hours (115),water_shortage,high,field_observed,19.3814282,72.8235843,under_inspection,Observed grievance #115
+ISS_116,Stagnant drain puddle breeding mosquitoes (116),drainage,medium,field_observed,19.3811169,72.8264402,reported,Observed grievance #116
+ISS_117,Broken road edge near culvert (117),road_damage,medium,resident_interview,19.3801515,72.8273607,reported,Observed grievance #117
+ISS_118,Non-functional streetlight pole (118),dark_zone,medium,resident_interview,19.3825875,72.8232106,in_progress,Observed grievance #118
+ISS_119,Hand pump handle jammed/broken (119),water_shortage,high,field_observed,19.3854276,72.830784,under_inspection,Observed grievance #119
+ISS_120,Low pressure during morning supply hours (120),water_shortage,medium,field_observed,19.3805173,72.8284819,in_progress,Observed grievance #120
+ISS_121,Unattended domestic garbage dump (121),waste_heap,medium,field_observed,19.3864815,72.8265781,reported,Observed grievance #121
+ISS_122,Stagnant drain puddle breeding mosquitoes (122),drainage,medium,field_observed,19.38586,72.8228059,in_progress,Observed grievance #122
+ISS_123,Lack of waste bin causing scattered litter (123),waste_heap,medium,resident_interview,19.3794559,72.8215386,reported,Observed grievance #123
+ISS_124,Open drain blocked by plastic & silt (124),drainage,medium,resident_interview,19.3850765,72.8242006,reported,Observed grievance #124
+ISS_125,Deep pothole cluster on main road (125),road_damage,high,resident_interview,19.3831713,72.8285319,resolved,Observed grievance #125
+ISS_126,Overflowing runoff into pedestrian lane (126),drainage,low,field_observed,19.3830992,72.8236933,in_progress,Observed grievance #126
+ISS_127,Open drain blocked by plastic & silt (127),drainage,high,field_observed,19.3815194,72.8263956,under_inspection,Observed grievance #127
+ISS_128,Low pressure during morning supply hours (128),water_shortage,medium,field_observed,19.3825104,72.8282795,reported,Observed grievance #128
+ISS_129,Unpaved muddy stretch slowing transit (129),road_damage,high,resident_interview,19.3815746,72.8220794,in_progress,Observed grievance #129
+ISS_130,Broken road edge near culvert (130),road_damage,medium,field_observed,19.3828576,72.827853,under_inspection,Observed grievance #130
+ISS_131,Unpaved muddy stretch slowing transit (131),road_damage,medium,field_observed,19.3836516,72.8219187,in_progress,Observed grievance #131
+ISS_132,Unpaved muddy stretch slowing transit (132),road_damage,high,resident_interview,19.3840687,72.8306513,in_progress,Observed grievance #132
+ISS_133,Hand pump handle jammed/broken (133),water_shortage,medium,field_observed,19.3827923,72.8258839,reported,Observed grievance #133
+ISS_134,Unpaved muddy stretch slowing transit (134),road_damage,medium,field_observed,19.3844928,72.8225068,reported,Observed grievance #134
+ISS_135,Low pressure during morning supply hours (135),water_shortage,medium,field_observed,19.3792715,72.8244238,under_inspection,Observed grievance #135
+ISS_136,Overflowing runoff into pedestrian lane (136),drainage,high,field_observed,19.3799078,72.8251342,reported,Observed grievance #136
+ISS_137,Open drain blocked by plastic & silt (137),drainage,high,field_observed,19.3853686,72.8285819,reported,Observed grievance #137
+ISS_138,Unattended domestic garbage dump (138),waste_heap,low,field_observed,19.3809028,72.8284342,resolved,Observed grievance #138
+ISS_139,Open drain blocked by plastic & silt (139),drainage,high,resident_interview,19.378206,72.8271194,under_inspection,Observed grievance #139
+ISS_140,Debris dumped alongside field edge (140),waste_heap,high,field_observed,19.3793841,72.8220593,in_progress,Observed grievance #140
+ISS_141,Open drain blocked by plastic & silt (141),drainage,medium,field_observed,19.3800125,72.8225157,under_inspection,Observed grievance #141
+ISS_142,Open drain blocked by plastic & silt (142),drainage,high,field_observed,19.3866159,72.8219376,under_inspection,Observed grievance #142
+ISS_143,Pitch dark curve near village school (143),dark_zone,medium,field_observed,19.3831574,72.8267717,reported,Observed grievance #143
+ISS_144,Unpaved muddy stretch slowing transit (144),road_damage,medium,resident_interview,19.3863946,72.8297714,reported,Observed grievance #144
+ISS_145,Deep pothole cluster on main road (145),road_damage,medium,field_observed,19.3831765,72.825338,reported,Observed grievance #145
+ISS_146,Lack of waste bin causing scattered litter (146),waste_heap,high,field_observed,19.3823142,72.8226085,reported,Observed grievance #146
+ISS_147,Unpaved muddy stretch slowing transit (147),road_damage,medium,field_observed,19.3808235,72.8265804,in_progress,Observed grievance #147
+ISS_148,Unattended domestic garbage dump (148),waste_heap,medium,field_observed,19.3834573,72.8291175,reported,Observed grievance #148
+ISS_149,Open drain blocked by plastic & silt (149),drainage,medium,resident_interview,19.3792528,72.8284171,under_inspection,Observed grievance #149
+ISS_150,Exposed wiring at lamp post (150),dark_zone,low,field_observed,19.3860844,72.8298145,reported,Observed grievance #150
+ISS_151,Community tap pipe leakage (151),water_shortage,high,resident_interview,19.385464,72.823779,reported,Observed grievance #151
+ISS_152,Community tap pipe leakage (152),water_shortage,medium,resident_interview,19.3808578,72.8229395,reported,Observed grievance #152
+ISS_153,Non-functional streetlight pole (153),dark_zone,high,field_observed,19.3865752,72.8297982,reported,Observed grievance #153
+ISS_154,Open drain blocked by plastic & silt (154),drainage,low,field_observed,19.3854268,72.8275756,reported,Observed grievance #154
+ISS_155,Non-functional streetlight pole (155),dark_zone,high,resident_interview,19.3839968,72.8241093,reported,Observed grievance #155
+ISS_156,Severe asphalt erosion after rains (156),road_damage,low,resident_interview,19.3790959,72.8284235,reported,Observed grievance #156
+ISS_157,Stagnant drain puddle breeding mosquitoes (157),drainage,high,field_observed,19.3823041,72.8291512,in_progress,Observed grievance #157
+ISS_158,Deep pothole cluster on main road (158),road_damage,high,field_observed,19.382555,72.8271498,reported,Observed grievance #158
+ISS_159,Stagnant drain puddle breeding mosquitoes (159),drainage,high,field_observed,19.380093,72.8278788,reported,Observed grievance #159
+ISS_160,Unpaved muddy stretch slowing transit (160),road_damage,medium,field_observed,19.3787197,72.8247526,under_inspection,Observed grievance #160
+ISS_161,Unattended domestic garbage dump (161),waste_heap,medium,resident_interview,19.3849905,72.826387,reported,Observed grievance #161
+ISS_162,Lack of waste bin causing scattered litter (162),waste_heap,medium,field_observed,19.3790983,72.8262416,in_progress,Observed grievance #162
+ISS_163,Exposed wiring at lamp post (163),dark_zone,high,field_observed,19.3833486,72.8294805,under_inspection,Observed grievance #163
+ISS_164,Deep pothole cluster on main road (164),road_damage,low,field_observed,19.386428,72.8293996,reported,Observed grievance #164
+ISS_165,Community tap pipe leakage (165),water_shortage,medium,resident_interview,19.3858849,72.8293268,under_inspection,Observed grievance #165
+ISS_166,Overflowing runoff into pedestrian lane (166),drainage,high,field_observed,19.3804998,72.8211103,reported,Observed grievance #166
+ISS_167,Unpaved muddy stretch slowing transit (167),road_damage,high,field_observed,19.385663,72.8284955,under_inspection,Observed grievance #167
+ISS_168,Stagnant drain puddle breeding mosquitoes (168),drainage,low,resident_interview,19.378003,72.8285868,reported,Observed grievance #168
+ISS_169,Open drain blocked by plastic & silt (169),drainage,medium,resident_interview,19.3781592,72.8277838,in_progress,Observed grievance #169
+ISS_170,Low pressure during morning supply hours (170),water_shortage,high,resident_interview,19.383423,72.8285626,reported,Observed grievance #170
+ISS_171,Overflowing runoff into pedestrian lane (171),drainage,high,field_observed,19.3812832,72.8294197,under_inspection,Observed grievance #171
+ISS_172,Overflowing runoff into pedestrian lane (172),drainage,high,resident_interview,19.3814781,72.8257032,under_inspection,Observed grievance #172
+ISS_173,Deep pothole cluster on main road (173),road_damage,high,resident_interview,19.38308,72.8260205,reported,Observed grievance #173
+ISS_174,Deep pothole cluster on main road (174),road_damage,medium,field_observed,19.379726,72.8222471,reported,Observed grievance #174
+ISS_175,Unpaved muddy stretch slowing transit (175),road_damage,medium,field_observed,19.3799058,72.8248538,in_progress,Observed grievance #175
+ISS_176,Pitch dark curve near village school (176),dark_zone,medium,resident_interview,19.3823614,72.8274337,in_progress,Observed grievance #176
+ISS_177,Deep pothole cluster on main road (177),road_damage,high,field_observed,19.3847883,72.828804,reported,Observed grievance #177
+ISS_178,Broken road edge near culvert (178),road_damage,medium,field_observed,19.3835755,72.8231721,in_progress,Observed grievance #178
+ISS_179,Broken road edge near culvert (179),road_damage,medium,field_observed,19.3806762,72.8223782,resolved,Observed grievance #179
+ISS_180,Debris dumped alongside field edge (180),waste_heap,medium,resident_interview,19.381873,72.8276304,in_progress,Observed grievance #180
+ISS_181,Non-functional streetlight pole (181),dark_zone,medium,field_observed,19.379536,72.8210188,reported,Observed grievance #181
+ISS_182,Unattended domestic garbage dump (182),waste_heap,medium,field_observed,19.3786717,72.8227837,in_progress,Observed grievance #182
+ISS_183,Hand pump handle jammed/broken (183),water_shortage,medium,resident_interview,19.3850443,72.8212907,reported,Observed grievance #183
+ISS_184,Overflowing runoff into pedestrian lane (184),drainage,medium,field_observed,19.3803885,72.8226689,resolved,Observed grievance #184
+ISS_185,Deep pothole cluster on main road (185),road_damage,high,field_observed,19.3795999,72.8228132,under_inspection,Observed grievance #185
+ISS_186,Pitch dark curve near village school (186),dark_zone,low,resident_interview,19.3842246,72.8248767,reported,Observed grievance #186
+ISS_187,Unattended domestic garbage dump (187),waste_heap,medium,field_observed,19.3835625,72.8250233,in_progress,Observed grievance #187
+ISS_188,Community tap pipe leakage (188),water_shortage,high,field_observed,19.3836987,72.8297426,reported,Observed grievance #188
+ISS_189,Lack of waste bin causing scattered litter (189),waste_heap,low,resident_interview,19.3800601,72.8261011,resolved,Observed grievance #189
+ISS_190,Low pressure during morning supply hours (190),water_shortage,medium,field_observed,19.3800938,72.828234,resolved,Observed grievance #190
+ISS_191,Community tap pipe leakage (191),water_shortage,high,field_observed,19.3799872,72.8220414,under_inspection,Observed grievance #191
+ISS_192,Exposed wiring at lamp post (192),dark_zone,medium,resident_interview,19.3795638,72.8232544,reported,Observed grievance #192
+ISS_193,Exposed wiring at lamp post (193),dark_zone,medium,field_observed,19.3839015,72.8280294,under_inspection,Observed grievance #193
+ISS_194,Community tap pipe leakage (194),water_shortage,high,field_observed,19.3856321,72.821528,reported,Observed grievance #194
+ISS_195,Community tap pipe leakage (195),water_shortage,medium,field_observed,19.3845189,72.825866,reported,Observed grievance #195
+ISS_196,Unpaved muddy stretch slowing transit (196),road_damage,medium,resident_interview,19.3851288,72.8269937,in_progress,Observed grievance #196
+ISS_197,Hand pump handle jammed/broken (197),water_shortage,medium,field_observed,19.3816432,72.8270215,reported,Observed grievance #197
+ISS_198,Unpaved muddy stretch slowing transit (198),road_damage,high,field_observed,19.3838867,72.8212293,reported,Observed grievance #198
+ISS_199,Overflowing runoff into pedestrian lane (199),drainage,high,field_observed,19.3811881,72.8242211,resolved,Observed grievance #199
+ISS_200,Exposed wiring at lamp post (200),dark_zone,low,resident_interview,19.3827295,72.8273649,reported,Observed grievance #200

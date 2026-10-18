@@ -1,0 +1,174 @@
+facility_id,name,category,operational_status,upi_available,monsoon_accessible,latitude,longitude,notes,source,zone,is_village_core
+FAC_001,Xyz,vendor,partially_functional,True,waterlogged,19.3537491,72.8864014,,field_survey,khopripada_core,True
+FAC_002,Arpita Pan and Puja Bandaar,vendor,functional,True,year_round,19.3556437,72.8851242,Local vendor  shop,field_survey,khopripada_core,True
+FAC_003,General store,vendor,functional,True,waterlogged,19.3555617,72.8851267,Local shop,field_survey,khopripada_core,True
+FAC_004,Saloon,vendor,partially_functional,True,waterlogged,19.3554267,72.885065,Saloon shop,field_survey,khopripada_core,True
+FAC_005,Refrigerator repair and sales shop,vendor,functional,,year_round,19.3553583,72.8849567,,field_survey,khopripada_core,True
+FAC_006,Lake,water_borewell,partially_functional,,waterlogged,19.355165,72.8847933,Hand pump,field_survey,khopripada_core,True
+FAC_007,Adarsh coaching class,school,partially_functional,,waterlogged,19.35464,72.8841083,Nursery to 12 th all boards classes,field_survey,khopripada_core,True
+FAC_008,Street light,water_standpost,partially_functional,,cut_off,19.354505,72.88397,Street light,field_survey,khopripada_core,True
+FAC_009,Street light 2,water_standpost,partially_functional,,cut_off,19.3546883,72.8850967,Street light,field_survey,khopripada_core,True
+FAC_010,Lake,water_borewell,functional,,year_round,19.35515,72.8848183,,field_survey,khopripada_core,True
+FAC_011,Aai ekveera water supplier,water_tank,partially_functional,,year_round,19.35518,72.8848383,Water supplier,field_survey,khopripada_core,True
+FAC_012,Shree sai clinic,health,partially_functional,,year_round,19.3575567,72.8847867,Bhms qualified doctor  timing 9.30 am to 2 pm then break then 5 pm to 10 pn,field_survey,service_area,False
+FAC_013,Chandika mata mandir,social_civic,functional,,year_round,19.3610133,72.8812283,Chandika mata mandir,field_survey,service_area,False
+FAC_014,School,school,functional,,year_round,19.360285,72.8800183,,field_survey,service_area,False
+FAC_015,Goverment hospital,health,functional,,year_round,19.3571417,72.8702833,,field_survey,wider_context,False
+FAC_016,Bahu rao patil school,school,functional,,year_round,19.3578417,72.8692683,,field_survey,wider_context,False
+FAC_017,Shining stars accademy,school,functional,,year_round,19.3583227,72.8847825,Playgroup for students,field_survey,service_area,False
+FAC_018,Graveyard,social_civic,functional,,year_round,19.356648,72.8849755,"Opposite shankar mandir 
+Water facility available",field_survey,khopripada_core,True
+FAC_019,Temple,social_civic,functional,,year_round,19.356683,72.8850824,Shankar Mandir,field_survey,khopripada_core,True
+FAC_020,Laundry,vendor,functional,True,waterlogged,19.3556473,72.8852046,Laundry shop but water is trapped in the mansoon,field_survey,khopripada_core,True
+FAC_021,Local clinic,health,partially_functional,,year_round,19.3553504,72.8848856,Uneven timings not accessible for villagers,field_survey,khopripada_core,True
+FAC_022,Mahanai devi chwal,social_civic,functional,,waterlogged,19.3546609,72.8841645,Residential area,field_survey,khopripada_core,True
+FAC_023,Public Community Borewell #1,water_borewell,non_functional,False,year_round,19.3529786,72.8839833,Field asset record #1,augmented,khopripada_core,True
+FAC_024,Youth Sports Ground #2,social_civic,functional,False,year_round,19.3544287,72.8858046,Field asset record #2,augmented,khopripada_core,True
+FAC_025,Village Agri Fertilizer Depot #3,vendor,functional,False,year_round,19.3537728,72.8857155,Field asset record #3,augmented,khopripada_core,True
+FAC_026,Z.P. Primary School Unit #4,school,functional,False,waterlogged,19.352575,72.8850927,Field asset record #4,augmented,khopripada_core,True
+FAC_027,Public Community Standpost #5,water_standpost,functional,False,year_round,19.3539579,72.8857333,Field asset record #5,augmented,khopripada_core,True
+FAC_028,Public Community Standpost #6,water_standpost,functional,False,year_round,19.3559197,72.8859907,Field asset record #6,augmented,khopripada_core,True
+FAC_029,Public Community Standpost #7,water_standpost,partially_functional,False,year_round,19.3545224,72.8857462,Field asset record #7,augmented,khopripada_core,True
+FAC_030,Aai Ekvira Tea Stall #8,vendor,functional,True,year_round,19.3538705,72.8846249,Field asset record #8,augmented,khopripada_core,True
+FAC_031,Balwadi Community Hall #9,school,functional,False,waterlogged,19.355074,72.8851983,Field asset record #9,augmented,khopripada_core,True
+FAC_032,Aai Ekvira Tea Stall #10,vendor,functional,False,year_round,19.355152,72.8865167,Field asset record #10,augmented,khopripada_core,True
+FAC_033,Public Community Standpost #11,water_standpost,functional,False,year_round,19.3546027,72.884927,Field asset record #11,augmented,khopripada_core,True
+FAC_034,Hanuman Mandir #12,social_civic,partially_functional,False,waterlogged,19.3528652,72.8857703,Field asset record #12,augmented,khopripada_core,True
+FAC_035,Khopripada Dairy Center #13,vendor,functional,True,cut_off,19.3539455,72.8848558,Field asset record #13,augmented,khopripada_core,True
+FAC_036,Public Community Standpost #14,water_standpost,functional,False,year_round,19.3544193,72.8869791,Field asset record #14,augmented,khopripada_core,True
+FAC_037,Public Community Standpost #15,water_standpost,non_functional,False,year_round,19.3553078,72.8862561,Field asset record #15,augmented,khopripada_core,True
+FAC_038,Public Community Standpost #16,water_standpost,functional,False,cut_off,19.353899,72.8858218,Field asset record #16,augmented,khopripada_core,True
+FAC_039,Public Community Borewell #17,water_borewell,non_functional,False,year_round,19.3518886,72.8863601,Field asset record #17,augmented,khopripada_core,True
+FAC_040,Public Community Tank #18,water_tank,partially_functional,False,year_round,19.3544818,72.8862249,Field asset record #18,augmented,khopripada_core,True
+FAC_041,Public Community Borewell #19,water_borewell,functional,False,waterlogged,19.3546078,72.8838683,Field asset record #19,augmented,khopripada_core,True
+FAC_042,Public Community Borewell #20,water_borewell,partially_functional,False,waterlogged,19.3540134,72.8850308,Field asset record #20,augmented,khopripada_core,True
+FAC_043,Balwadi Community Hall #21,school,functional,False,waterlogged,19.3538631,72.8857266,Field asset record #21,augmented,khopripada_core,True
+FAC_044,Public Community Standpost #22,water_standpost,non_functional,False,waterlogged,19.3533709,72.8850916,Field asset record #22,augmented,khopripada_core,True
+FAC_045,Public Community Borewell #23,water_borewell,functional,False,year_round,19.3538929,72.8846043,Field asset record #23,augmented,khopripada_core,True
+FAC_046,Public Community Borewell #24,water_borewell,functional,False,cut_off,19.3552464,72.8860731,Field asset record #24,augmented,khopripada_core,True
+FAC_047,Public Community Tank #25,water_tank,non_functional,False,year_round,19.3517578,72.8858784,Field asset record #25,augmented,khopripada_core,True
+FAC_048,Gaon Flour Mill (Chakki) #26,vendor,functional,True,year_round,19.3526463,72.8873456,Field asset record #26,augmented,khopripada_core,True
+FAC_049,Public Community Standpost #27,water_standpost,functional,False,waterlogged,19.3533075,72.8868731,Field asset record #27,augmented,khopripada_core,True
+FAC_050,Public Community Tank #28,water_tank,functional,False,year_round,19.3543494,72.8856307,Field asset record #28,augmented,khopripada_core,True
+FAC_051,Balwadi Community Hall #29,school,partially_functional,False,year_round,19.3542467,72.8853661,Field asset record #29,augmented,khopripada_core,True
+FAC_052,Public Community Standpost #30,water_standpost,partially_functional,False,year_round,19.3550087,72.8853557,Field asset record #30,augmented,khopripada_core,True
+FAC_053,Khopripada Anganwadi Center #31,school,functional,False,year_round,19.3555406,72.8842043,Field asset record #31,augmented,khopripada_core,True
+FAC_054,Public Community Standpost #32,water_standpost,functional,False,year_round,19.3537918,72.8846972,Field asset record #32,augmented,khopripada_core,True
+FAC_055,Public Community Standpost #33,water_standpost,non_functional,False,year_round,19.3535422,72.8856651,Field asset record #33,augmented,khopripada_core,True
+FAC_056,Samaj Mandir Hall #34,social_civic,partially_functional,False,year_round,19.353972,72.8858596,Field asset record #34,augmented,khopripada_core,True
+FAC_057,Gram Panchayat Extension Room #35,social_civic,functional,False,year_round,19.35575,72.8861192,Field asset record #35,augmented,khopripada_core,True
+FAC_058,Om Sai Stationery & Xerox #36,vendor,functional,True,year_round,19.3538244,72.8855812,Field asset record #36,augmented,khopripada_core,True
+FAC_059,Public Community Borewell #37,water_borewell,functional,False,waterlogged,19.3523109,72.8852625,Field asset record #37,augmented,khopripada_core,True
+FAC_060,Public Community Standpost #38,water_standpost,functional,False,cut_off,19.3548267,72.8872456,Field asset record #38,augmented,khopripada_core,True
+FAC_061,Khopripada Dairy Center #39,vendor,functional,True,year_round,19.3546339,72.8862538,Field asset record #39,augmented,khopripada_core,True
+FAC_062,Public Community Borewell #40,water_borewell,functional,False,cut_off,19.3525724,72.8839542,Field asset record #40,augmented,khopripada_core,True
+FAC_063,Public Community Standpost #41,water_standpost,functional,False,cut_off,19.3543473,72.8863722,Field asset record #41,augmented,khopripada_core,True
+FAC_064,Public Community Tank #42,water_tank,non_functional,False,waterlogged,19.3547572,72.8850899,Field asset record #42,augmented,khopripada_core,True
+FAC_065,Public Community Standpost #43,water_standpost,functional,False,year_round,19.3526666,72.8842939,Field asset record #43,augmented,khopripada_core,True
+FAC_066,Youth Sports Ground #44,social_civic,partially_functional,False,year_round,19.3543635,72.8833155,Field asset record #44,augmented,khopripada_core,True
+FAC_067,Public Community Borewell #45,water_borewell,functional,False,year_round,19.353574,72.8853938,Field asset record #45,augmented,khopripada_core,True
+FAC_068,Mobile Clinic Halt Point #46,health,partially_functional,False,cut_off,19.3533164,72.883712,Field asset record #46,augmented,khopripada_core,True
+FAC_069,Public Community Borewell #47,water_borewell,functional,False,year_round,19.3540718,72.883549,Field asset record #47,augmented,khopripada_core,True
+FAC_070,Public Community Tank #48,water_tank,non_functional,False,year_round,19.3545746,72.8842559,Field asset record #48,augmented,khopripada_core,True
+FAC_071,Public Community Tank #49,water_tank,functional,False,waterlogged,19.3541471,72.8856936,Field asset record #49,augmented,khopripada_core,True
+FAC_072,Public Community Standpost #50,water_standpost,partially_functional,False,waterlogged,19.3538129,72.8853283,Field asset record #50,augmented,khopripada_core,True
+FAC_073,Hanuman Mandir #51,social_civic,partially_functional,False,year_round,19.3539538,72.8845924,Field asset record #51,augmented,khopripada_core,True
+FAC_074,Mauli General Store #52,vendor,functional,False,year_round,19.3561367,72.8855101,Field asset record #52,augmented,khopripada_core,True
+FAC_075,Hanuman Mandir #53,social_civic,non_functional,False,year_round,19.352936,72.8855393,Field asset record #53,augmented,khopripada_core,True
+FAC_076,Khopripada Dairy Center #54,vendor,functional,False,year_round,19.354313,72.8861315,Field asset record #54,augmented,khopripada_core,True
+FAC_077,Khopripada Anganwadi Center #55,school,partially_functional,False,year_round,19.3546825,72.8859514,Field asset record #55,augmented,khopripada_core,True
+FAC_078,Samaj Mandir Hall #56,social_civic,functional,False,year_round,19.3519596,72.8863268,Field asset record #56,augmented,khopripada_core,True
+FAC_079,Public Community Standpost #57,water_standpost,functional,False,year_round,19.3528831,72.8866323,Field asset record #57,augmented,khopripada_core,True
+FAC_080,Public Community Standpost #58,water_standpost,non_functional,False,waterlogged,19.3557628,72.8862867,Field asset record #58,augmented,khopripada_core,True
+FAC_081,Public Community Standpost #59,water_standpost,partially_functional,False,year_round,19.3534851,72.8833374,Field asset record #59,augmented,khopripada_core,True
+FAC_082,Public Community Borewell #60,water_borewell,functional,False,year_round,19.3528332,72.8871172,Field asset record #60,augmented,khopripada_core,True
+FAC_083,Public Community Borewell #61,water_borewell,functional,False,year_round,19.3545519,72.8862066,Field asset record #61,augmented,khopripada_core,True
+FAC_084,Public Community Borewell #62,water_borewell,partially_functional,False,year_round,19.3542968,72.8848619,Field asset record #62,augmented,khopripada_core,True
+FAC_085,Khopripada Dairy Center #63,vendor,non_functional,True,year_round,19.3525081,72.8868204,Field asset record #63,augmented,khopripada_core,True
+FAC_086,Public Community Borewell #64,water_borewell,functional,False,year_round,19.3539869,72.8852941,Field asset record #64,augmented,khopripada_core,True
+FAC_087,Public Community Borewell #65,water_borewell,functional,False,waterlogged,19.3550632,72.8856995,Field asset record #65,augmented,khopripada_core,True
+FAC_088,Public Community Tank #66,water_tank,non_functional,False,year_round,19.3543734,72.8852571,Field asset record #66,augmented,khopripada_core,True
+FAC_089,Public Community Standpost #67,water_standpost,functional,False,waterlogged,19.3559829,72.8844588,Field asset record #67,augmented,khopripada_core,True
+FAC_090,Village Agri Fertilizer Depot #68,vendor,functional,True,year_round,19.3651314,72.8824785,Field asset record #68,augmented,service_area,False
+FAC_091,Public Community Standpost #69,water_standpost,functional,False,year_round,19.3664747,72.8784216,Field asset record #69,augmented,service_area,False
+FAC_092,Hanuman Mandir #70,social_civic,functional,False,waterlogged,19.3567606,72.883616,Field asset record #70,augmented,service_area,False
+FAC_093,Mauli General Store #71,vendor,functional,True,year_round,19.3589829,72.8824273,Field asset record #71,augmented,service_area,False
+FAC_094,Public Community Standpost #72,water_standpost,functional,False,year_round,19.3579245,72.8785028,Field asset record #72,augmented,service_area,False
+FAC_095,Public Community Standpost #73,water_standpost,non_functional,False,year_round,19.362048,72.8840496,Field asset record #73,augmented,service_area,False
+FAC_096,Om Sai Stationery & Xerox #74,vendor,functional,True,waterlogged,19.3601101,72.8804006,Field asset record #74,augmented,service_area,False
+FAC_097,Gaon Flour Mill (Chakki) #75,vendor,functional,False,year_round,19.3567565,72.8832047,Field asset record #75,augmented,service_area,False
+FAC_098,Om Sai Stationery & Xerox #76,vendor,functional,True,year_round,19.361887,72.881614,Field asset record #76,augmented,service_area,False
+FAC_099,Om Sai Stationery & Xerox #77,vendor,functional,True,cut_off,19.3565181,72.8835275,Field asset record #77,augmented,service_area,False
+FAC_100,Public Community Standpost #78,water_standpost,functional,False,year_round,19.366407,72.882342,Field asset record #78,augmented,service_area,False
+FAC_101,Public Community Borewell #79,water_borewell,functional,False,year_round,19.3645428,72.8810919,Field asset record #79,augmented,service_area,False
+FAC_102,Public Community Standpost #80,water_standpost,functional,False,year_round,19.3638222,72.8823761,Field asset record #80,augmented,service_area,False
+FAC_103,Mauli General Store #81,vendor,functional,True,year_round,19.3626534,72.8841364,Field asset record #81,augmented,service_area,False
+FAC_104,Z.P. Primary School Unit #82,school,functional,False,cut_off,19.3647304,72.8796471,Field asset record #82,augmented,service_area,False
+FAC_105,Public Community Borewell #83,water_borewell,functional,False,waterlogged,19.3584335,72.8805091,Field asset record #83,augmented,service_area,False
+FAC_106,Public Community Standpost #84,water_standpost,functional,False,cut_off,19.362816,72.8809462,Field asset record #84,augmented,service_area,False
+FAC_107,Public Community Borewell #85,water_borewell,non_functional,False,waterlogged,19.3559645,72.8783337,Field asset record #85,augmented,service_area,False
+FAC_108,Public Community Borewell #86,water_borewell,functional,False,waterlogged,19.3580421,72.8816172,Field asset record #86,augmented,service_area,False
+FAC_109,Sai Kirana Store #87,vendor,functional,True,year_round,19.3569773,72.8812479,Field asset record #87,augmented,service_area,False
+FAC_110,Local Primary Care Dispensary #88,health,functional,False,cut_off,19.3598715,72.8840703,Field asset record #88,augmented,service_area,False
+FAC_111,Gaon Flour Mill (Chakki) #89,vendor,partially_functional,True,waterlogged,19.3553486,72.8812507,Field asset record #89,augmented,service_area,False
+FAC_112,Public Community Tank #90,water_tank,functional,False,year_round,19.3578946,72.8796205,Field asset record #90,augmented,service_area,False
+FAC_113,Public Community Standpost #91,water_standpost,functional,False,year_round,19.3687321,72.8808945,Field asset record #91,augmented,service_area,False
+FAC_114,Om Sai Stationery & Xerox #92,vendor,functional,False,year_round,19.3639124,72.8816877,Field asset record #92,augmented,service_area,False
+FAC_115,Sai Kirana Store #93,vendor,functional,True,waterlogged,19.3631619,72.8850304,Field asset record #93,augmented,service_area,False
+FAC_116,Balwadi Community Hall #94,school,functional,False,year_round,19.3581484,72.8818787,Field asset record #94,augmented,service_area,False
+FAC_117,Om Sai Stationery & Xerox #95,vendor,partially_functional,False,waterlogged,19.3649924,72.8790613,Field asset record #95,augmented,service_area,False
+FAC_118,Public Community Tank #96,water_tank,functional,False,year_round,19.3649013,72.8849207,Field asset record #96,augmented,service_area,False
+FAC_119,Public Community Tank #97,water_tank,functional,False,year_round,19.360006,72.8821226,Field asset record #97,augmented,service_area,False
+FAC_120,Public Community Borewell #98,water_borewell,partially_functional,False,year_round,19.3679574,72.8801153,Field asset record #98,augmented,service_area,False
+FAC_121,Public Community Standpost #99,water_standpost,functional,False,year_round,19.3674527,72.8827851,Field asset record #99,augmented,service_area,False
+FAC_122,Public Community Standpost #100,water_standpost,partially_functional,False,year_round,19.3563357,72.879625,Field asset record #100,augmented,service_area,False
+FAC_123,Public Community Standpost #101,water_standpost,functional,False,waterlogged,19.3653182,72.8791605,Field asset record #101,augmented,service_area,False
+FAC_124,Mobile Clinic Halt Point #102,health,partially_functional,False,year_round,19.3563102,72.8781743,Field asset record #102,augmented,service_area,False
+FAC_125,Public Community Borewell #103,water_borewell,non_functional,False,year_round,19.3635708,72.8809512,Field asset record #103,augmented,service_area,False
+FAC_126,Public Community Tank #104,water_tank,partially_functional,False,year_round,19.3596194,72.8793956,Field asset record #104,augmented,service_area,False
+FAC_127,Youth Sports Ground #105,social_civic,partially_functional,False,year_round,19.3650658,72.8827209,Field asset record #105,augmented,service_area,False
+FAC_128,Public Community Standpost #106,water_standpost,non_functional,False,waterlogged,19.3574918,72.8820623,Field asset record #106,augmented,service_area,False
+FAC_129,Public Community Borewell #107,water_borewell,functional,False,cut_off,19.3574331,72.8824676,Field asset record #107,augmented,service_area,False
+FAC_130,Mauli General Store #108,vendor,functional,True,year_round,19.3650092,72.8812607,Field asset record #108,augmented,service_area,False
+FAC_131,Public Community Standpost #109,water_standpost,functional,False,year_round,19.3672554,72.8808554,Field asset record #109,augmented,service_area,False
+FAC_132,Public Community Standpost #110,water_standpost,functional,False,waterlogged,19.363266,72.8841569,Field asset record #110,augmented,service_area,False
+FAC_133,Public Community Borewell #111,water_borewell,partially_functional,False,waterlogged,19.3607249,72.8810627,Field asset record #111,augmented,service_area,False
+FAC_134,Public Community Standpost #112,water_standpost,partially_functional,False,year_round,19.3591144,72.8809452,Field asset record #112,augmented,service_area,False
+FAC_135,Gram Panchayat Extension Room #113,social_civic,functional,False,year_round,19.3595271,72.8855091,Field asset record #113,augmented,service_area,False
+FAC_136,Om Sai Stationery & Xerox #114,vendor,functional,True,waterlogged,19.3648445,72.8848994,Field asset record #114,augmented,service_area,False
+FAC_137,Mobile Clinic Halt Point #115,health,functional,False,year_round,19.3620549,72.8850199,Field asset record #115,augmented,service_area,False
+FAC_138,Khopripada Dairy Center #116,vendor,partially_functional,True,waterlogged,19.3618696,72.8838771,Field asset record #116,augmented,service_area,False
+FAC_139,Mauli General Store #117,vendor,partially_functional,False,year_round,19.3643548,72.8809702,Field asset record #117,augmented,service_area,False
+FAC_140,Public Community Standpost #118,water_standpost,functional,False,year_round,19.357929,72.8783303,Field asset record #118,augmented,service_area,False
+FAC_141,Om Sai Stationery & Xerox #119,vendor,functional,True,year_round,19.3570026,72.8812945,Field asset record #119,augmented,service_area,False
+FAC_142,Public Community Tank #120,water_tank,partially_functional,False,cut_off,19.3406017,72.8467453,Field asset record #120,augmented,wider_context,False
+FAC_143,Khopripada Dairy Center #121,vendor,non_functional,True,waterlogged,19.3595486,72.8406964,Field asset record #121,augmented,wider_context,False
+FAC_144,Village Agri Fertilizer Depot #122,vendor,functional,True,year_round,19.3490275,72.8539419,Field asset record #122,augmented,wider_context,False
+FAC_145,Public Community Borewell #123,water_borewell,non_functional,False,year_round,19.3449161,72.8511577,Field asset record #123,augmented,wider_context,False
+FAC_146,Public Community Standpost #124,water_standpost,functional,False,year_round,19.343059,72.8438733,Field asset record #124,augmented,wider_context,False
+FAC_147,Public Community Standpost #125,water_standpost,functional,False,year_round,19.3574768,72.8480695,Field asset record #125,augmented,wider_context,False
+FAC_148,Public Community Borewell #126,water_borewell,functional,False,year_round,19.3610985,72.842019,Field asset record #126,augmented,wider_context,False
+FAC_149,Om Sai Stationery & Xerox #127,vendor,functional,True,waterlogged,19.3539243,72.8493922,Field asset record #127,augmented,wider_context,False
+FAC_150,Sai Kirana Store #128,vendor,functional,False,year_round,19.3481306,72.8412006,Field asset record #128,augmented,wider_context,False
+FAC_151,Public Community Standpost #129,water_standpost,functional,False,cut_off,19.3651505,72.8486649,Field asset record #129,augmented,wider_context,False
+FAC_152,Public Community Tank #130,water_tank,functional,False,cut_off,19.342817,72.8502433,Field asset record #130,augmented,wider_context,False
+FAC_153,Public Community Borewell #131,water_borewell,functional,False,waterlogged,19.3546642,72.8497013,Field asset record #131,augmented,wider_context,False
+FAC_154,Public Community Standpost #132,water_standpost,functional,False,cut_off,19.346962,72.8425348,Field asset record #132,augmented,wider_context,False
+FAC_155,Public Community Standpost #133,water_standpost,functional,False,year_round,19.3489557,72.8440381,Field asset record #133,augmented,wider_context,False
+FAC_156,Public Community Borewell #134,water_borewell,non_functional,False,year_round,19.3596601,72.8479521,Field asset record #134,augmented,wider_context,False
+FAC_157,Gram Panchayat Extension Room #135,social_civic,functional,False,waterlogged,19.3453212,72.8444964,Field asset record #135,augmented,wider_context,False
+FAC_158,Public Community Borewell #136,water_borewell,non_functional,False,waterlogged,19.3422044,72.8462616,Field asset record #136,augmented,wider_context,False
+FAC_159,Public Community Tank #137,water_tank,functional,False,waterlogged,19.3549598,72.8450991,Field asset record #137,augmented,wider_context,False
+FAC_160,Khopripada Dairy Center #138,vendor,non_functional,True,cut_off,19.3501438,72.842279,Field asset record #138,augmented,wider_context,False
+FAC_161,Public Community Borewell #139,water_borewell,functional,False,year_round,19.3463832,72.8453533,Field asset record #139,augmented,wider_context,False
+FAC_162,Samaj Mandir Hall #140,social_civic,functional,False,year_round,19.3605565,72.8413175,Field asset record #140,augmented,wider_context,False
+FAC_163,Hanuman Mandir #141,social_civic,functional,False,year_round,19.363641,72.8504661,Field asset record #141,augmented,wider_context,False
+FAC_164,Public Community Borewell #142,water_borewell,non_functional,False,cut_off,19.3663883,72.8499141,Field asset record #142,augmented,wider_context,False
+FAC_165,Public Community Tank #143,water_tank,functional,False,year_round,19.353914,72.8457116,Field asset record #143,augmented,wider_context,False
+FAC_166,Public Community Borewell #144,water_borewell,functional,False,waterlogged,19.353052,72.8480592,Field asset record #144,augmented,wider_context,False
+FAC_167,Public Community Borewell #145,water_borewell,functional,False,year_round,19.3614641,72.8542442,Field asset record #145,augmented,wider_context,False
+FAC_168,Public Community Standpost #146,water_standpost,non_functional,False,waterlogged,19.3596093,72.8418932,Field asset record #146,augmented,wider_context,False
+FAC_169,Balwadi Community Hall #147,school,non_functional,False,waterlogged,19.3545989,72.8498653,Field asset record #147,augmented,wider_context,False
+FAC_170,Public Community Tank #148,water_tank,non_functional,False,year_round,19.3637178,72.8444327,Field asset record #148,augmented,wider_context,False
+FAC_171,Public Community Standpost #149,water_standpost,partially_functional,False,year_round,19.365821,72.8484433,Field asset record #149,augmented,wider_context,False
+FAC_172,Public Community Borewell #150,water_borewell,functional,False,year_round,19.3544867,72.8508056,Field asset record #150,augmented,wider_context,False

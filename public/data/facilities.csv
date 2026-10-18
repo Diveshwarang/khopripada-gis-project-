@@ -1,0 +1,23 @@
+facility_id,name,category,operational_status,upi_available,monsoon_accessible,latitude,longitude,notes,photo
+FAC_001,Xyz Local Vendor,vendor,partially_functional,True,waterlogged,19.3537491,72.8864014,Local vendor stall,
+FAC_002,Arpita Pan and Puja Bandaar,vendor,functional,True,year_round,19.3556437,72.8851242,Local vendor shop,
+FAC_003,General store,vendor,functional,True,waterlogged,19.3555617,72.8851267,Local shop,
+FAC_004,Saloon,vendor,partially_functional,True,waterlogged,19.3554267,72.885065,Saloon shop,
+FAC_005,Refrigerator repair and sales shop,vendor,functional,False,year_round,19.3553583,72.8849567,Electronics repair and sales,
+FAC_006,Lake Hand Pump,water_borewell,partially_functional,False,waterlogged,19.355165,72.8847933,Lake side hand pump,lake_hand_pump.jpg
+FAC_007,Adarsh coaching class,school,partially_functional,False,waterlogged,19.35464,72.8841083,Nursery to 12th all boards classes,
+FAC_008,Street light (Pillar 1),water_standpost,partially_functional,False,cut_off,19.354505,72.88397,Village core street light pillar,
+FAC_009,Street light (Pillar 2),water_standpost,partially_functional,False,cut_off,19.3546883,72.8850967,Paved lane street light,
+FAC_010,Lake Public Water Point,water_borewell,functional,False,year_round,19.35515,72.8848183,Community lake borewell,
+FAC_011,Aai ekveera water supplier,water_tank,partially_functional,False,year_round,19.35518,72.8848383,Water supplier & tanker point,
+FAC_012,Shree sai clinic,health,partially_functional,False,year_round,19.3575567,72.8847867,BHMS qualified doctor (9:30 AM - 2:00 PM & 5:00 PM - 10:00 PM),
+FAC_013,Chandika mata mandir,social_civic,functional,False,year_round,19.3610133,72.8812283,Historical temple & community gathering landmark,chandika_temple.jpg
+FAC_014,Primary Village School,school,functional,False,year_round,19.360285,72.8800183,Village primary school building,
+FAC_015,Goverment hospital,health,functional,False,year_round,19.3571417,72.8702833,Public government hospital sub-unit,
+FAC_016,Bahu rao patil school,school,functional,False,year_round,19.3578417,72.8692683,Secondary high school campus,
+FAC_017,Shining stars accademy,school,functional,False,year_round,19.3583227,72.8847825,Playgroup and early childhood academy,
+FAC_018,Graveyard & Shankar Mandir Ground,social_civic,functional,False,year_round,19.356648,72.8849755,Opposite Shankar Mandir (Water facility available),
+FAC_019,Shankar Mandir Temple,social_civic,functional,False,year_round,19.356683,72.8850824,Shankar Mandir heritage temple,
+FAC_020,Village Laundry Services,vendor,functional,True,waterlogged,19.3556473,72.8852046,Laundry shop (water trapped during heavy monsoon),
+FAC_021,Local clinic,health,partially_functional,False,year_round,19.3553504,72.8848856,Uneven timings not accessible for all villagers,
+FAC_022,Mahanai devi chwal,social_civic,functional,False,waterlogged,19.3546609,72.8841645,Residential pada settlement,

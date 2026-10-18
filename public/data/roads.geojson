@@ -1,0 +1,203 @@
+{
+  "type": "FeatureCollection",
+  "name": "Khopripada_Bapane_Road_Network_Audit",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "road_id": "RD-001",
+        "name": "Naigaon-Juchandra-Khopripada Main Road",
+        "category": "Village Arterial",
+        "surface": "Bituminous Asphalt",
+        "condition": "fair",
+        "length_km": 1.45,
+        "width_m": 6.0,
+        "maintained_by": "VVCMC / PWD",
+        "last_inspected": "12-Oct-2026",
+        "notes": "Moderate surface wear and edge raveling near culvert. Speed breakers present."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [72.87285, 19.36001],
+          [72.87550, 19.35880],
+          [72.87920, 19.35720],
+          [72.88210, 19.35590],
+          [72.88463, 19.35509],
+          [72.88780, 19.35460],
+          [72.89120, 19.35380],
+          [72.89347, 19.35098]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "road_id": "RD-002",
+        "name": "Khopripada Core Gaothan Spine Road",
+        "category": "Internal Gaothan",
+        "surface": "Cement Concrete (CC)",
+        "condition": "good",
+        "length_km": 0.65,
+        "width_m": 4.5,
+        "maintained_by": "Bapane Gram Panchayat",
+        "last_inspected": "15-Sep-2026",
+        "notes": "Newly laid concrete pavement with side drains. Excellent condition."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [72.88280, 19.35410],
+          [72.88463, 19.35509],
+          [72.88560, 19.35580],
+          [72.88640, 19.35710],
+          [72.88720, 19.35850]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "road_id": "RD-003",
+        "name": "Khopripada to Wakipada Link Road",
+        "category": "Inter-Pada Connector",
+        "surface": "Damaged Bituminous",
+        "condition": "poor",
+        "length_km": 0.88,
+        "width_m": 3.8,
+        "maintained_by": "Bapane Gram Panchayat",
+        "last_inspected": "05-Oct-2026",
+        "notes": "Multiple large potholes (15-20cm deep) causing waterlogging. Urgent resurfacing required."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [72.88463, 19.35509],
+          [72.88420, 19.35750],
+          [72.88380, 19.36020],
+          [72.88410, 19.36280],
+          [72.88470, 19.36500]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "road_id": "RD-004",
+        "name": "Bapane Gaothan Administrative Road",
+        "category": "Internal Gaothan",
+        "surface": "Heavy-Duty Paver Blocks",
+        "condition": "good",
+        "length_km": 0.52,
+        "width_m": 4.2,
+        "maintained_by": "Bapane Gram Panchayat",
+        "last_inspected": "20-Aug-2026",
+        "notes": "Connects Panchayat Bhavan, Primary Health Center and temple. Good drainage."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [72.88980, 19.36450],
+          [72.89120, 19.36540],
+          [72.89225, 19.36600],
+          [72.89380, 19.36680]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "road_id": "RD-005",
+        "name": "Khopripada East Agri Cart Track",
+        "category": "Agricultural Track",
+        "surface": "Earthen / Mud Track (Kachha)",
+        "condition": "kachha",
+        "length_km": 1.15,
+        "width_m": 3.0,
+        "maintained_by": "Local Farmers / Gram Panchayat",
+        "last_inspected": "28-Sep-2026",
+        "notes": "Unpaved dirt track serving paddy fields and borewells. Slippery during monsoon season."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [72.88640, 19.35710],
+          [72.88850, 19.35780],
+          [72.89100, 19.35860],
+          [72.89350, 19.35920],
+          [72.89620, 19.36010]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "road_id": "RD-006",
+        "name": "Juchandra Station Market Access Road",
+        "category": "Transit Access",
+        "surface": "Deteriorated Asphalt",
+        "condition": "poor",
+        "length_km": 0.42,
+        "width_m": 5.5,
+        "maintained_by": "VVCMC / Railway Authority",
+        "last_inspected": "10-Oct-2026",
+        "notes": "Heavy pedestrian and auto traffic. Damaged surface near auto stand, needs immediate patch-work."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [72.87120, 19.36110],
+          [72.87285, 19.36001],
+          [72.87410, 19.35910]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "road_id": "RD-007",
+        "name": "Chandika Devi Mandir Approach Road",
+        "category": "Heritage Access",
+        "surface": "WBM with Concrete Interlocks",
+        "condition": "fair",
+        "length_km": 0.74,
+        "width_m": 4.5,
+        "maintained_by": "Bapane Gram Panchayat",
+        "last_inspected": "01-Oct-2026",
+        "notes": "Fair condition with streetlights. Minor gravel looseness on bends."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [72.87920, 19.35720],
+          [72.88050, 19.35880],
+          [72.88170, 19.36030],
+          [72.88240, 19.36150]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "road_id": "RD-008",
+        "name": "Bapane NH-48 Highway Connector",
+        "category": "Arterial Link",
+        "surface": "Dense Bituminous Concrete (DBC)",
+        "condition": "good",
+        "length_km": 0.95,
+        "width_m": 7.0,
+        "maintained_by": "National Highways Authority / PWD",
+        "last_inspected": "18-Sep-2026",
+        "notes": "Dual-lane paved corridor linking Bapane gaothan to Mumbai-Ahmedabad highway flyover."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [72.89225, 19.36600],
+          [72.89310, 19.36380],
+          [72.89347, 19.35098]
+        ]
+      }
+    }
+  ]
+}

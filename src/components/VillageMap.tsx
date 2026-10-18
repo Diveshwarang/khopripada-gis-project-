@@ -1,0 +1,2750 @@
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import {
+  Layers,
+  MapPin,
+  Building2,
+  ChevronRight,
+  ChevronDown,
+  Locate,
+  AlertTriangle,
+  FileSpreadsheet,
+  PlusCircle,
+  Plus,
+  Flame,
+  Maximize2,
+  Minimize2,
+  FileText,
+  ClipboardList,
+} from 'lucide-react';
+import {
+  getCurrentPosition,
+  isCoordInStudyCorridor,
+  type GeolocationResult,
+} from '../services/geolocation';
+import {
+  db,
+  seedFacilitiesFromCsv,
+  saveFacilityToOfflineDb,
+  seedIssuesFromCsv,
+  type CachedFacility,
+  type CachedIssue,
+} from '../services/offlineDb';
+import { NetworkStatusBar } from './NetworkStatusBar';
+import { GrievanceModal } from './GrievanceModal';
+import { GrievanceListDrawer } from './GrievanceListDrawer';
+import { AddFacilityModal } from './AddFacilityModal';
+import { useAuth } from '../context/AuthContext';
+import { UserProfileBadge } from './UserProfileBadge';
+import { PanchayatAdminPanel } from './PanchayatAdminPanel';
+import { PhotoLightboxModal } from './PhotoLightboxModal';
+import { ExportAuditModal } from './ExportAuditModal';
+import { DEFAULT_INSPECTION_PLACEHOLDER } from '../utils/imageUtils';
+import {
+  generatePanchayatPDF,
+  generateOfficerWorklistPDF,
+  exportMasterDataCSV,
+} from '../utils/reportGenerator';
+
+import {
+  KHOPRIPADA_CORE,
+  JUCHANDRA_STN,
+  DEFAULT_ZOOM,
+} from '../constants/gis';
+
+// Key Landmarks & POIs in Khopripada, Bapane, and Naigaon East
+interface LandmarkPOI {
+  id: string;
+  name: string;
+  category: 'village' | 'heritage' | 'transit' | 'corridor' | 'civic';
+  coords: [number, number];
+  zoom: number;
+  description: string;
+}
+
+const LANDMARKS: LandmarkPOI[] = [
+  {
+    id: 'khopripada-core',
+    name: 'Khopripada Core (Primary)',
+    category: 'village',
+    coords: KHOPRIPADA_CORE,
+    zoom: 17,
+    description: 'Exact central core of Khopripada settlement, residential clusters, and local padas.',
+  },
+  {
+    id: 'juchandra-station',
+    name: 'Juchandra Stn (Naigaon E)',
+    category: 'transit',
+    coords: JUCHANDRA_STN,
+    zoom: 17,
+    description: 'Central Railway commuter node (19.36001°N, 72.87285°E) serving Khopripada & Bapane.',
+  },
+  {
+    id: 'bapane-gaothan',
+    name: 'Bapane Village Gaothan',
+    category: 'civic',
+    coords: [19.366, 72.89225],
+    zoom: 16,
+    description: 'Bapane Gram Panchayat administrative center & civic office.',
+  },
+  {
+    id: 'chandika-mandir',
+    name: 'Chandika Devi Mandir',
+    category: 'heritage',
+    coords: [19.3603, 72.8817],
+    zoom: 17,
+    description: 'Historical community landmark along the Juchandra-Bapane village boundary.',
+  },
+  {
+    id: 'nh48-junction',
+    name: 'NH-48 Highway Junction',
+    category: 'corridor',
+    coords: [19.35098, 72.89347],
+    zoom: 16,
+    description: 'Western corridor connecting Mumbai-Ahmedabad National Highway.',
+  },
+];
+
+// Khopripada-Bapane Study Corridor Boundary Polygon
+const VILLAGE_BOUNDARY_COORDS: [number, number][] = [
+  [19.370, 72.880],
+  [19.372, 72.895],
+  [19.366, 72.900],
+  [19.352, 72.898],
+  [19.345, 72.890],
+  [19.348, 72.872],
+  [19.362, 72.868],
+  [19.370, 72.880],
+];
+
+type BasemapType = 'esri' | 'osm' | 'cartoDark' | 'topo';
+export type FacilityCategoryFilter = 'all' | 'water' | 'education' | 'commerce' | 'health' | 'civic' | 'issues';
+
+export const VillageMap = () => {
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const boundaryLayerRef = useRef<L.Polygon | null>(null);
+  const landmarksLayerRef = useRef<L.LayerGroup | null>(null);
+  const facilitiesLayerRef = useRef<L.LayerGroup | null>(null);
+  const issuesLayerRef = useRef<L.LayerGroup | null>(null);
+  const grievancesLayerRef = useRef<L.LayerGroup | null>(null);
+  const gpsLocationLayerRef = useRef<L.LayerGroup | null>(null);
+  const inspectMarkerRef = useRef<L.Marker | null>(null);
+  const tileLayersRef = useRef<Record<BasemapType, L.TileLayer> | null>(null);
+  const allFacilitiesRef = useRef<CachedFacility[]>([]);
+  const allIssuesRef = useRef<CachedIssue[]>([]);
+
+  // Auth Context & Role
+  const { session } = useAuth();
+  const userRole = session?.role || 'user';
+  const userRoleRef = useRef(userRole);
+  userRoleRef.current = userRole;
+
+  // Spatial ML: DBSCAN Clusters & Heatmap layers
+  const dbscanLayerRef = useRef<L.LayerGroup | null>(null);
+  const heatmapLayerRef = useRef<L.LayerGroup | null>(null);
+  const [showDbscanClusters, setShowDbscanClusters] = useState<boolean>(true);
+  const [showHeatmap, setShowHeatmap] = useState<boolean>(false);
+  const handleUpdateIssueStatusRef = useRef<((id: string, st: string) => Promise<void>) | null>(null);
+
+  // Map state
+  const [currentZoom, setCurrentZoom] = useState<number>(DEFAULT_ZOOM);
+  const [centerCoords, setCenterCoords] = useState<[number, number]>(KHOPRIPADA_CORE);
+  const [cursorCoords, setCursorCoords] = useState<[number, number] | null>(null);
+  const [activeBasemap, setActiveBasemap] = useState<BasemapType>('esri');
+  const [showBoundary, setShowBoundary] = useState<boolean>(true);
+  const [showLandmarks, setShowLandmarks] = useState<boolean>(true);
+  const [showFacilities, setShowFacilities] = useState<boolean>(true);
+  const [showIssues, setShowIssues] = useState<boolean>(true);
+  const [showGrievancePins, setShowGrievancePins] = useState<boolean>(true);
+  const [facilityFilter, setFacilityFilter] = useState<FacilityCategoryFilter>('all');
+  const [facilitiesList, setFacilitiesList] = useState<CachedFacility[]>([]);
+  const [issuesList, setIssuesList] = useState<CachedIssue[]>([]);
+  const [activeDataset, setActiveDataset] = useState<'survey' | 'unified'>('survey');
+
+  // Inspection and Point Selection
+  const [inspectedPoint, setInspectedPoint] = useState<{
+    lat: number;
+    lng: number;
+    distKm: number;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // High-Resolution Field Photo Lightbox Modal State
+  const [lightboxData, setLightboxData] = useState<{
+    isOpen: boolean;
+    photoUrl: string | null;
+    title: string;
+    category?: string;
+    coords?: [number, number] | null;
+  }>({
+    isOpen: false,
+    photoUrl: null,
+    title: '',
+    category: undefined,
+    coords: null,
+  });
+
+  // Drawer Accordion States
+  const [activeLayersOpen, setActiveLayersOpen] = useState<boolean>(true);
+  const [categoryFiltersOpen, setCategoryFiltersOpen] = useState<boolean>(true);
+  const [analyticsHealthOpen, setAnalyticsHealthOpen] = useState<boolean>(true);
+
+  // Offline and Field Modals
+  const [isLocating, setIsLocating] = useState(false);
+  const [toastWarning, setToastWarning] = useState<string | null>(null);
+  const [isGrievanceModalOpen, setIsGrievanceModalOpen] = useState(false);
+  const [isGrievanceDrawerOpen, setIsGrievanceDrawerOpen] = useState(false);
+  const [isSimulatedOffline, setIsSimulatedOffline] = useState(false);
+  const [facilityCount, setFacilityCount] = useState(0);
+  const [gpsWarningModal, setGpsWarningModal] = useState<{
+    open: boolean;
+    lat: number;
+    lng: number;
+  } | null>(null);
+
+  // Add Facility Mode State
+  const [isAddFacilityMode, setIsAddFacilityMode] = useState<boolean>(false);
+  const [isAddFacilityModalOpen, setIsAddFacilityModalOpen] = useState<boolean>(false);
+  const [newFacilityCoords, setNewFacilityCoords] = useState<[number, number] | null>(null);
+  const [isExportAuditModalOpen, setIsExportAuditModalOpen] = useState<boolean>(false);
+  const tempFacilityMarkerRef = useRef<L.Marker | null>(null);
+  const isAddFacilityModeRef = useRef<boolean>(false);
+  isAddFacilityModeRef.current = isAddFacilityMode;
+
+  // Operational status breakdown counts for village facilities
+  const operationalCounts = useMemo(() => {
+    return {
+      functional: facilitiesList.filter(
+        (f) =>
+          f.operational_status.toLowerCase().includes('functional') &&
+          !f.operational_status.toLowerCase().includes('partial') &&
+          !f.operational_status.toLowerCase().includes('non')
+      ).length,
+      partial: facilitiesList.filter((f) =>
+        f.operational_status.toLowerCase().includes('partial')
+      ).length,
+      nonFunctional: facilitiesList.filter(
+        (f) =>
+          f.operational_status.toLowerCase().includes('non') ||
+          f.operational_status.toLowerCase().includes('repair') ||
+          f.operational_status.toLowerCase().includes('broken') ||
+          f.operational_status.toLowerCase().includes('degraded')
+      ).length,
+    };
+  }, [facilitiesList]);
+
+  // Priority breakdown counts for village issues from CSV
+  const issueCounts = useMemo(() => {
+    return {
+      total: issuesList.length,
+      high: issuesList.filter(
+        (i) => i.severity === 'high' || i.severity === 'critical' || i.severity === 'urgent'
+      ).length,
+      medium: issuesList.filter((i) => i.severity === 'medium').length,
+      low: issuesList.filter((i) => i.severity === 'low').length,
+    };
+  }, [issuesList]);
+
+  // Show Toast Warning with auto-dismiss
+  const showToast = useCallback((msg: string) => {
+    setToastWarning(msg);
+    setTimeout(() => {
+      setToastWarning(null);
+    }, 5000);
+  }, []);
+
+  // Cancel / Cleanup Add Facility Mode and remove temporary marker
+  const cleanupAddFacilityMode = useCallback(() => {
+    setIsAddFacilityMode(false);
+    isAddFacilityModeRef.current = false;
+    setIsAddFacilityModalOpen(false);
+    setNewFacilityCoords(null);
+    if (tempFacilityMarkerRef.current && mapInstanceRef.current) {
+      mapInstanceRef.current.removeLayer(tempFacilityMarkerRef.current);
+      tempFacilityMarkerRef.current = null;
+    }
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.getContainer().classList.remove('facility-crosshair-active');
+      mapInstanceRef.current.invalidateSize();
+    }
+  }, []);
+
+  // Handle ESC key to dismiss Add Facility mode or modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isAddFacilityMode || isAddFacilityModalOpen) {
+          cleanupAddFacilityMode();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAddFacilityMode, isAddFacilityModalOpen, cleanupAddFacilityMode]);
+
+  // Handle map crosshair cursor styling when Add Facility Mode is active
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const container = mapInstanceRef.current.getContainer();
+    if (isAddFacilityMode) {
+      container.classList.add('facility-crosshair-active');
+    } else {
+      container.classList.remove('facility-crosshair-active');
+    }
+    // Prevent any layout jump or tile freeze
+    mapInstanceRef.current.invalidateSize();
+  }, [isAddFacilityMode]);
+
+  // Global Photo Lightbox trigger hook for Leaflet popup HTML
+  useEffect(() => {
+    (window as any).openPhotoLightbox = (
+      photoUrl: string,
+      title: string,
+      category?: string,
+      coords?: [number, number]
+    ) => {
+      setLightboxData({
+        isOpen: true,
+        photoUrl,
+        title,
+        category,
+        coords: coords || null,
+      });
+    };
+    return () => {
+      delete (window as any).openPhotoLightbox;
+    };
+  }, []);
+
+
+
+  // Render / Re-render Status-Coded Facility Markers & Polished Inspection Popups
+  const renderFacilityMarkers = useCallback(
+    (facilities: CachedFacility[], filter: FacilityCategoryFilter = 'all') => {
+      if (!facilitiesLayerRef.current) return;
+      const group = facilitiesLayerRef.current;
+      group.clearLayers();
+
+      if (filter === 'issues') {
+        return; // Clear facility markers when focusing specifically on village issues
+      }
+
+      const filtered = facilities.filter((fac) => {
+        // Strict approval filter: user and officer ONLY see approved facilities
+        const isApproved = fac.approval_status === 'approved' || fac.approval_status === undefined;
+        if ((userRoleRef.current === 'user' || userRoleRef.current === 'officer') && !isApproved) {
+          return false;
+        }
+        if (fac.approval_status === 'rejected') {
+          return false;
+        }
+
+        if (filter === 'all') return true;
+        const cat = fac.category.toLowerCase();
+        if (filter === 'water') {
+          return (
+            cat.includes('water') ||
+            cat.includes('borewell') ||
+            cat.includes('standpost') ||
+            cat.includes('pump') ||
+            cat.includes('well') ||
+            cat.includes('tank') ||
+            fac.name.toLowerCase().includes('lake')
+          );
+        }
+        if (filter === 'education') {
+          return (
+            cat.includes('education') ||
+            cat.includes('school') ||
+            cat.includes('anganwadi') ||
+            cat.includes('childcare') ||
+            cat.includes('college') ||
+            cat.includes('balwadi') ||
+            cat.includes('coaching') ||
+            cat.includes('academy')
+          );
+        }
+        if (filter === 'commerce') {
+          return (
+            cat.includes('shop') ||
+            cat.includes('commerce') ||
+            cat.includes('store') ||
+            cat.includes('ration') ||
+            cat.includes('dairy') ||
+            cat.includes('hardware') ||
+            cat.includes('market') ||
+            cat.includes('vendor') ||
+            cat.includes('saloon') ||
+            cat.includes('laundry')
+          );
+        }
+        if (filter === 'health') {
+          return (
+            cat.includes('health') ||
+            cat.includes('clinic') ||
+            cat.includes('hospital') ||
+            cat.includes('sub-center')
+          );
+        }
+        if (filter === 'civic') {
+          return (
+            cat.includes('civic') ||
+            cat.includes('social') ||
+            cat.includes('mandir') ||
+            cat.includes('temple') ||
+            cat.includes('graveyard') ||
+            cat.includes('chwal') ||
+            cat.includes('chawl') ||
+            cat.includes('panchayat') ||
+            cat.includes('admin')
+          );
+        }
+        return false;
+      });
+
+      filtered.forEach((fac) => {
+        // Status Coding:
+        // functional: Emerald Green (#10B981)
+        // partially_functional: Amber (#F59E0B)
+        // non_functional: Red (#EF4444)
+        const status = fac.operational_status.toLowerCase();
+        let statusColor = '#10B981'; // Functional Emerald Green
+        let statusLabel = 'Functional';
+        let statusBadge = 'bg-emerald-950/90 text-emerald-400 border-emerald-500/40';
+
+        if (status.includes('partial')) {
+          statusColor = '#F59E0B'; // Partially Functional Amber
+          statusLabel = 'Partially Functional';
+          statusBadge = 'bg-amber-950/90 text-amber-400 border-amber-500/40';
+        } else if (
+          status.includes('non') ||
+          status.includes('repair') ||
+          status.includes('broken') ||
+          status.includes('degraded')
+        ) {
+          statusColor = '#EF4444'; // Non-Functional Red
+          statusLabel = 'Non-Functional / Degraded';
+          statusBadge = 'bg-rose-950/90 text-rose-400 border-rose-500/40';
+        }
+
+        const isWater =
+          fac.category.includes('water') ||
+          fac.category.includes('borewell') ||
+          fac.category.includes('standpost') ||
+          fac.category.includes('tank') ||
+          fac.category.includes('pump') ||
+          fac.category.includes('well') ||
+          fac.name.toLowerCase().includes('lake');
+
+        const glyph = isWater
+          ? '💧'
+          : fac.category.includes('edu') || fac.category.includes('school') || fac.category.includes('coaching') || fac.category.includes('academy')
+          ? '🏫'
+          : fac.category.includes('angan') || fac.category.includes('child') || fac.category.includes('balwadi')
+          ? '🎒'
+          : fac.category.includes('shop') || fac.category.includes('store') || fac.category.includes('hardware') || fac.category.includes('vendor') || fac.category.includes('saloon') || fac.category.includes('laundry')
+          ? '🏪'
+          : fac.category.includes('ration') || fac.category.includes('commerce') || fac.category.includes('dairy')
+          ? '🛒'
+          : fac.category.includes('health') || fac.category.includes('clinic') || fac.category.includes('hospital')
+          ? '🏥'
+          : fac.category.includes('mandir') || fac.category.includes('temple')
+          ? '🛕'
+          : fac.category.includes('graveyard')
+          ? '⚰️'
+          : fac.name.toLowerCase().includes('light')
+          ? '💡'
+          : '🏛️';
+
+        // Custom divIcon with high-contrast outer ring and pulse animation for water
+        const customIcon = L.divIcon({
+          className: 'custom-facility-marker',
+          html: `
+            <div class="relative flex items-center justify-center group cursor-pointer">
+              ${
+                isWater
+                  ? `<span class="absolute w-8 h-8 rounded-full animate-ping opacity-60" style="background-color: ${statusColor};"></span>`
+                  : ''
+              }
+              <div class="relative w-8 h-8 rounded-full bg-slate-950 border-2 shadow-2xl flex items-center justify-center text-xs font-bold transition-transform group-hover:scale-125" style="border-color: ${statusColor}; box-shadow: 0 0 12px ${statusColor}80;">
+                <span>${glyph}</span>
+                <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-slate-950" style="background-color: ${statusColor}"></span>
+              </div>
+            </div>
+          `,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+
+        const marker = L.marker([fac.latitude, fac.longitude], { icon: customIcon });
+
+        // Clean lightweight Leaflet tooltip that immediately disappears on mouseout
+        marker.bindTooltip(
+          `<div class="font-sans font-semibold text-xs text-white">${fac.name}</div>`,
+          {
+            direction: 'top',
+            offset: [0, -18],
+            className: 'gis-clean-tooltip',
+            opacity: 0.95,
+          }
+        );
+
+        // Polished Inspection Popup with Photo Thumbnail & 4 Essential Features
+        const monsoonLower = fac.monsoon_accessible.toLowerCase();
+        const isFloods =
+          monsoonLower.includes('cut') ||
+          monsoonLower.includes('inaccessible') ||
+          monsoonLower.includes('waterlog') ||
+          monsoonLower.includes('flood') ||
+          monsoonLower.includes('isolated');
+
+        const monsoonPill = isFloods
+          ? `<span class="px-2 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/40 text-rose-300 font-bold text-[10px] flex items-center gap-1">⚠️ Floods/Isolated</span>`
+          : `<span class="px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] flex items-center gap-1">✅ Year-round</span>`;
+
+        // Check KoboToolbox / Survey Photo evidence
+        const rawPhoto = fac.photoBase64 || fac.photo_url || (fac as any).photo || '';
+        let resolvedPhoto = '';
+        if (rawPhoto) {
+          if (
+            rawPhoto.startsWith('data:') ||
+            rawPhoto.startsWith('http://') ||
+            rawPhoto.startsWith('https://') ||
+            rawPhoto.startsWith('/')
+          ) {
+            resolvedPhoto = rawPhoto;
+          } else {
+            resolvedPhoto = `/media/${rawPhoto}`;
+          }
+        }
+
+        const photoMarkup = resolvedPhoto
+          ? `
+            <div
+              onclick="window.openPhotoLightbox && window.openPhotoLightbox('${resolvedPhoto}', '${fac.name.replace(/'/g, "\\'")}', '${fac.category}', [${fac.latitude}, ${fac.longitude}])"
+              class="relative w-full h-32 mb-2 rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900 shadow-inner group cursor-pointer"
+              title="Click to inspect high-resolution field survey evidence"
+            >
+              <img src="${resolvedPhoto}" alt="${fac.name}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <div class="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                <span class="opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded-lg bg-slate-950/90 text-[10px] font-bold text-cyan-300 border border-slate-700 shadow-md">
+                  🔍 Inspect Ground-Truth
+                </span>
+              </div>
+              <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-slate-950/85 text-emerald-300 border border-emerald-500/30">
+                📷 KoboCollect Field Photo
+              </span>
+            </div>
+          `
+          : `
+            <div class="mb-2 p-2 rounded-xl bg-slate-950/70 border border-slate-800 text-center flex items-center justify-center gap-1.5 text-slate-400 text-xs">
+              <span class="text-slate-500 text-[11px]">📷</span>
+              <span class="text-[10px] font-semibold text-slate-400">No Field Photo Recorded</span>
+            </div>
+          `;
+
+        const popupHtml = `
+          <div class="font-sans text-slate-100 p-2 min-w-[260px] max-w-[310px]">
+            <!-- Inspection Thumbnail / Fallback -->
+            ${photoMarkup}
+
+            <!-- 1. Asset Title & ID -->
+            <div class="flex items-start justify-between gap-2 mb-1.5">
+              <h3 class="text-sm font-bold text-white tracking-tight leading-snug">
+                ${fac.name}
+              </h3>
+              <span class="text-[9px] font-mono text-slate-400 font-bold bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 flex-shrink-0">
+                ${fac.facility_id}
+              </span>
+            </div>
+
+            <!-- 2. Category Badge -->
+            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 font-semibold text-[10px] capitalize mb-2">
+              <span>${glyph}</span>
+              <span>${fac.category.replace(/_/g, ' ')}</span>
+            </div>
+
+            <!-- 3. Status Pill & 4. Monsoon Access Condition -->
+            <div class="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] mb-2">
+              <div>
+                <span class="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Status</span>
+                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadge}">
+                  ● ${statusLabel}
+                </span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Monsoon Access</span>
+                ${monsoonPill}
+              </div>
+            </div>
+
+            <!-- Coordinate Telemetry & Copy -->
+            <div class="pt-1.5 border-t border-slate-800 flex items-center justify-between gap-2 text-[10px] font-mono">
+              <span class="text-slate-300 truncate font-semibold">
+                ${fac.latitude.toFixed(5)}°N, ${fac.longitude.toFixed(5)}°E
+              </span>
+              <button
+                onclick="navigator.clipboard.writeText('${fac.latitude.toFixed(5)}, ${fac.longitude.toFixed(5)}'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Coords', 1500);"
+                class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 font-sans font-semibold transition active:scale-95 cursor-pointer text-[10px]"
+              >
+                Copy Coords
+              </button>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupHtml, {
+          className: 'gis-dark-popup',
+          closeButton: true,
+        });
+
+        group.addLayer(marker);
+      });
+    },
+    []
+  );
+
+  // Render Status & Severity Coded Issue Markers & Inspection Popups
+  const renderIssueMarkers = useCallback(
+    (issues: CachedIssue[], filter: FacilityCategoryFilter = 'all') => {
+      if (!issuesLayerRef.current) return;
+      const group = issuesLayerRef.current;
+      group.clearLayers();
+
+      const filtered = issues.filter((iss) => {
+        // Strict approval filter: user and officer ONLY see approved issues
+        const isApproved = iss.approval_status === 'approved' || iss.approval_status === undefined;
+        if ((userRoleRef.current === 'user' || userRoleRef.current === 'officer') && !isApproved) {
+          return false;
+        }
+        if (iss.approval_status === 'rejected') {
+          return false;
+        }
+
+        if (filter === 'all' || filter === 'issues') return true;
+        const cat = (iss.category || '').toLowerCase();
+        const title = (iss.title || '').toLowerCase();
+        if (filter === 'water') {
+          return (
+            cat.includes('water') ||
+            cat.includes('drain') ||
+            cat.includes('runoff') ||
+            title.includes('drain') ||
+            title.includes('water')
+          );
+        }
+        if (filter === 'health') {
+          return (
+            cat.includes('waste') ||
+            cat.includes('heap') ||
+            cat.includes('sanitation') ||
+            title.includes('waste')
+          );
+        }
+        return false;
+      });
+
+      filtered.forEach((iss) => {
+        const sev = (iss.severity || 'medium').toLowerCase();
+        let statusColor = '#f59e0b'; // Amber for medium
+        let severityLabel = 'Medium Priority';
+        let severityBadge = 'bg-amber-950/90 text-amber-300 border-amber-500/40';
+
+        if (sev === 'high' || sev === 'critical' || sev === 'urgent') {
+          statusColor = '#ef4444'; // Red for high/critical
+          severityLabel = 'High Priority';
+          severityBadge = 'bg-rose-950/90 text-rose-300 border-rose-500/40';
+        } else if (sev === 'low') {
+          statusColor = '#06b6d4'; // Cyan for low
+          severityLabel = 'Low Priority';
+          severityBadge = 'bg-cyan-950/90 text-cyan-300 border-cyan-500/40';
+        }
+
+        const cat = (iss.category || '').toLowerCase();
+        const glyph =
+          cat.includes('road') || cat.includes('pothole')
+            ? '🚧'
+            : cat.includes('waste') || cat.includes('dump')
+            ? '🚯'
+            : cat.includes('drain') || cat.includes('runoff')
+            ? '🌊'
+            : cat.includes('water')
+            ? '🚰'
+            : cat.includes('light') || cat.includes('electric')
+            ? '⚡'
+            : '⚠️';
+
+        const customIcon = L.divIcon({
+          className: 'custom-issue-marker',
+          html: `
+            <div class="relative flex items-center justify-center group cursor-pointer">
+              ${
+                sev === 'high' || sev === 'critical' || sev === 'urgent'
+                  ? `<span class="absolute w-8 h-8 rounded-full animate-ping opacity-60" style="background-color: ${statusColor};"></span>`
+                  : ''
+              }
+              <div class="relative w-8 h-8 rounded-full bg-slate-950 border-2 shadow-2xl flex items-center justify-center text-xs font-bold transition-transform group-hover:scale-125" style="border-color: ${statusColor}; box-shadow: 0 0 14px ${statusColor}90;">
+                <span>${glyph}</span>
+                <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-slate-950" style="background-color: ${statusColor}"></span>
+              </div>
+            </div>
+          `,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+
+        const marker = L.marker([iss.latitude, iss.longitude], { icon: customIcon });
+
+        // Clean lightweight Leaflet tooltip that immediately disappears on mouseout
+        marker.bindTooltip(
+          `<div class="font-sans font-semibold text-xs text-white">${iss.title}</div>`,
+          {
+            direction: 'top',
+            offset: [0, -18],
+            className: 'gis-clean-tooltip',
+            opacity: 0.95,
+          }
+        );
+
+        const currentRole = userRoleRef.current;
+        const isUserRole = currentRole === 'user';
+        const isOfficerRole = currentRole === 'officer';
+        const isAdminRole = currentRole === 'admin';
+
+        // Role-based status interaction
+        let statusControlHtml = '';
+        if (isUserRole) {
+          statusControlHtml = `
+            <div class="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400">Current Status:</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-900 border border-slate-700 text-slate-200">
+                ● ${(iss.status || 'reported').replace(/_/g, ' ')}
+              </span>
+            </div>
+          `;
+        } else if (isOfficerRole) {
+          statusControlHtml = `
+            <div class="mt-2.5 pt-2 border-t border-blue-900/50">
+              <div class="text-[9px] uppercase font-bold text-blue-300 mb-1 flex items-center justify-between">
+                <span>Field Inspection Status:</span>
+                <span class="text-blue-400 font-mono text-[9px]">Officer Update</span>
+              </div>
+              <select
+                class="issue-status-select w-full bg-slate-900 border border-blue-500/50 rounded-lg text-xs text-white p-1.5 focus:outline-none focus:border-blue-400 transition cursor-pointer"
+                data-issue-id="${iss.issue_id}"
+              >
+                <option value="reported" ${iss.status === 'reported' ? 'selected' : ''}>⚠️ Reported</option>
+                <option value="under_inspection" ${iss.status === 'under_inspection' ? 'selected' : ''}>🔍 Under Inspection</option>
+                <option value="resolved" ${iss.status === 'resolved' ? 'selected' : ''}>✅ Resolved</option>
+              </select>
+            </div>
+          `;
+        } else if (isAdminRole) {
+          statusControlHtml = `
+            <div class="mt-2.5 pt-2 border-t border-rose-900/50">
+              <div class="text-[9px] uppercase font-bold text-rose-300 mb-1 flex items-center justify-between">
+                <span>Administrative Status Override:</span>
+                <span class="text-rose-400 font-mono text-[9px]">Admin Override</span>
+              </div>
+              <select
+                class="issue-status-select w-full bg-slate-900 border border-rose-500/50 rounded-lg text-xs text-white p-1.5 focus:outline-none focus:border-rose-400 transition cursor-pointer"
+                data-issue-id="${iss.issue_id}"
+              >
+                <option value="reported" ${iss.status === 'reported' ? 'selected' : ''}>⚠️ Reported</option>
+                <option value="under_inspection" ${iss.status === 'under_inspection' ? 'selected' : ''}>🔍 Under Inspection</option>
+                <option value="in_progress" ${iss.status === 'in_progress' ? 'selected' : ''}>🛠️ In Progress</option>
+                <option value="resolved" ${iss.status === 'resolved' ? 'selected' : ''}>✅ Resolved</option>
+              </select>
+            </div>
+          `;
+        }
+
+        // Check KoboToolbox / Survey Photo evidence
+        const rawPhoto = iss.photoBase64 || iss.photo_url || (iss as any).photo || '';
+        let resolvedPhoto = '';
+        if (rawPhoto) {
+          if (
+            rawPhoto.startsWith('data:') ||
+            rawPhoto.startsWith('http://') ||
+            rawPhoto.startsWith('https://') ||
+            rawPhoto.startsWith('/')
+          ) {
+            resolvedPhoto = rawPhoto;
+          } else {
+            resolvedPhoto = `/media/${rawPhoto}`;
+          }
+        }
+
+        const photoMarkup = resolvedPhoto
+          ? `
+            <div
+              onclick="window.openPhotoLightbox && window.openPhotoLightbox('${resolvedPhoto}', '${(iss.title || '').replace(/'/g, "\\'")}', '${iss.category || 'Incident'}', [${iss.latitude}, ${iss.longitude}])"
+              class="relative w-full h-32 mb-2 rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900 shadow-inner group cursor-pointer"
+              title="Click to inspect high-resolution field survey evidence"
+            >
+              <img src="${resolvedPhoto}" alt="${iss.title}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <div class="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                <span class="opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded-lg bg-slate-950/90 text-[10px] font-bold text-amber-300 border border-slate-700 shadow-md">
+                  🔍 Inspect Ground-Truth
+                </span>
+              </div>
+              <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-slate-950/85 text-amber-300 border border-amber-500/30">
+                📷 KoboCollect Field Photo
+              </span>
+            </div>
+          `
+          : `
+            <div class="mb-2 p-2 rounded-xl bg-slate-950/70 border border-slate-800 text-center flex items-center justify-center gap-1.5 text-slate-400 text-xs">
+              <span class="text-slate-500 text-[11px]">📷</span>
+              <span class="text-[10px] font-semibold text-slate-400">No Field Photo Recorded</span>
+            </div>
+          `;
+
+        const isFloods =
+          (iss.title || '').toLowerCase().includes('flood') ||
+          (iss.title || '').toLowerCase().includes('drain') ||
+          (iss.title || '').toLowerCase().includes('inundat') ||
+          (iss.notes || '').toLowerCase().includes('waterlog') ||
+          iss.severity === 'critical' ||
+          iss.severity === 'high';
+
+        const monsoonPill = isFloods
+          ? `<span class="px-2 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/40 text-rose-300 font-bold text-[10px] flex items-center gap-1">⚠️ Floods/Isolated</span>`
+          : `<span class="px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] flex items-center gap-1">✅ Year-round</span>`;
+
+        const statusPill =
+          iss.status === 'resolved'
+            ? `<span class="px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 font-bold text-[10px]">● Solved</span>`
+            : iss.status === 'in_progress'
+            ? `<span class="px-2 py-0.5 rounded-full bg-cyan-950/90 border border-cyan-500/40 text-cyan-300 font-bold text-[10px]">● In Progress</span>`
+            : iss.status === 'under_inspection'
+            ? `<span class="px-2 py-0.5 rounded-full bg-amber-950/90 border border-amber-500/40 text-amber-300 font-bold text-[10px]">● Under Inspection</span>`
+            : `<span class="px-2 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/40 text-rose-300 font-bold text-[10px]">● New / Reported</span>`;
+
+        const popupHtml = `
+          <div class="font-sans text-slate-100 p-2 min-w-[260px] max-w-[310px]">
+            <!-- Inspection Thumbnail / Fallback -->
+            ${photoMarkup}
+
+            <!-- 1. Incident Title & ID -->
+            <div class="flex items-start justify-between gap-2 mb-1.5">
+              <h3 class="text-sm font-bold text-white tracking-tight leading-snug">
+                ${iss.title}
+              </h3>
+              <span class="text-[9px] font-mono text-slate-400 font-bold bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 flex-shrink-0">
+                ${iss.issue_id}
+              </span>
+            </div>
+
+            <!-- 2. Category Badge -->
+            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-500/40 text-amber-300 font-semibold text-[10px] capitalize mb-2">
+              <span>${glyph}</span>
+              <span>${iss.category.replace(/_/g, ' ')}</span>
+            </div>
+
+            <!-- 3. Status Pill & 4. Priority Badge -->
+            <div class="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] mb-2">
+              <div>
+                <span class="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Status</span>
+                ${statusPill}
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Priority</span>
+                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${severityBadge}">● ${severityLabel}</span>
+              </div>
+            </div>
+            <div class="mb-2 p-1.5 rounded-lg bg-slate-950/60 border border-slate-800/80 text-[10px] flex items-center justify-between">
+              <span class="text-slate-400 text-[9px] uppercase tracking-wider">Monsoon Access:</span>
+              ${monsoonPill}
+            </div>
+
+            ${statusControlHtml}
+
+            <!-- Coordinate Telemetry & Copy -->
+            <div class="pt-1.5 border-t border-slate-800 flex items-center justify-between gap-2 text-[10px] font-mono mt-2">
+              <span class="text-slate-300 truncate font-semibold">
+                ${iss.latitude.toFixed(5)}°N, ${iss.longitude.toFixed(5)}°E
+              </span>
+              <button
+                onclick="navigator.clipboard.writeText('${iss.latitude.toFixed(5)}, ${iss.longitude.toFixed(5)}'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Coords', 1500);"
+                class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-sans font-semibold transition active:scale-95 cursor-pointer text-[10px]"
+              >
+                Copy Coords
+              </button>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupHtml, {
+          className: 'gis-dark-popup',
+          closeButton: true,
+        });
+
+        group.addLayer(marker);
+      });
+    },
+    []
+  );
+
+  // Filter facilities & issues by category and smoothly fit bounds to filtered group
+  const handleFilterFacilities = (filter: FacilityCategoryFilter) => {
+    setFacilityFilter(filter);
+    renderFacilityMarkers(allFacilitiesRef.current, filter);
+    renderIssueMarkers(allIssuesRef.current, filter);
+
+    if (filter === 'issues') {
+      const issueCoords = allIssuesRef.current
+        .filter((i) => !isNaN(i.latitude) && !isNaN(i.longitude) && i.latitude !== 0 && i.longitude !== 0)
+        .map((i) => [i.latitude, i.longitude] as [number, number]);
+
+      if (issueCoords.length > 0 && mapInstanceRef.current) {
+        const bounds = L.latLngBounds(issueCoords);
+        if (bounds.isValid()) {
+          try {
+            mapInstanceRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 17 });
+          } catch {
+            // ignore
+          }
+        }
+      }
+      return;
+    }
+
+    const filtered = allFacilitiesRef.current.filter((fac) => {
+      if (filter === 'all') return true;
+      const cat = fac.category.toLowerCase();
+      if (filter === 'water') {
+        return (
+          cat.includes('water') ||
+          cat.includes('borewell') ||
+          cat.includes('standpost') ||
+          cat.includes('pump') ||
+          cat.includes('well') ||
+          cat.includes('tank') ||
+          fac.name.toLowerCase().includes('lake')
+        );
+      }
+      if (filter === 'education') {
+        return (
+          cat.includes('education') ||
+          cat.includes('school') ||
+          cat.includes('anganwadi') ||
+          cat.includes('childcare') ||
+          cat.includes('college') ||
+          cat.includes('balwadi') ||
+          cat.includes('coaching') ||
+          cat.includes('academy')
+        );
+      }
+      if (filter === 'commerce') {
+        return (
+          cat.includes('shop') ||
+          cat.includes('commerce') ||
+          cat.includes('store') ||
+          cat.includes('ration') ||
+          cat.includes('dairy') ||
+          cat.includes('hardware') ||
+          cat.includes('market') ||
+          cat.includes('vendor') ||
+          cat.includes('saloon') ||
+          cat.includes('laundry')
+        );
+      }
+      if (filter === 'health') {
+        return (
+          cat.includes('health') ||
+          cat.includes('clinic') ||
+          cat.includes('hospital') ||
+          cat.includes('sub-center')
+        );
+      }
+      if (filter === 'civic') {
+        return (
+          cat.includes('civic') ||
+          cat.includes('social') ||
+          cat.includes('mandir') ||
+          cat.includes('temple') ||
+          cat.includes('graveyard') ||
+          cat.includes('chwal') ||
+          cat.includes('chawl') ||
+          cat.includes('panchayat') ||
+          cat.includes('admin')
+        );
+      }
+      return false;
+    });
+
+    const coords = filtered
+      .filter((f) => !isNaN(f.latitude) && !isNaN(f.longitude) && f.latitude !== 0 && f.longitude !== 0)
+      .map((f) => [f.latitude, f.longitude] as [number, number]);
+
+    if (coords.length > 0 && mapInstanceRef.current) {
+      const bounds = L.latLngBounds(coords);
+      if (bounds.isValid()) {
+        try {
+          mapInstanceRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 17 });
+        } catch {
+          // ignore transient container size errors
+        }
+      }
+    }
+  };
+
+  // Switch dataset between field surveyed assets (22 fac + 3 iss) and unified village model assets (172 fac + 203 iss)
+  const handleSwitchDataset = async (dataset: 'survey' | 'unified') => {
+    setActiveDataset(dataset);
+    const facPath = dataset === 'unified' ? '/data/unified_facilities.csv' : '/data/facilities.csv';
+    const issPath = dataset === 'unified' ? '/data/unified_issues.csv' : '/data/issues.csv';
+
+    const [facilities, issues] = await Promise.all([
+      seedFacilitiesFromCsv(true, facPath),
+      seedIssuesFromCsv(true, issPath),
+    ]);
+
+    allFacilitiesRef.current = facilities;
+    setFacilitiesList(facilities);
+    setFacilityCount(facilities.length);
+    renderFacilityMarkers(facilities, facilityFilter);
+
+    allIssuesRef.current = issues;
+    setIssuesList(issues);
+    renderIssueMarkers(issues, facilityFilter);
+
+    showToast(
+      dataset === 'unified'
+        ? `Loaded All ${facilities.length} Facilities & ${issues.length} Issues (Digital Twin Model)`
+        : `Loaded ${facilities.length} Survey Facilities & ${issues.length} Field Survey Issues`
+    );
+
+    const validCoords = (facilityFilter === 'issues' ? issues : facilities)
+      .filter((f) => !isNaN(f.latitude) && !isNaN(f.longitude) && f.latitude !== 0 && f.longitude !== 0)
+      .map((f) => [f.latitude, f.longitude] as [number, number]);
+
+    if (validCoords.length > 0 && mapInstanceRef.current) {
+      const bounds = L.latLngBounds(validCoords);
+      if (bounds.isValid()) {
+        try {
+          mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        } catch {
+          // ignore transient container size errors
+        }
+      }
+    }
+  };
+
+  // Handle saving newly registered facility
+  const handleFacilitySaved = async (newFacility: CachedFacility) => {
+    try {
+      // 1. Save directly to IndexedDB SmartVillageOfflineDB (cached_facilities)
+      await saveFacilityToOfflineDb(newFacility);
+
+      // 2. Instantly append to React state and refs
+      const updated = [newFacility, ...allFacilitiesRef.current];
+      allFacilitiesRef.current = updated;
+      setFacilitiesList(updated);
+      setFacilityCount(
+        updated.filter((f) => f.approval_status === 'approved' || !f.approval_status).length
+      );
+
+      // 3. Immediately render on Leaflet layer (pending items automatically hidden for user/officer)
+      renderFacilityMarkers(updated, facilityFilter);
+
+      // 4. Cleanup mode & temporary marker
+      cleanupAddFacilityMode();
+
+      // 5. Success Toast / Feedback
+      if (newFacility.approval_status === 'pending_approval') {
+        showToast('Facility proposal submitted for Panchayat Verification.');
+      } else {
+        showToast('Facility registered and published to live map!');
+      }
+    } catch (err) {
+      console.error('Failed to save facility:', err);
+      showToast('Error saving facility to local database.');
+    }
+  };
+
+  // Update status for a village issue from popup
+  const handleUpdateIssueStatus = useCallback(
+    async (issueId: string, newStatus: string) => {
+      try {
+        await db.cached_issues.update(issueId, { status: newStatus });
+        allIssuesRef.current = allIssuesRef.current.map((iss) =>
+          iss.issue_id === issueId ? { ...iss, status: newStatus } : iss
+        );
+        setIssuesList([...allIssuesRef.current]);
+        renderIssueMarkers(allIssuesRef.current, facilityFilter);
+        showToast(`Issue ${issueId} status updated to "${newStatus.replace(/_/g, ' ')}"!`);
+      } catch (err) {
+        console.error('Failed to update issue status in DB:', err);
+      }
+    },
+    [facilityFilter, renderIssueMarkers, showToast]
+  );
+  handleUpdateIssueStatusRef.current = handleUpdateIssueStatus;
+
+  // Fly to high priority issue from ML Decision Support panel
+  const handleFlyToIssue = useCallback((issue: CachedIssue) => {
+    if (!mapInstanceRef.current) return;
+    mapInstanceRef.current.flyTo([issue.latitude, issue.longitude], 18, {
+      duration: 1.5,
+    });
+    if (issuesLayerRef.current) {
+      issuesLayerRef.current.eachLayer((layer: any) => {
+        if (layer.getLatLng) {
+          const latlng = layer.getLatLng();
+          if (
+            Math.abs(latlng.lat - issue.latitude) < 0.0001 &&
+            Math.abs(latlng.lng - issue.longitude) < 0.0001
+          ) {
+            setTimeout(() => {
+              layer.openPopup();
+            }, 800);
+          }
+        }
+      });
+    }
+  }, []);
+
+  // Pre-computed DBSCAN clusters based on survey fault density (epsilon = 85m, minPts = 4)
+  const DBSCAN_CLUSTERS = [
+    {
+      id: 'cluster-alpha',
+      name: 'Hotspot α: Core Inundation & Culvert Choke',
+      coords: [19.3548, 72.8858] as [number, number],
+      radius: 135,
+      count: 9,
+      sev: 'Critical Danger Zone',
+      color: '#ef4444',
+      desc: 'High concentration of drainage overflow & road shoulder erosion affecting 140+ households during monsoon.',
+    },
+    {
+      id: 'cluster-beta',
+      name: 'Hotspot β: Station Transit Corridor Deterioration',
+      coords: [19.3615, 72.8755] as [number, number],
+      radius: 145,
+      count: 6,
+      sev: 'High Danger Zone',
+      color: '#ef4444',
+      desc: 'Severe pavement potholes & waterlogging along Juchandra commuter arterial link.',
+    },
+    {
+      id: 'cluster-gamma',
+      name: 'Hotspot γ: Bapane Gaothan Silt & Debris Blockage',
+      coords: [19.3665, 72.8835] as [number, number],
+      radius: 120,
+      count: 5,
+      sev: 'High Danger Zone',
+      color: '#ef4444',
+      desc: 'Silted stormwater channel creating backwater seepage near civic boundary.',
+    },
+  ];
+
+  // Spatial ML: DBSCAN Spatial Clustering & Density Heatmap Generator
+  const renderDbscanAndHeatmap = useCallback(
+    (issues: CachedIssue[], showDbscan: boolean, showHeat: boolean) => {
+      // 1. Render DBSCAN Layer
+      if (dbscanLayerRef.current) {
+        dbscanLayerRef.current.clearLayers();
+        if (showDbscan) {
+          DBSCAN_CLUSTERS.forEach((cl) => {
+            const circle = L.circle(cl.coords, {
+              radius: cl.radius,
+              color: '#EF4444',
+              weight: 2,
+              dashArray: '6, 6',
+              fillColor: '#EF4444',
+              fillOpacity: 0.25,
+            });
+
+            circle.bindTooltip(
+              `<div class="p-2 font-sans text-xs bg-slate-950/95 border border-rose-500/50 rounded-xl shadow-2xl text-slate-100">
+                <div class="flex items-center gap-1.5 mb-1">
+                  <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                  <strong class="text-rose-300 text-xs font-bold">High-Density Failure Zone</strong>
+                </div>
+                <div class="text-[11px] text-white font-semibold">${cl.name}</div>
+                <div class="text-[10px] text-amber-300 font-mono font-bold">${cl.count} Correlated Faults • DBSCAN ε=85m</div>
+                <div class="text-[10px] text-slate-300 mt-1 italic max-w-xs leading-relaxed">${cl.desc}</div>
+              </div>`,
+              { sticky: true, className: 'gis-clean-tooltip' }
+            );
+
+            dbscanLayerRef.current?.addLayer(circle);
+          });
+        }
+      }
+
+      // 2. Render Heatmap Layer (with Scaled Red-filled Transparent DBSCAN Failure Hotspots)
+      if (heatmapLayerRef.current) {
+        heatmapLayerRef.current.clearLayers();
+        if (showHeat) {
+          const map = mapInstanceRef.current;
+          const mapBounds = map?.getBounds();
+
+          // 2.1 Always Scale Red-filled Transparent DBSCAN Failure Circles on Heatmap
+          DBSCAN_CLUSTERS.forEach((cl) => {
+            const dangerCircle = L.circle(cl.coords, {
+              radius: cl.radius,
+              color: '#EF4444',
+              weight: 2,
+              dashArray: '6, 6',
+              fillColor: '#EF4444',
+              fillOpacity: 0.25,
+            });
+
+            dangerCircle.bindTooltip(
+              `<div class="p-2.5 font-sans text-xs bg-slate-950/95 border-2 border-rose-500 rounded-xl shadow-[0_0_25px_rgba(239,68,68,0.4)] text-slate-100">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                  <strong class="text-rose-400 text-xs uppercase font-black tracking-wide">High-Density Failure Zone</strong>
+                </div>
+                <div class="text-[11px] text-white font-semibold">${cl.name}</div>
+                <div class="text-[10px] text-amber-300 font-mono font-bold">${cl.count} Spatial Faults • ε=85m</div>
+                <div class="text-[10px] text-slate-300 mt-1 italic max-w-xs leading-relaxed">${cl.desc}</div>
+              </div>`,
+              { sticky: true, className: 'gis-clean-tooltip' }
+            );
+
+            heatmapLayerRef.current?.addLayer(dangerCircle);
+          });
+
+          // 2.2 Render Gradient Thermal Density Discs for all visible issues
+          issues.forEach((iss) => {
+            if (!iss.latitude || !iss.longitude) return;
+            if (mapBounds && !mapBounds.contains([iss.latitude, iss.longitude])) return;
+
+            const isUrgent =
+              iss.severity === 'high' || iss.severity === 'critical' || iss.severity === 'urgent';
+
+            // Outer soft glow disc
+            const outerDisc = L.circle([iss.latitude, iss.longitude], {
+              radius: isUrgent ? 85 : 55,
+              stroke: false,
+              fillColor: isUrgent ? '#ef4444' : '#f59e0b',
+              fillOpacity: isUrgent ? 0.25 : 0.16,
+            });
+            heatmapLayerRef.current?.addLayer(outerDisc);
+
+            // Inner intense thermal core disc
+            const innerCore = L.circle([iss.latitude, iss.longitude], {
+              radius: isUrgent ? 40 : 25,
+              stroke: false,
+              fillColor: isUrgent ? '#f43f5e' : '#fbbf24',
+              fillOpacity: isUrgent ? 0.45 : 0.32,
+            });
+            heatmapLayerRef.current?.addLayer(innerCore);
+          });
+        }
+      }
+    },
+    []
+  );
+
+  // Hook map pan/zoom boundary updates so density rendering overlay updates dynamically
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    const handleBoundaryUpdate = () => {
+      if (showHeatmap) {
+        renderDbscanAndHeatmap(allIssuesRef.current, showDbscanClusters, true);
+      }
+    };
+
+    map.on('moveend', handleBoundaryUpdate);
+    map.on('zoomend', handleBoundaryUpdate);
+
+    return () => {
+      map.off('moveend', handleBoundaryUpdate);
+      map.off('zoomend', handleBoundaryUpdate);
+    };
+  }, [showHeatmap, showDbscanClusters, renderDbscanAndHeatmap]);
+
+  const toggleDbscanClusters = (enable: boolean) => {
+    setShowDbscanClusters(enable);
+    if (!mapInstanceRef.current || !dbscanLayerRef.current) return;
+    if (enable) {
+      if (!mapInstanceRef.current.hasLayer(dbscanLayerRef.current)) {
+        mapInstanceRef.current.addLayer(dbscanLayerRef.current);
+      }
+      renderDbscanAndHeatmap(allIssuesRef.current, true, showHeatmap);
+    } else {
+      if (mapInstanceRef.current.hasLayer(dbscanLayerRef.current)) {
+        mapInstanceRef.current.removeLayer(dbscanLayerRef.current);
+      }
+    }
+  };
+
+  const toggleHeatmap = (enable: boolean) => {
+    setShowHeatmap(enable);
+    if (!mapInstanceRef.current || !heatmapLayerRef.current) return;
+    if (enable) {
+      if (!mapInstanceRef.current.hasLayer(heatmapLayerRef.current)) {
+        mapInstanceRef.current.addLayer(heatmapLayerRef.current);
+      }
+      renderDbscanAndHeatmap(allIssuesRef.current, showDbscanClusters, true);
+    } else {
+      if (mapInstanceRef.current.hasLayer(heatmapLayerRef.current)) {
+        mapInstanceRef.current.removeLayer(heatmapLayerRef.current);
+      }
+    }
+  };
+
+  // Export Handlers for Client-Side Audit & Reporting Engine
+  const handleDownloadPanchayatPdf = useCallback(() => {
+    generatePanchayatPDF(facilitiesList, issuesList, session || undefined);
+    showToast('📄 Official Panchayat Audit PDF generated & downloaded!');
+  }, [facilitiesList, issuesList, session, showToast]);
+
+  const handleExportMasterCsv = useCallback(() => {
+    exportMasterDataCSV(facilitiesList, issuesList);
+    showToast('📊 Master Data CSV exported successfully!');
+  }, [facilitiesList, issuesList, showToast]);
+
+  const handleOfficerExportWorklist = useCallback(() => {
+    generateOfficerWorklistPDF(issuesList, session || undefined);
+    showToast('📋 Field Inspection Worklist PDF generated & downloaded!');
+  }, [issuesList, session, showToast]);
+
+  // Export Audit Handler - role adaptive
+  const handleExportAuditSummary = () => {
+    if (userRole === 'officer') {
+      handleOfficerExportWorklist();
+    } else {
+      setIsExportAuditModalOpen(true);
+    }
+  };
+
+  // Refresh grievance pins from IndexedDB
+  const refreshGrievanceMarkers = useCallback(async () => {
+    if (!mapInstanceRef.current || !grievancesLayerRef.current) return;
+    grievancesLayerRef.current.clearLayers();
+
+    try {
+      const allGrievances = await db.offline_grievances.toArray();
+      const visibleGrievances = allGrievances.filter((g) => {
+        const isApproved = g.approval_status === 'approved' || g.approval_status === undefined;
+        if ((userRoleRef.current === 'user' || userRoleRef.current === 'officer') && !isApproved) {
+          return false;
+        }
+        if (g.approval_status === 'rejected') {
+          return false;
+        }
+        return true;
+      });
+
+      visibleGrievances.forEach((g) => {
+        const severityColor =
+          g.severity === 'critical'
+            ? '#f43f5e'
+            : g.severity === 'high'
+            ? '#f97316'
+            : g.severity === 'medium'
+            ? '#eab308'
+            : '#10b981';
+
+        const customIcon = L.divIcon({
+          className: 'grievance-marker',
+          html: `
+            <div class="relative flex items-center justify-center group cursor-pointer">
+              <span class="absolute w-7 h-7 rounded-full animate-ping opacity-75" style="background-color: ${severityColor}40"></span>
+              <div class="relative w-6 h-6 rounded-full border-2 border-white shadow-xl flex items-center justify-center text-xs font-bold text-white" style="background-color: ${severityColor}">
+                ⚠️
+              </div>
+            </div>
+          `,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+        });
+
+        const photoSrc = g.photoBase64 || DEFAULT_INSPECTION_PLACEHOLDER;
+        const isFloods =
+          (g.description || '').toLowerCase().includes('flood') ||
+          (g.description || '').toLowerCase().includes('inundat') ||
+          g.severity === 'critical';
+
+        const monsoonPill = isFloods
+          ? `<span class="px-2 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/40 text-rose-300 font-bold text-[10px] flex items-center gap-1">⚠️ Floods/Isolated</span>`
+          : `<span class="px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] flex items-center gap-1">✅ Year-round</span>`;
+
+        const marker = L.marker([g.latitude, g.longitude], { icon: customIcon });
+        marker.bindPopup(
+          `
+          <div class="font-sans text-slate-100 p-2 min-w-[260px] max-w-[310px]">
+            <!-- Inspection Thumbnail -->
+            <div class="relative w-full h-32 mb-2 rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900 shadow-inner">
+              <img src="${photoSrc}" alt="${g.title}" class="w-full h-full object-cover" />
+              <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-slate-950/85 text-emerald-400 border border-emerald-500/30">
+                ${g.photoBase64 ? '📷 Photo Captured' : 'Offline Inspection'}
+              </span>
+            </div>
+
+            <!-- 1. Incident Title -->
+            <div class="flex items-start justify-between gap-2 mb-1.5">
+              <h3 class="text-sm font-bold text-white tracking-tight leading-snug">
+                ${g.title}
+              </h3>
+              <span class="text-[9px] font-mono text-emerald-400 font-bold bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 flex-shrink-0">
+                #${g.id ?? 'NEW'}
+              </span>
+            </div>
+
+            <!-- 2. Category Badge -->
+            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 font-semibold text-[10px] capitalize mb-2">
+              <span>⚠️</span>
+              <span>${g.category}</span>
+            </div>
+
+            <!-- 3. Status Pill & 4. Monsoon Access Condition -->
+            <div class="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] mb-2">
+              <div>
+                <span class="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Status</span>
+                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold text-white uppercase" style="background-color: ${severityColor}">
+                  ● ${g.severity}
+                </span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Monsoon Condition</span>
+                ${monsoonPill}
+              </div>
+            </div>
+
+            ${
+              g.description
+                ? `<div class="p-2 rounded-xl bg-slate-950/90 border border-slate-800 text-[11px] text-slate-300 italic mb-2">"${g.description}"</div>`
+                : ''
+            }
+
+            <!-- Coordinate Telemetry & Copy -->
+            <div class="pt-1.5 border-t border-slate-800 flex items-center justify-between gap-2 text-[10px] font-mono">
+              <span class="text-slate-300 truncate font-semibold">
+                ${g.latitude.toFixed(5)}°N, ${g.longitude.toFixed(5)}°E
+              </span>
+              <button
+                onclick="navigator.clipboard.writeText('${g.latitude.toFixed(5)}, ${g.longitude.toFixed(5)}'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Coords', 1500);"
+                class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 font-sans font-semibold transition active:scale-95 cursor-pointer text-[10px]"
+              >
+                Copy Coords
+              </button>
+            </div>
+          </div>
+        `,
+          { className: 'gis-dark-popup' }
+        );
+
+        grievancesLayerRef.current?.addLayer(marker);
+      });
+    } catch (e) {
+      console.error('Failed to render grievance markers from IndexedDB:', e);
+    }
+  }, []);
+
+  // Initialize Map
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+    }
+
+    // 1. Create Tile Layers
+    const esriWorldImagery = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 19,
+        attribution:
+          '&copy; <a href="https://www.esri.com/" target="_blank">Esri</a>, Maxar, Earthstar Geographics',
+      }
+    );
+
+    const osmStandard = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
+    });
+
+    const cartoDark = L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      {
+        subdomains: 'abcd',
+        maxZoom: 19,
+        attribution:
+          '&copy; <a href="https://carto.com/" target="_blank">CARTO</a> &copy; OpenStreetMap',
+      }
+    );
+
+    const openTopo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom: 17,
+      attribution: '&copy; OpenTopoMap contributors',
+    });
+
+    tileLayersRef.current = {
+      esri: esriWorldImagery,
+      osm: osmStandard,
+      cartoDark: cartoDark,
+      topo: openTopo,
+    };
+
+    // 2. Initialize Map Instance centered at Khopripada Core
+    const map = L.map(mapContainerRef.current, {
+      center: KHOPRIPADA_CORE,
+      zoom: DEFAULT_ZOOM,
+      zoomControl: false,
+      layers: [esriWorldImagery],
+    });
+
+    mapInstanceRef.current = map;
+
+    // 3. Add Scale Control
+    L.control
+      .scale({
+        imperial: false,
+        metric: true,
+        position: 'bottomleft',
+      })
+      .addTo(map);
+
+    // 4. Village Boundary AOI Overlay
+    const boundary = L.polygon(VILLAGE_BOUNDARY_COORDS, {
+      color: '#10b981',
+      weight: 2.5,
+      opacity: 0.9,
+      dashArray: '6, 6',
+      fillColor: '#059669',
+      fillOpacity: 0.12,
+    }).addTo(map);
+
+    boundary.bindTooltip(
+      '<div class="px-2 py-1 font-sans text-xs font-semibold text-emerald-300 bg-slate-900/90 border border-emerald-500/40 rounded shadow-lg">Khopripada & Bapane Study Corridor</div>',
+      { sticky: true, className: 'gis-boundary-tooltip' }
+    );
+    boundaryLayerRef.current = boundary;
+
+    // 5. Layer Groups
+    const landmarksGroup = L.layerGroup().addTo(map);
+    landmarksLayerRef.current = landmarksGroup;
+
+    const facilitiesGroup = L.layerGroup().addTo(map);
+    facilitiesLayerRef.current = facilitiesGroup;
+
+    const issuesGroup = L.layerGroup().addTo(map);
+    issuesLayerRef.current = issuesGroup;
+
+    const grievancesGroup = L.layerGroup().addTo(map);
+    grievancesLayerRef.current = grievancesGroup;
+
+    const gpsGroup = L.layerGroup().addTo(map);
+    gpsLocationLayerRef.current = gpsGroup;
+
+    // DBSCAN & Heatmap Layers
+    const dbscanGroup = L.layerGroup();
+    dbscanLayerRef.current = dbscanGroup;
+    if (userRoleRef.current === 'admin' && showDbscanClusters) {
+      dbscanGroup.addTo(map);
+    }
+
+    const heatmapGroup = L.layerGroup();
+    heatmapLayerRef.current = heatmapGroup;
+    if (userRoleRef.current === 'admin' && showHeatmap) {
+      heatmapGroup.addTo(map);
+    }
+
+
+
+    // Plot Landmarks
+    LANDMARKS.forEach((poi) => {
+      const isCore = poi.id === 'khopripada-core';
+      const isStation = poi.id === 'juchandra-station';
+
+      const customIcon = L.divIcon({
+        className: 'custom-poi-marker',
+        html: `
+          <div class="relative flex items-center justify-center group cursor-pointer">
+            <span class="absolute w-8 h-8 rounded-full ${isCore ? 'bg-emerald-400/40 animate-ping' : isStation ? 'bg-cyan-400/40 animate-ping' : 'bg-emerald-400/20'}"></span>
+            <div class="relative w-7 h-7 rounded-xl ${isCore ? 'bg-emerald-950 border-2 border-emerald-400 text-emerald-300 scale-110 shadow-[0_0_15px_#10b981]' : isStation ? 'bg-cyan-950 border-2 border-cyan-400 text-cyan-300 shadow-[0_0_12px_#06b6d4]' : 'bg-slate-900/90 border-2 border-emerald-400 text-emerald-400'} shadow-xl flex items-center justify-center text-xs font-bold transition-transform group-hover:scale-125">
+              ${isCore ? '🎯' : isStation ? '🚆' : poi.category === 'heritage' ? '🛕' : poi.category === 'corridor' ? '🛣️' : '📍'}
+            </div>
+          </div>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      });
+
+      const marker = L.marker(poi.coords, { icon: customIcon });
+
+      // Clean lightweight Leaflet tooltip that disappears immediately on mouseout
+      marker.bindTooltip(
+        `<div class="font-sans font-semibold text-xs text-white">${poi.name}</div>`,
+        { direction: 'top', offset: [0, -14], className: 'gis-clean-tooltip', opacity: 0.95 }
+      );
+
+      const popupContent = `
+        <div class="font-sans text-slate-100 p-1 min-w-[210px]">
+          <div class="flex items-center gap-1.5 mb-1">
+            <span class="text-xs uppercase tracking-wider font-semibold text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+              ${poi.category.toUpperCase()}
+            </span>
+          </div>
+          <h3 class="text-sm font-bold text-slate-100 mt-1">${poi.name}</h3>
+          <p class="text-xs text-slate-300 mt-1 leading-relaxed">${poi.description}</p>
+          <div class="mt-2 pt-2 border-t border-slate-700/60 text-[11px] font-mono text-emerald-400 flex items-center justify-between">
+            <span>${poi.coords[0].toFixed(5)}°N, ${poi.coords[1].toFixed(5)}°E</span>
+            <span class="text-slate-400">Fixed Point</span>
+          </div>
+        </div>
+      `;
+
+      marker.bindPopup(popupContent, {
+        className: 'gis-dark-popup',
+        closeButton: true,
+      });
+
+      landmarksGroup.addLayer(marker);
+    });
+
+    // Seed and Plot Facilities from CSV using PapaParse & Auto Fit Bounds
+    seedFacilitiesFromCsv(false).then((facilities) => {
+      allFacilitiesRef.current = facilities;
+      setFacilitiesList(facilities);
+      setFacilityCount(facilities.length);
+      renderFacilityMarkers(facilities, 'all');
+
+      // Verify that the map bounds fit automatically around all mapped facilities without crashing
+      const validCoords = facilities
+        .filter((f) => !isNaN(f.latitude) && !isNaN(f.longitude) && f.latitude !== 0 && f.longitude !== 0)
+        .map((f) => [f.latitude, f.longitude] as [number, number]);
+
+      if (validCoords.length > 0) {
+        const bounds = L.latLngBounds(validCoords);
+        if (bounds.isValid()) {
+          try {
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+          } catch {
+            // ignore transient container size errors
+          }
+        }
+      }
+    });
+
+    // Seed and Plot Issues from CSV using PapaParse
+    seedIssuesFromCsv(false).then((issues) => {
+      allIssuesRef.current = issues;
+      setIssuesList(issues);
+      renderIssueMarkers(issues, 'all');
+    });
+
+    // Initial render of existing offline grievances
+    refreshGrievanceMarkers();
+
+    // Map Events
+    const updateMeta = () => {
+      const center = map.getCenter();
+      setCenterCoords([parseFloat(center.lat.toFixed(5)), parseFloat(center.lng.toFixed(5))]);
+      setCurrentZoom(map.getZoom());
+    };
+
+    let lastMoveTime = 0;
+    const handleMouseMove = (e: L.LeafletMouseEvent) => {
+      const now = performance.now();
+      if (now - lastMoveTime > 60) {
+        lastMoveTime = now;
+        setCursorCoords([parseFloat(e.latlng.lat.toFixed(5)), parseFloat(e.latlng.lng.toFixed(5))]);
+      }
+    };
+
+    const handleMouseOut = () => {
+      setCursorCoords(null);
+    };
+
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
+      const lat = parseFloat(e.latlng.lat.toFixed(5));
+      const lng = parseFloat(e.latlng.lng.toFixed(5));
+
+      // Handle Add Facility Mode Click
+      if (isAddFacilityModeRef.current) {
+        // Validate coordinates fall within the Khopripada study envelope (Lat: 19.3000–19.4500 N, Lng: 72.7500–72.9000 E)
+        const isInside = isCoordInStudyCorridor(lat, lng);
+        if (!isInside) {
+          showToast(
+            `Clicked location (${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E) is outside the Khopripada study envelope (19.3000–19.4500°N, 72.7500–72.9000°E)!`
+          );
+          return;
+        }
+
+        // Drop temporary pulsing marker at clicked location
+        if (tempFacilityMarkerRef.current) {
+          tempFacilityMarkerRef.current.setLatLng([lat, lng]);
+        } else {
+          const tempIcon = L.divIcon({
+            className: 'temp-facility-marker',
+            html: `
+              <div class="relative flex items-center justify-center pointer-events-none">
+                <span class="absolute w-12 h-12 rounded-full bg-cyan-400/50 animate-ping"></span>
+                <div class="relative w-8 h-8 rounded-full bg-cyan-500 border-2 border-white shadow-[0_0_20px_#06b6d4] flex items-center justify-center text-white text-xs font-bold animate-pulse">
+                  📍
+                </div>
+              </div>
+            `,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+          });
+          const marker = L.marker([lat, lng], { icon: tempIcon }).addTo(map);
+          tempFacilityMarkerRef.current = marker;
+        }
+
+        // Open modal with captured coords
+        setNewFacilityCoords([lat, lng]);
+        setIsAddFacilityModalOpen(true);
+        return;
+      }
+
+      // Normal map inspection behavior
+      const distance = map.distance(e.latlng, L.latLng(KHOPRIPADA_CORE[0], KHOPRIPADA_CORE[1]));
+
+      setInspectedPoint({
+        lat,
+        lng,
+        distKm: parseFloat((distance / 1000).toFixed(2)),
+      });
+
+      if (inspectMarkerRef.current) {
+        inspectMarkerRef.current.setLatLng([lat, lng]);
+      } else {
+        const inspectIcon = L.divIcon({
+          className: 'inspect-marker',
+          html: `
+            <div class="relative flex items-center justify-center">
+              <span class="absolute w-10 h-10 rounded-full bg-cyan-400/30 animate-ping"></span>
+              <div class="relative w-8 h-8 rounded-full bg-cyan-500 border-2 border-white shadow-2xl flex items-center justify-center text-white text-xs font-bold">
+                🎯
+              </div>
+            </div>
+          `,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+
+        const newMarker = L.marker([lat, lng], { icon: inspectIcon }).addTo(map);
+        inspectMarkerRef.current = newMarker;
+      }
+    };
+
+    const handlePopupOpen = (e: L.PopupEvent) => {
+      const contentNode = e.popup.getElement();
+      if (!contentNode) return;
+      const selects = contentNode.querySelectorAll<HTMLSelectElement>('.issue-status-select');
+      selects.forEach((select) => {
+        select.onchange = async () => {
+          const issueId = select.getAttribute('data-issue-id');
+          const newStatus = select.value;
+          if (issueId && handleUpdateIssueStatusRef.current) {
+            await handleUpdateIssueStatusRef.current(issueId, newStatus);
+          }
+        };
+      });
+    };
+
+    map.on('moveend', updateMeta);
+    map.on('zoomend', updateMeta);
+    map.on('mousemove', handleMouseMove);
+    map.on('mouseout', handleMouseOut);
+    map.on('click', handleMapClick);
+    map.on('popupopen', handlePopupOpen);
+
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+
+    return () => {
+      map.off('moveend', updateMeta);
+      map.off('zoomend', updateMeta);
+      map.off('mousemove', handleMouseMove);
+      map.off('mouseout', handleMouseOut);
+      map.off('click', handleMapClick);
+      map.off('popupopen', handlePopupOpen);
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, [refreshGrievanceMarkers, renderFacilityMarkers, renderIssueMarkers, showDbscanClusters, showHeatmap]);
+
+  // Synchronize layer visibility and marker popups whenever user role or DBSCAN state changes
+  useEffect(() => {
+    userRoleRef.current = userRole;
+    if (allFacilitiesRef.current.length > 0) {
+      renderFacilityMarkers(allFacilitiesRef.current, facilityFilter);
+    }
+    if (allIssuesRef.current.length > 0) {
+      renderIssueMarkers(allIssuesRef.current, facilityFilter);
+    }
+    refreshGrievanceMarkers();
+    if (userRole === 'admin') {
+      if (
+        mapInstanceRef.current &&
+        dbscanLayerRef.current &&
+        showDbscanClusters &&
+        !mapInstanceRef.current.hasLayer(dbscanLayerRef.current)
+      ) {
+        mapInstanceRef.current.addLayer(dbscanLayerRef.current);
+      }
+      if (
+        mapInstanceRef.current &&
+        heatmapLayerRef.current &&
+        showHeatmap &&
+        !mapInstanceRef.current.hasLayer(heatmapLayerRef.current)
+      ) {
+        mapInstanceRef.current.addLayer(heatmapLayerRef.current);
+      }
+      renderDbscanAndHeatmap(allIssuesRef.current, showDbscanClusters, showHeatmap);
+    } else {
+      if (
+        mapInstanceRef.current &&
+        dbscanLayerRef.current &&
+        mapInstanceRef.current.hasLayer(dbscanLayerRef.current)
+      ) {
+        mapInstanceRef.current.removeLayer(dbscanLayerRef.current);
+      }
+      if (
+        mapInstanceRef.current &&
+        heatmapLayerRef.current &&
+        mapInstanceRef.current.hasLayer(heatmapLayerRef.current)
+      ) {
+        mapInstanceRef.current.removeLayer(heatmapLayerRef.current);
+      }
+    }
+  }, [
+    userRole,
+    renderIssueMarkers,
+    facilityFilter,
+    showDbscanClusters,
+    showHeatmap,
+    renderDbscanAndHeatmap,
+  ]);
+
+  // Render GPS Accuracy Circle & Pin
+  const renderGpsFix = (coords: [number, number], accuracy: number, isSimulated = false) => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    gpsLocationLayerRef.current?.clearLayers();
+
+    const accuracyCircle = L.circle(coords, {
+      radius: Math.max(accuracy, 15),
+      color: isSimulated ? '#10b981' : '#3b82f6',
+      fillColor: isSimulated ? '#34d399' : '#60a5fa',
+      fillOpacity: 0.22,
+      weight: 1.5,
+    });
+
+    const gpsPinIcon = L.divIcon({
+      className: 'gps-pin',
+      html: `
+        <div class="relative flex items-center justify-center">
+          <span class="absolute w-8 h-8 rounded-full ${isSimulated ? 'bg-emerald-500/40' : 'bg-blue-500/40'} animate-ping"></span>
+          <div class="relative w-5 h-5 rounded-full ${isSimulated ? 'bg-emerald-600' : 'bg-blue-600'} border-2 border-white shadow-2xl flex items-center justify-center text-[10px] text-white font-bold">
+            ●
+          </div>
+        </div>
+      `,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
+
+    const gpsMarker = L.marker(coords, { icon: gpsPinIcon });
+    gpsMarker.bindPopup(
+      `
+      <div class="font-sans text-slate-100 p-1 min-w-[190px]">
+        <div class="text-[10px] uppercase font-bold ${isSimulated ? 'text-emerald-400' : 'text-blue-400'} mb-0.5">
+          ${isSimulated ? 'Simulated Field Position' : 'Your Live GNSS Position'}
+        </div>
+        <div class="text-xs font-bold text-white">Khopripada Field Surveyor</div>
+        <div class="mt-1 text-[11px] font-mono text-slate-300">
+          ${coords[0].toFixed(5)}°N, ${coords[1].toFixed(5)}°E
+        </div>
+        <div class="text-[10px] text-emerald-400 mt-1">Accuracy: ±${accuracy.toFixed(1)}m (Corridor Verified)</div>
+      </div>
+    `,
+      { className: 'gis-dark-popup' }
+    );
+
+    gpsLocationLayerRef.current?.addLayer(accuracyCircle);
+    gpsLocationLayerRef.current?.addLayer(gpsMarker);
+
+    map.flyTo(coords, 17, { duration: 1.8 });
+    setTimeout(() => gpsMarker.openPopup(), 800);
+  };
+
+  // Geolocation Handler: High Accuracy Locate Me
+  const handleLocateMe = async () => {
+    setIsLocating(true);
+    try {
+      const pos: GeolocationResult = await getCurrentPosition();
+      const { latitude, longitude, accuracy, isWithinBounds } = pos;
+
+      if (isWithinBounds) {
+        renderGpsFix([latitude, longitude], accuracy, false);
+      } else {
+        setGpsWarningModal({
+          open: true,
+          lat: latitude,
+          lng: longitude,
+        });
+      }
+    } catch (err: unknown) {
+      const errorMsg = (err as { message?: string })?.message || 'Could not acquire GPS position.';
+      showToast(errorMsg);
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  // Recenter explicitly on Khopripada Core (19.35509, 72.88463)
+  const recenterToKhopripadaCore = useCallback(() => {
+    if (!mapInstanceRef.current) return;
+    mapInstanceRef.current.flyTo(KHOPRIPADA_CORE, DEFAULT_ZOOM, {
+      duration: 1.4,
+    });
+  }, []);
+
+  // Recenter explicitly on Juchandra Station (19.36001, 72.87285)
+  const flyToJuchandraStation = useCallback(() => {
+    if (!mapInstanceRef.current) return;
+    mapInstanceRef.current.flyTo(JUCHANDRA_STN, 17, {
+      duration: 1.4,
+    });
+  }, []);
+
+  // Switch Basemap
+  const changeBasemap = useCallback(
+    (type: BasemapType) => {
+      if (!mapInstanceRef.current || !tileLayersRef.current) return;
+      const map = mapInstanceRef.current;
+
+      Object.values(tileLayersRef.current).forEach((layer) => {
+        if (map.hasLayer(layer)) {
+          map.removeLayer(layer);
+        }
+      });
+
+      const selected = tileLayersRef.current[type];
+      map.addLayer(selected);
+      setActiveBasemap(type);
+    },
+    []
+  );
+
+  // Toggle Boundary
+  const toggleBoundary = () => {
+    if (!mapInstanceRef.current || !boundaryLayerRef.current) return;
+    const map = mapInstanceRef.current;
+    if (showBoundary) {
+      map.removeLayer(boundaryLayerRef.current);
+      setShowBoundary(false);
+    } else {
+      map.addLayer(boundaryLayerRef.current);
+      setShowBoundary(true);
+    }
+  };
+
+  // Toggle Landmarks
+  const toggleLandmarks = () => {
+    if (!mapInstanceRef.current || !landmarksLayerRef.current) return;
+    const map = mapInstanceRef.current;
+    if (showLandmarks) {
+      map.removeLayer(landmarksLayerRef.current);
+      setShowLandmarks(false);
+    } else {
+      map.addLayer(landmarksLayerRef.current);
+      setShowLandmarks(true);
+    }
+  };
+
+  // Toggle Facilities Layer
+  const toggleFacilities = () => {
+    if (!mapInstanceRef.current || !facilitiesLayerRef.current) return;
+    const map = mapInstanceRef.current;
+    if (showFacilities) {
+      map.removeLayer(facilitiesLayerRef.current);
+      setShowFacilities(false);
+    } else {
+      map.addLayer(facilitiesLayerRef.current);
+      setShowFacilities(true);
+    }
+  };
+
+  // Toggle Issues Layer
+  const toggleIssues = () => {
+    if (!mapInstanceRef.current || !issuesLayerRef.current) return;
+    const map = mapInstanceRef.current;
+    if (showIssues) {
+      map.removeLayer(issuesLayerRef.current);
+      setShowIssues(false);
+    } else {
+      map.addLayer(issuesLayerRef.current);
+      setShowIssues(true);
+    }
+  };
+
+  // Toggle Grievances Layer
+  const toggleGrievancePins = () => {
+    if (!mapInstanceRef.current || !grievancesLayerRef.current) return;
+    const map = mapInstanceRef.current;
+    if (showGrievancePins) {
+      map.removeLayer(grievancesLayerRef.current);
+      setShowGrievancePins(false);
+    } else {
+      map.addLayer(grievancesLayerRef.current);
+      setShowGrievancePins(true);
+    }
+  };
+
+
+
+  // Fly to Grievance from Drawer
+  const flyToCoords = (coords: [number, number]) => {
+    if (!mapInstanceRef.current) return;
+    mapInstanceRef.current.flyTo(coords, 18, { duration: 1.5 });
+  };
+
+  // Fullscreen toggle
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true));
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false));
+    }
+  };
+
+  // Copy coordinates
+  const copyCoords = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans select-none text-slate-100 flex flex-col">
+      {/* 0. SLIM NETWORK STATUS BANNER & INDEXEDDB TELEMETRY */}
+      <NetworkStatusBar
+        onOpenGrievancesList={() => setIsGrievanceDrawerOpen(true)}
+        isSimulatedOffline={isSimulatedOffline}
+        onToggleSimulateOffline={() => setIsSimulatedOffline(!isSimulatedOffline)}
+      />
+
+      {/* TOAST WARNING MODAL */}
+      {toastWarning && (
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[3000] px-4 py-3 rounded-xl bg-amber-950/95 border border-amber-500/60 text-amber-200 text-xs shadow-2xl flex items-center gap-2.5 max-w-md animate-in fade-in slide-in-from-top-4">
+          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+          <span>{toastWarning}</span>
+        </div>
+      )}
+
+      {/* 1. TOP NAVIGATION BAR (GLASSMORPHISM, 3 DISTINCT FLEX SECTIONS) */}
+      <header className="relative z-[1100] w-full backdrop-blur-md bg-slate-900/80 border-b border-slate-700/60 shadow-xl flex flex-wrap justify-between items-center px-4 py-2 gap-2">
+        {/* Section 1: Left - Project Logo & Status Badge */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex items-center justify-center">
+              <span className="animate-ping absolute inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_10px_#10b981]"></span>
+            </div>
+            <span className="font-bold text-white text-sm sm:text-base tracking-tight whitespace-nowrap">
+              Khopripada Digital Twin
+            </span>
+          </div>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            Live
+          </span>
+        </div>
+
+        {/* Section 2: Center - Quick Toggles Only */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Locate Me (GPS) */}
+          <button
+            onClick={handleLocateMe}
+            disabled={isLocating}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border active:scale-95 disabled:opacity-50 ${
+              isLocating
+                ? 'bg-blue-600/30 border-blue-400 text-blue-200'
+                : 'bg-slate-800/80 hover:bg-blue-600/20 border-slate-700 hover:border-blue-500/50 text-slate-200'
+            }`}
+            title="High-precision GPS geolocation with Khopripada study corridor boundary check"
+          >
+            <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin text-cyan-400' : 'text-blue-400'}`} />
+            <span className="hidden md:inline">{isLocating ? 'Locating...' : 'Locate Me (GPS)'}</span>
+          </button>
+
+          {/* Density Heatmap */}
+          <button
+            onClick={() => toggleHeatmap(!showHeatmap)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border active:scale-95 ${
+              showHeatmap
+                ? 'bg-amber-500/25 border-amber-400/80 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
+                : 'bg-slate-800/80 hover:bg-amber-500/20 border-slate-700 hover:border-amber-500/50 text-slate-300'
+            }`}
+            title="Toggle failure density heatmap & DBSCAN spatial clusters"
+          >
+            <Flame className={`w-3.5 h-3.5 ${showHeatmap ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
+            <span className="hidden md:inline">Density Heatmap</span>
+          </button>
+
+
+        </div>
+
+        {/* Section 3: Right - Action Buttons & Role Badge */}
+        <div className="flex items-center gap-2">
+          {/* + Add Facility / + Add Govt Scheme Asset (Role-Adaptive) */}
+          <button
+            onClick={() => {
+              if (isAddFacilityMode) {
+                cleanupAddFacilityMode();
+              } else {
+                setIsAddFacilityMode(true);
+              }
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 ${
+              isAddFacilityMode
+                ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/30'
+                : userRole === 'officer'
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40'
+                : userRole === 'user'
+                ? 'bg-teal-600 hover:bg-teal-500 text-white shadow-teal-950/40'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40'
+            }`}
+            title={
+              userRole === 'officer'
+                ? 'Register Government-sanctioned scheme asset by clicking on the map'
+                : userRole === 'user'
+                ? 'Propose a community facility for Panchayat verification'
+                : 'Register and publish village asset directly to the live map'
+            }
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">
+              {isAddFacilityMode
+                ? 'Cancel Placing'
+                : userRole === 'officer'
+                ? '+ Add Govt Scheme Asset'
+                : userRole === 'user'
+                ? '+ Propose Facility'
+                : '+ Add Facility'}
+            </span>
+          </button>
+
+          {/* Report Grievance (Primary Amber button) */}
+          <button
+            onClick={() => setIsGrievanceModalOpen(true)}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shadow-md shadow-amber-950/40 flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+            title="Report citizen grievance with camera photo capture"
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Report Grievance</span>
+          </button>
+
+          {/* Export Audit (Admin) or Export Worklist (Officer) - Hidden for Villagers */}
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setIsExportAuditModalOpen(true)}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-md shadow-purple-950/40 flex items-center gap-1.5 transition active:scale-95 cursor-pointer border border-purple-400/30"
+              title="Open Executive Panchayat Audit & Reporting Engine (PDF & CSV)"
+            >
+              <FileText className="w-3.5 h-3.5 text-purple-200" />
+              <span className="hidden sm:inline">Export Audit</span>
+            </button>
+          )}
+
+          {userRole === 'officer' && (
+            <button
+              onClick={handleOfficerExportWorklist}
+              className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-md shadow-blue-950/40 flex items-center gap-1.5 transition active:scale-95 cursor-pointer border border-blue-400/30"
+              title="Download Field Inspection Worklist PDF"
+            >
+              <ClipboardList className="w-3.5 h-3.5 text-blue-200" />
+              <span className="hidden sm:inline">Export Worklist</span>
+            </button>
+          )}
+
+          {/* Role Profile Pill with dropdown for Logout & Export Audit */}
+          <UserProfileBadge onExportAudit={handleExportAuditSummary} />
+
+          {/* Floating toggle button: [ Layers & Analytics ⚙️ ] */}
+          <button
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border active:scale-95 ${
+              sidebarOpen
+                ? 'bg-emerald-500/25 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                : 'bg-slate-800/90 hover:bg-slate-700 border-slate-700 text-slate-200'
+            }`}
+            title="Toggle Layers & Analytics Drawer"
+          >
+            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Layers & Analytics</span>
+            <span>⚙️</span>
+          </button>
+        </div>
+      </header>
+
+      {/* 1.1 ADD FACILITY MODE INSTRUCTION BANNER */}
+      {isAddFacilityMode && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[1500] pointer-events-auto animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className="backdrop-blur-2xl bg-slate-900/95 border-2 border-cyan-400/90 rounded-2xl px-5 py-2.5 shadow-[0_0_25px_rgba(6,182,212,0.35)] flex items-center gap-3 text-xs text-white">
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] flex-shrink-0"></span>
+            <span className="font-semibold text-slate-200">
+              {userRole === 'officer'
+                ? 'Click on the map to place Government Scheme Asset GPS point'
+                : userRole === 'user'
+                ? 'Click on the map to propose Community Facility GPS point'
+                : 'Click anywhere on the map to place the new facility'}{' '}
+              <span className="text-cyan-300 font-mono text-[11px]">(Press Esc to cancel)</span>
+            </span>
+            <button
+              onClick={cleanupAddFacilityMode}
+              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition cursor-pointer text-[11px] font-bold"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. COLLAPSIBLE RIGHT SIDEBAR ("DRAWER MODE") */}
+      <aside
+        className={`fixed top-[49px] right-0 bottom-0 z-[1200] w-88 sm:w-96 bg-slate-900/95 backdrop-blur-xl border-l border-slate-700/70 shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Drawer Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/60 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-emerald-400" />
+            <span className="font-bold text-sm text-white">Layers & Analytics</span>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+            title="Close Drawer (100% full-screen map visibility)"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Drawer Body (Scrollable) */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+          {/* BASEMAPS: Clean segmented toggle button group: [ Satellite | OSM Street | Dark Matter ] */}
+          <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
+            <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400 mb-2 flex items-center justify-between">
+              <span>Select Basemap</span>
+              <span className="text-[10px] text-emerald-400 font-mono">Tile Cache Active</span>
+            </div>
+            <div className="grid grid-cols-3 p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+              {[
+                { id: 'esri', label: 'Satellite' },
+                { id: 'osm', label: 'OSM Street' },
+                { id: 'cartoDark', label: 'Dark Matter' },
+              ].map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => changeBasemap(b.id as BasemapType)}
+                  className={`py-1.5 px-2 rounded-lg font-semibold text-center transition cursor-pointer text-xs ${
+                    activeBasemap === b.id
+                      ? 'bg-emerald-500 text-white shadow-md'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`}
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ACCORDION 1: > Active Layers */}
+          <div className="rounded-2xl bg-slate-950/70 border border-slate-800 overflow-hidden">
+            <button
+              onClick={() => setActiveLayersOpen(!activeLayersOpen)}
+              className="w-full flex items-center justify-between p-3 text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white bg-slate-900/60 hover:bg-slate-900 transition cursor-pointer"
+            >
+              <span className="flex items-center gap-1.5">
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${activeLayersOpen ? '' : '-rotate-90'}`} />
+                Active Layers
+              </span>
+              <span className="text-[10px] font-mono text-emerald-400">Layer Stack</span>
+            </button>
+
+            {activeLayersOpen && (
+              <div className="p-3 pt-2 space-y-2 border-t border-slate-800/80">
+
+
+                {/* Village Boundary AOI */}
+                <label className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                  <span className="text-xs text-slate-200 flex items-center gap-2">
+                    <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+                    Khopripada Boundary (AOI)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showBoundary}
+                    onChange={toggleBoundary}
+                    className="w-4 h-4 rounded text-emerald-500 focus:ring-0 accent-emerald-500 cursor-pointer"
+                  />
+                </label>
+
+                {/* Village Facilities */}
+                <label className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                  <span className="text-xs text-slate-200 flex items-center gap-2">
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-cyan-400" />
+                    Village Facilities ({facilityCount})
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showFacilities}
+                    onChange={toggleFacilities}
+                    className="w-4 h-4 rounded text-cyan-500 focus:ring-0 accent-cyan-500 cursor-pointer"
+                  />
+                </label>
+
+                {/* Surveyed Issues */}
+                <label className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                  <span className="text-xs text-slate-200 flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                    Surveyed Issues ({issueCounts.total})
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showIssues}
+                    onChange={toggleIssues}
+                    className="w-4 h-4 rounded text-rose-500 focus:ring-0 accent-rose-500 cursor-pointer"
+                  />
+                </label>
+
+                {/* Grievances Pins */}
+                <label className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                  <span className="text-xs text-slate-200 flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    Reported Grievances (IndexedDB)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showGrievancePins}
+                    onChange={toggleGrievancePins}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-0 accent-amber-500 cursor-pointer"
+                  />
+                </label>
+
+                {/* Key Landmark POIs */}
+                <label className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer transition">
+                  <span className="text-xs text-slate-200 flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                    Key Landmark POIs
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showLandmarks}
+                    onChange={toggleLandmarks}
+                    className="w-4 h-4 rounded text-emerald-500 focus:ring-0 accent-emerald-500 cursor-pointer"
+                  />
+                </label>
+
+                {/* DBSCAN Failure Zones */}
+                <label className="flex items-center justify-between p-2 rounded-lg bg-purple-950/30 border border-purple-500/40 hover:border-purple-400 cursor-pointer transition">
+                  <span className="text-xs text-purple-100 flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                    DBSCAN Failure Zones (3 Hotspots)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showDbscanClusters}
+                    onChange={(e) => toggleDbscanClusters(e.target.checked)}
+                    className="w-4 h-4 rounded text-purple-500 focus:ring-0 accent-purple-500 cursor-pointer"
+                  />
+                </label>
+
+                {/* Failure Density Heatmap */}
+                <label className="flex items-center justify-between p-2 rounded-lg bg-amber-950/30 border border-amber-500/40 hover:border-amber-400 cursor-pointer transition">
+                  <span className="text-xs text-amber-100 flex items-center gap-2">
+                    <Flame className="w-3.5 h-3.5 text-amber-400" />
+                    Failure Density Heatmap
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showHeatmap}
+                    onChange={(e) => toggleHeatmap(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-0 accent-amber-500 cursor-pointer"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* ACCORDION 2: > Category Filters */}
+          <div className="rounded-2xl bg-slate-950/70 border border-slate-800 overflow-hidden">
+            <button
+              onClick={() => setCategoryFiltersOpen(!categoryFiltersOpen)}
+              className="w-full flex items-center justify-between p-3 text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white bg-slate-900/60 hover:bg-slate-900 transition cursor-pointer"
+            >
+              <span className="flex items-center gap-1.5">
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${categoryFiltersOpen ? '' : '-rotate-90'}`} />
+                Category Filters
+              </span>
+              <span className="text-[10px] font-mono text-cyan-400">{facilitiesList.length} Fac</span>
+            </button>
+
+            {categoryFiltersOpen && (
+              <div className="p-3 pt-2 space-y-3 border-t border-slate-800/80">
+                {/* Dataset Switcher */}
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Dataset Model</span>
+                  <div className="grid grid-cols-2 p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px]">
+                    <button
+                      onClick={() => handleSwitchDataset('survey')}
+                      className={`py-1 px-1.5 rounded-md font-semibold text-center transition cursor-pointer ${
+                        activeDataset === 'survey' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Field Survey (22 / 3)
+                    </button>
+                    <button
+                      onClick={() => handleSwitchDataset('unified')}
+                      className={`py-1 px-1.5 rounded-md font-semibold text-center transition cursor-pointer ${
+                        activeDataset === 'unified' ? 'bg-cyan-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      All Model (172 / 203)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Category Filter Buttons */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { id: 'all', label: 'All POIs', icon: '🏢' },
+                    { id: 'water', label: 'Drinking Water', icon: '💧' },
+                    { id: 'education', label: 'Education', icon: '🏫' },
+                    { id: 'commerce', label: 'Shops & Commerce', icon: '🏪' },
+                    { id: 'health', label: 'Health Clinics', icon: '🏥' },
+                    { id: 'civic', label: 'Civic & Mandirs', icon: '🏛️' },
+                    { id: 'issues', label: `Issues (${issuesList.length})`, icon: '⚠️' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => handleFilterFacilities(opt.id as FacilityCategoryFilter)}
+                      className={`px-2 py-1.5 rounded-lg text-[10px] font-semibold border transition cursor-pointer flex items-center gap-1.5 ${
+                        facilityFilter === opt.id
+                          ? opt.id === 'issues'
+                            ? 'bg-rose-500/25 border-rose-400 text-rose-300 shadow-sm'
+                            : 'bg-cyan-500/25 border-cyan-400 text-cyan-300 shadow-sm'
+                          : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      <span>{opt.icon}</span>
+                      <span className="truncate">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Facility Health Breakdown */}
+                <div className="pt-2 border-t border-slate-800/80">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Facility Health</span>
+                  <div className="grid grid-cols-3 gap-1 text-[10px] p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
+                    <div>
+                      <span className="text-emerald-400 block text-[9px]">● Functional</span>
+                      <strong className="text-slate-200 text-xs">{operationalCounts.functional}</strong>
+                    </div>
+                    <div className="border-x border-slate-800">
+                      <span className="text-amber-400 block text-[9px]">● Partial</span>
+                      <strong className="text-slate-200 text-xs">{operationalCounts.partial}</strong>
+                    </div>
+                    <div>
+                      <span className="text-rose-400 block text-[9px]">● Degraded</span>
+                      <strong className="text-slate-200 text-xs">{operationalCounts.nonFunctional}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Issues Severity Breakdown */}
+                <div className="pt-2 border-t border-slate-800/80">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Issues Severity</span>
+                  <div className="grid grid-cols-3 gap-1 text-[10px] p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
+                    <div>
+                      <span className="text-rose-400 block text-[9px]">● High/Crit</span>
+                      <strong className="text-slate-200 text-xs">{issueCounts.high}</strong>
+                    </div>
+                    <div className="border-x border-slate-800">
+                      <span className="text-amber-400 block text-[9px]">● Medium</span>
+                      <strong className="text-slate-200 text-xs">{issueCounts.medium}</strong>
+                    </div>
+                    <div>
+                      <span className="text-cyan-400 block text-[9px]">● Low</span>
+                      <strong className="text-slate-200 text-xs">{issueCounts.low}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ACCORDION 3: > Analytics & Health */}
+          <div className="rounded-2xl bg-slate-950/70 border border-slate-800 overflow-hidden">
+            <button
+              onClick={() => setAnalyticsHealthOpen(!analyticsHealthOpen)}
+              className="w-full flex items-center justify-between p-3 text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white bg-slate-900/60 hover:bg-slate-900 transition cursor-pointer"
+            >
+              <span className="flex items-center gap-1.5">
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${analyticsHealthOpen ? '' : '-rotate-90'}`} />
+                Analytics & Health
+              </span>
+              <span className="text-[10px] font-mono text-purple-400">Decision Support</span>
+            </button>
+
+            {analyticsHealthOpen && (
+              <div className="p-2 border-t border-slate-800/80">
+                <PanchayatAdminPanel
+                  issues={issuesList}
+                  facilities={facilitiesList}
+                  onFlyToIssue={handleFlyToIssue}
+                  isOpen={true}
+                  onClose={() => {}}
+                  onExportAudit={() => setIsExportAuditModalOpen(true)}
+                  onApproveSubmission={(item) => {
+                    if (item.type === 'facility') {
+                      const updated = allFacilitiesRef.current.map((f) =>
+                        f.facility_id === item.id ? { ...f, approval_status: 'approved' as const } : f
+                      );
+                      allFacilitiesRef.current = updated;
+                      setFacilitiesList(updated);
+                      renderFacilityMarkers(updated, facilityFilter);
+                    } else {
+                      refreshGrievanceMarkers();
+                    }
+                    showToast(`✅ "${item.title}" approved and published to live map!`);
+                  }}
+                  onRejectSubmission={(item) => {
+                    if (item.type === 'facility') {
+                      const updated = allFacilitiesRef.current.map((f) =>
+                        f.facility_id === item.id ? { ...f, approval_status: 'rejected' as const } : f
+                      );
+                      allFacilitiesRef.current = updated;
+                      setFacilitiesList(updated);
+                      renderFacilityMarkers(updated, facilityFilter);
+                    } else {
+                      refreshGrievanceMarkers();
+                    }
+                    showToast(`❌ Submission "${item.title}" rejected.`);
+                  }}
+                  onOpenPhotoLightbox={(data) => {
+                    setLightboxData({
+                      isOpen: true,
+                      photoUrl: data.photoUrl,
+                      title: data.title,
+                      category: data.category,
+                      coords: data.coords,
+                    });
+                  }}
+                  onFlyToCoords={flyToCoords}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* Selected / Inspected Point Floating Card */}
+      {inspectedPoint && (
+        <div className="absolute top-16 left-4 z-[1000] pointer-events-auto backdrop-blur-xl bg-slate-900/95 border border-cyan-500/40 text-slate-100 rounded-xl p-3 shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 max-w-sm">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-500/50 flex items-center justify-center text-cyan-400">
+              <MapPin className="w-4 h-4" />
+            </div>
+            <div className="text-xs">
+              <div className="font-semibold text-cyan-300 flex items-center gap-1">
+                Point Inspected
+                <span className="text-[10px] text-slate-400">
+                  ({inspectedPoint.distKm} km from Core)
+                </span>
+              </div>
+              <div className="font-mono text-slate-300 text-[11px] mt-0.5">
+                {inspectedPoint.lat}°N, {inspectedPoint.lng}°E
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setIsGrievanceModalOpen(true)}
+              className="text-[11px] px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition cursor-pointer flex items-center gap-1"
+              title="Log Grievance here"
+            >
+              <AlertTriangle className="w-3 h-3" />
+              <span>Report</span>
+            </button>
+            <button
+              onClick={() => copyCoords(`${inspectedPoint.lat}, ${inspectedPoint.lng}`)}
+              className="text-xs px-2 py-1 rounded bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 transition cursor-pointer"
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+            <button
+              onClick={() => setInspectedPoint(null)}
+              className="text-xs p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 5. FULL-SCREEN LEAFLET MAP CANVAS */}
+      <div
+        ref={mapContainerRef}
+        id="village-map-canvas"
+        className="w-full h-full z-0 flex-1 relative"
+      />
+
+      {/* 5.1 BOTTOM-LEFT: VILLAGE SUMMARY STATS & QUICK NAVIGATION PILL */}
+      <div className="absolute bottom-6 left-4 z-[1000] pointer-events-none hidden sm:flex items-center gap-3">
+        <div className="pointer-events-auto backdrop-blur-md bg-slate-900/85 border border-slate-800 text-slate-300 rounded-xl px-3.5 py-2 shadow-xl flex items-center gap-3 text-xs">
+          <button
+            onClick={recenterToKhopripadaCore}
+            className="flex items-center gap-1.5 hover:text-emerald-300 transition cursor-pointer"
+            title="Click to Recenter on Khopripada Core"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span className="font-semibold text-white">Khopripada Core</span>
+          </button>
+          <span className="text-slate-600">|</span>
+          <button
+            onClick={flyToJuchandraStation}
+            className="text-slate-400 hover:text-cyan-300 transition cursor-pointer"
+            title="Click to Fly to Juchandra Station"
+          >
+            Juchandra Stn
+          </button>
+          <span className="text-slate-600">|</span>
+          <span className="text-slate-400 font-mono text-[11px]">
+            {cursorCoords ? `${cursorCoords[0]}°N, ${cursorCoords[1]}°E` : `${centerCoords[0]}°N, ${centerCoords[1]}°E`}
+          </span>
+          <span className="text-slate-600">|</span>
+          <span className="text-slate-400">
+            Zoom: <strong className="text-white font-mono">{currentZoom}</strong>
+          </span>
+          <span className="text-slate-600">|</span>
+          <button
+            onClick={toggleFullscreen}
+            className="text-slate-400 hover:text-white transition cursor-pointer"
+            title="Toggle Fullscreen"
+          >
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* 6. REPORT GRIEVANCE MODAL */}
+      <GrievanceModal
+        isOpen={isGrievanceModalOpen}
+        onClose={() => setIsGrievanceModalOpen(false)}
+        initialCoords={inspectedPoint ? [inspectedPoint.lat, inspectedPoint.lng] : KHOPRIPADA_CORE}
+        onGrievanceSaved={() => {
+          refreshGrievanceMarkers();
+        }}
+        userRole={userRole}
+      />
+
+      {/* 6.1 REGISTER NEW VILLAGE FACILITY MODAL */}
+      <AddFacilityModal
+        isOpen={isAddFacilityModalOpen}
+        onClose={cleanupAddFacilityMode}
+        coords={newFacilityCoords}
+        onFacilitySaved={handleFacilitySaved}
+        userRole={userRole}
+      />
+
+      {/* 7. GRIEVANCES LIST DRAWER */}
+      <GrievanceListDrawer
+        isOpen={isGrievanceDrawerOpen}
+        onClose={() => setIsGrievanceDrawerOpen(false)}
+        onFlyToGrievance={flyToCoords}
+        userRole={userRole}
+        onGrievanceStatusUpdated={refreshGrievanceMarkers}
+      />
+
+      {/* 7.1 HIGH-RESOLUTION FIELD SURVEY PHOTO LIGHTBOX MODAL */}
+      <PhotoLightboxModal
+        isOpen={lightboxData.isOpen}
+        photoUrl={lightboxData.photoUrl}
+        title={lightboxData.title}
+        category={lightboxData.category}
+        coords={lightboxData.coords}
+        onClose={() =>
+          setLightboxData((prev) => ({
+            ...prev,
+            isOpen: false,
+          }))
+        }
+      />
+
+      {/* 8. GPS OUT-OF-BOUNDS MODAL (WITH SIMULATE OPTION) */}
+      {gpsWarningModal?.open && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-md bg-slate-900 border border-amber-500/50 rounded-2xl shadow-2xl p-5 text-slate-100 flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">
+                  Location Outside Khopripada Study Corridor
+                </h3>
+                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  Your live browser GPS coordinates: <span className="font-mono text-amber-300 font-semibold">{gpsWarningModal.lat.toFixed(4)}°N, {gpsWarningModal.lng.toFixed(4)}°E</span>.
+                  The Smart Village GIS boundary is strictly enforced for Khopripada & Bapane (19.3000–19.4500°N, 72.7500–72.9000°E).
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 flex items-center gap-2">
+              <span className="text-emerald-400 font-bold">💡 Tip:</span>
+              <span>For field verification outside the corridor, you can simulate a high-accuracy GNSS fix at Khopripada Core.</span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-1">
+              <button
+                onClick={() => setGpsWarningModal(null)}
+                className="px-3.5 py-2 text-xs font-medium text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition cursor-pointer"
+              >
+                Dismiss
+              </button>
+              <button
+                onClick={() => {
+                  setGpsWarningModal(null);
+                  renderGpsFix(KHOPRIPADA_CORE, 8.5, true);
+                }}
+                className="px-4 py-2 text-xs font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 active:scale-95 rounded-xl shadow-lg shadow-emerald-500/20 transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Locate className="w-3.5 h-3.5" />
+                <span>Simulate Field Position</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 9. EXECUTIVE PANCHAYAT AUDIT & DATA EXPORT MODAL */}
+      <ExportAuditModal
+        isOpen={isExportAuditModalOpen}
+        onClose={() => setIsExportAuditModalOpen(false)}
+        facilities={facilitiesList}
+        issues={issuesList}
+        currentUser={session || undefined}
+        onDownloadPdf={handleDownloadPanchayatPdf}
+        onExportCsv={handleExportMasterCsv}
+      />
+    </div>
+  );
+};
+
+export default VillageMap;

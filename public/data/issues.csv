@@ -1,0 +1,4 @@
+issue_id,title,category,severity,reported_by,latitude,longitude,status,notes,photo
+ISS_001,Potholes & Erosion Cluster,road_damage,medium,field_observed,19.3540650,72.8857199,reported,Severe potholes along unpaved lane,road_potholes.jpg
+ISS_002,Waste dumping on roadside,waste_heap,medium,field_observed,19.3562647,72.8851422,reported,Garbage blocking the drainage,
+ISS_003,Damaged road corridor,road_damage,high,field_observed,19.3546546,72.8841405,reported,Very damaged road stretch near settlement,road_potholes.jpg
