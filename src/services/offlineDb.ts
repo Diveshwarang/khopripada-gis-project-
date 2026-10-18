@@ -36,6 +36,21 @@ export interface CachedFacility {
   approval_status?: ApprovalStatus;
   submitted_by?: string;
   scheme_name?: string;
+  // Context-Aware Attributes
+  business_hours?: string;
+  service_type?: string;
+  health_services?: string;
+  operational_hours?: string;
+  grade_levels?: string;
+  midday_meal?: boolean;
+  filtered_water?: boolean;
+  supply_timings?: string;
+  potability_status?: string;
+  maintenance_authority?: string;
+  community_usage?: string;
+  seating_capacity?: string;
+  fixture_type?: string;
+  power_grid?: string;
 }
 
 
@@ -156,9 +171,22 @@ export const parseFacilitiesCsv = (csvText: string): CachedFacility[] => {
       source: (row.source || 'field_survey').trim(),
       zone: (row.zone || '').trim(),
       photoBase64: photoUrl,
-      photo_url: photoUrl,
       approval_status: 'approved',
       submitted_by: 'Baseline Field Survey',
+      business_hours: row.business_hours ? row.business_hours.trim() : undefined,
+      service_type: row.service_type ? row.service_type.trim() : undefined,
+      health_services: row.health_services ? row.health_services.trim() : undefined,
+      operational_hours: row.operational_hours ? row.operational_hours.trim() : undefined,
+      grade_levels: row.grade_levels ? row.grade_levels.trim() : undefined,
+      midday_meal: row.midday_meal ? row.midday_meal.toLowerCase() === 'true' || row.midday_meal === '1' || row.midday_meal.toLowerCase() === 'yes' : undefined,
+      filtered_water: row.filtered_water ? row.filtered_water.toLowerCase() === 'true' || row.filtered_water === '1' || row.filtered_water.toLowerCase() === 'yes' : undefined,
+      supply_timings: row.supply_timings ? row.supply_timings.trim() : undefined,
+      potability_status: row.potability_status ? row.potability_status.trim() : undefined,
+      maintenance_authority: row.maintenance_authority ? row.maintenance_authority.trim() : undefined,
+      community_usage: row.community_usage ? row.community_usage.trim() : undefined,
+      seating_capacity: row.seating_capacity ? row.seating_capacity.trim() : undefined,
+      fixture_type: row.fixture_type ? row.fixture_type.trim() : undefined,
+      power_grid: row.power_grid ? row.power_grid.trim() : undefined,
     });
   }
 

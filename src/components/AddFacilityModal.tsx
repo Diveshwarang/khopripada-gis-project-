@@ -12,6 +12,14 @@ import {
 import { type CachedFacility } from '../services/offlineDb';
 import { compressImageToBase64 } from '../utils/imageUtils';
 import type { UserRole } from '../types';
+import {
+  isCommercialCategory,
+  isHealthCategory,
+  isEducationCategory,
+  isWaterCategory,
+  isCivicCategory,
+  isLightingCategory,
+} from '../utils/facilityUtils';
 
 interface AddFacilityModalProps {
   isOpen: boolean;
@@ -39,6 +47,23 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
+
+  // Context-Aware Form States
+  const [upiAvailable, setUpiAvailable] = useState<boolean>(true);
+  const [businessHours, setBusinessHours] = useState<string>('7:00 AM – 9:30 PM');
+  const [serviceType, setServiceType] = useState<string>('Daily Groceries & Essentials');
+  const [healthServices, setHealthServices] = useState<string>('Primary First Aid & Maternal Health');
+  const [operationalHours, setOperationalHours] = useState<string>('10:00 AM – 5:00 PM (Mon–Sat)');
+  const [gradeLevels, setGradeLevels] = useState<string>('Std 1st to 7th (Marathi/Semi-English)');
+  const [middayMeal, setMiddayMeal] = useState<boolean>(true);
+  const [filteredWater, setFilteredWater] = useState<boolean>(true);
+  const [supplyTimings, setSupplyTimings] = useState<string>('Morning 6:30 AM – 9:00 AM (Gravity Tank)');
+  const [potabilityStatus, setPotabilityStatus] = useState<string>('✅ Potable Drinking Water');
+  const [maintenanceAuthority, setMaintenanceAuthority] = useState<string>('Gram Panchayat Khopripada Water Dept');
+  const [communityUsage, setCommunityUsage] = useState<string>('Public Gatherings & Gram Sabha Meetings');
+  const [seatingCapacity, setSeatingCapacity] = useState<string>('Capacity: ~150 Persons');
+  const [fixtureType, setFixtureType] = useState<string>('LED 45W / Solar Photovoltaic');
+  const [powerGrid, setPowerGrid] = useState<string>('MSEDCL Feeder Line (Panchayat Auto-Timer)');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -123,6 +148,13 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
       const isOfficer = userRole === 'officer';
       const isAdmin = userRole === 'admin';
 
+      const isComm = isCommercialCategory(category);
+      const isHlth = isHealthCategory(category);
+      const isEdu = isEducationCategory(category);
+      const isWtr = isWaterCategory(category);
+      const isCiv = isCivicCategory(category);
+      const isUtil = isLightingCategory(category);
+
       const newFacility: CachedFacility = {
         facility_id: facilityId,
         name: name.trim(),
@@ -135,6 +167,23 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
         approval_status: isAdmin ? 'approved' : 'pending_approval',
         submitted_by: isResident ? 'Resident' : isOfficer ? 'Officer' : 'Admin',
         scheme_name: isOfficer ? category : undefined,
+
+        // Context-Aware Attributes
+        upi_available: isComm ? upiAvailable : isHlth ? upiAvailable : undefined,
+        business_hours: isComm ? businessHours.trim() : undefined,
+        service_type: isComm ? serviceType.trim() : undefined,
+        health_services: isHlth ? healthServices.trim() : undefined,
+        operational_hours: isHlth ? operationalHours.trim() : undefined,
+        grade_levels: isEdu ? gradeLevels.trim() : undefined,
+        midday_meal: isEdu ? middayMeal : undefined,
+        filtered_water: isEdu ? filteredWater : undefined,
+        supply_timings: isWtr ? supplyTimings.trim() : undefined,
+        potability_status: isWtr ? potabilityStatus.trim() : undefined,
+        maintenance_authority: isWtr ? maintenanceAuthority.trim() : undefined,
+        community_usage: isCiv ? communityUsage.trim() : undefined,
+        seating_capacity: isCiv ? seatingCapacity.trim() : undefined,
+        fixture_type: isUtil ? fixtureType.trim() : undefined,
+        power_grid: isUtil ? powerGrid.trim() : undefined,
       };
 
       if (isResident) {
@@ -404,6 +453,295 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* DYNAMIC CONTEXT-AWARE ATTRIBUTE FORM SECTIONS */}
+          {isCommercialCategory(category) && (
+            <div className="p-3 rounded-xl bg-slate-950/70 border border-emerald-500/30 space-y-2.5 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                  <span>🏪</span> Commercial & Retail Details
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">Payment & Services</span>
+              </div>
+
+              <label className="flex items-center gap-2.5 p-2 rounded-lg bg-emerald-950/30 border border-emerald-500/20 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={upiAvailable}
+                  onChange={(e) => setUpiAvailable(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-500 bg-slate-900 border-slate-700 focus:ring-emerald-400 cursor-pointer"
+                />
+                <div>
+                  <span className="text-xs font-semibold text-emerald-300 block">
+                    Accepts GPay / PhonePe / UPI Payments
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">
+                    QR code setup active on store counter
+                  </span>
+                </div>
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                    Operating Hours
+                  </label>
+                  <input
+                    type="text"
+                    value={businessHours}
+                    onChange={(e) => setBusinessHours(e.target.value)}
+                    placeholder="e.g. 7:00 AM – 9:30 PM"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                    Service / Goods Type
+                  </label>
+                  <input
+                    type="text"
+                    value={serviceType}
+                    onChange={(e) => setServiceType(e.target.value)}
+                    placeholder="e.g. Daily Groceries & Atta Chakki"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isHealthCategory(category) && (
+            <div className="p-3 rounded-xl bg-slate-950/70 border border-rose-500/30 space-y-2.5 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-rose-300 flex items-center gap-1.5">
+                  <span>🏥</span> Healthcare Facility & OPD Details
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">Medical Specifics</span>
+              </div>
+
+              <label className="flex items-center gap-2.5 p-2 rounded-lg bg-rose-950/30 border border-rose-500/20 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={upiAvailable}
+                  onChange={(e) => setUpiAvailable(e.target.checked)}
+                  className="w-4 h-4 rounded text-rose-500 bg-slate-900 border-slate-700 focus:ring-rose-400 cursor-pointer"
+                />
+                <div>
+                  <span className="text-xs font-semibold text-rose-300 block">
+                    Accepts GPay / PM-JAY Ayushman Card
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">
+                    Digital payments & insurance card accepted (or Govt NHM Free Care)
+                  </span>
+                </div>
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                    Healthcare Services Focus
+                  </label>
+                  <input
+                    type="text"
+                    value={healthServices}
+                    onChange={(e) => setHealthServices(e.target.value)}
+                    placeholder="e.g. Primary First Aid & Maternal Health"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-rose-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                    Doctor / Clinic Timings
+                  </label>
+                  <input
+                    type="text"
+                    value={operationalHours}
+                    onChange={(e) => setOperationalHours(e.target.value)}
+                    placeholder="e.g. 10:00 AM – 5:00 PM (Mon–Sat)"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-rose-400"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isEducationCategory(category) && (
+            <div className="p-3 rounded-xl bg-slate-950/70 border border-purple-500/30 space-y-2.5 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-purple-300 flex items-center gap-1.5">
+                  <span>🏫</span> Educational Institution Amenities
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">No Payment Applied</span>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                  Grade Levels / Standard
+                </label>
+                <input
+                  type="text"
+                  value={gradeLevels}
+                  onChange={(e) => setGradeLevels(e.target.value)}
+                  placeholder="e.g. Std 1st to 7th (Marathi/Semi-English Medium)"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-purple-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/80 border border-slate-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={middayMeal}
+                    onChange={(e) => setMiddayMeal(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-purple-500 bg-slate-950 border-slate-700 focus:ring-purple-400 cursor-pointer"
+                  />
+                  <span className="text-[10px] text-slate-300 font-semibold">
+                    🍱 PM-POSHAN Midday Meal Active
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/80 border border-slate-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filteredWater}
+                    onChange={(e) => setFilteredWater(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-purple-500 bg-slate-950 border-slate-700 focus:ring-purple-400 cursor-pointer"
+                  />
+                  <span className="text-[10px] text-slate-300 font-semibold">
+                    🚰 Filtered Drinking Tap Available
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {isWaterCategory(category) && (
+            <div className="p-3 rounded-xl bg-slate-950/70 border border-cyan-500/30 space-y-2.5 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-cyan-300 flex items-center gap-1.5">
+                  <span>🚰</span> Drinking Water Source Details
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">No Payment Applied</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                    Water Availability / Supply Timings
+                  </label>
+                  <input
+                    type="text"
+                    value={supplyTimings}
+                    onChange={(e) => setSupplyTimings(e.target.value)}
+                    placeholder="e.g. Morning 6:30 AM – 9:00 AM (Gravity Tank)"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                    Source Potability Status
+                  </label>
+                  <select
+                    value={potabilityStatus}
+                    onChange={(e) => setPotabilityStatus(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-400 cursor-pointer"
+                  >
+                    <option value="✅ Potable Drinking Water">✅ Potable Drinking Water (Chlorinated)</option>
+                    <option value="⚠️ Ground Testing Needed">⚠️ Ground Testing Needed (Unfiltered)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                  Maintenance Authority
+                </label>
+                <input
+                  type="text"
+                  value={maintenanceAuthority}
+                  onChange={(e) => setMaintenanceAuthority(e.target.value)}
+                  placeholder="e.g. Gram Panchayat Khopripada Water Dept"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+            </div>
+          )}
+
+          {isCivicCategory(category) && (
+            <div className="p-3 rounded-xl bg-slate-950/70 border border-amber-500/30 space-y-2.5 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+                  <span>🏛️</span> Civic & Cultural Space Details
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">Community Hall / Temple</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                    Community Utilization
+                  </label>
+                  <input
+                    type="text"
+                    value={communityUsage}
+                    onChange={(e) => setCommunityUsage(e.target.value)}
+                    placeholder="e.g. Public Gatherings & Gram Sabha Meetings"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                    Seating / Capacity
+                  </label>
+                  <input
+                    type="text"
+                    value={seatingCapacity}
+                    onChange={(e) => setSeatingCapacity(e.target.value)}
+                    placeholder="e.g. Capacity: ~150 Persons"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isLightingCategory(category) && (
+            <div className="p-3 rounded-xl bg-slate-950/70 border border-blue-500/30 space-y-2.5 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-blue-300 flex items-center gap-1.5">
+                  <span>💡</span> Public Lighting & Utility Specs
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">No Payment Applied</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                    Fixture / Asset Specification
+                  </label>
+                  <input
+                    type="text"
+                    value={fixtureType}
+                    onChange={(e) => setFixtureType(e.target.value)}
+                    placeholder="e.g. LED 45W / Solar Photovoltaic"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-300 font-semibold block mb-1">
+                    Power Grid Feeder
+                  </label>
+                  <input
+                    type="text"
+                    value={powerGrid}
+                    onChange={(e) => setPowerGrid(e.target.value)}
+                    placeholder="e.g. MSEDCL Feeder Line"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Photo Upload & Camera Input Section */}
           <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">

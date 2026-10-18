@@ -46,6 +46,10 @@ import {
   generateOfficerWorklistPDF,
   exportMasterDataCSV,
 } from '../utils/reportGenerator';
+import {
+  buildFacilityContextAttributesHtml,
+  getCategoryTheme,
+} from '../utils/facilityUtils';
 
 import {
   KHOPRIPADA_CORE,
@@ -547,8 +551,11 @@ export const VillageMap = () => {
             </div>
           `;
 
+        const catTheme = getCategoryTheme(fac.category, fac.name);
+        const contextAttributesHtml = buildFacilityContextAttributesHtml(fac);
+
         const popupHtml = `
-          <div class="font-sans text-slate-100 p-2 min-w-[260px] max-w-[310px]">
+          <div class="font-sans text-slate-100 p-2 min-w-[270px] max-w-[320px]">
             <!-- Inspection Thumbnail / Fallback -->
             ${photoMarkup}
 
@@ -562,13 +569,13 @@ export const VillageMap = () => {
               </span>
             </div>
 
-            <!-- 2. Category Badge -->
-            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 font-semibold text-[10px] capitalize mb-2">
-              <span>${glyph}</span>
+            <!-- 2. Category Badge (Colored by Category) -->
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border text-[10px] font-bold capitalize mb-2 ${catTheme.badgeClass}">
+              <span>${catTheme.glyph}</span>
               <span>${fac.category.replace(/_/g, ' ')}</span>
             </div>
 
-            <!-- 3. Status Pill & 4. Monsoon Access Condition -->
+            <!-- 3. Status Pill & Monsoon Access Condition -->
             <div class="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] mb-2">
               <div>
                 <span class="text-slate-400 block text-[9px] uppercase tracking-wider mb-0.5">Status</span>
@@ -582,7 +589,10 @@ export const VillageMap = () => {
               </div>
             </div>
 
-            <!-- Coordinate Telemetry & Copy -->
+            <!-- 4. Category-Specific Context Attributes (Never Generic / No False UPI) -->
+            ${contextAttributesHtml}
+
+            <!-- 5. Coordinate Telemetry & Copy Coords -->
             <div class="pt-1.5 border-t border-slate-800 flex items-center justify-between gap-2 text-[10px] font-mono">
               <span class="text-slate-300 truncate font-semibold">
                 ${fac.latitude.toFixed(5)}°N, ${fac.longitude.toFixed(5)}°E
