@@ -92,30 +92,30 @@ export const UserProfileBadge: React.FC<UserProfileBadgeProps> = ({ onRoleSwitch
       {/* Active User Badge Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`backdrop-blur-xl bg-slate-900/90 hover:bg-slate-800/90 border ${currentRoleConfig.borderClass} ${currentRoleConfig.glowClass} text-slate-100 px-3 py-1.5 rounded-2xl shadow-2xl flex items-center gap-2.5 transition active:scale-95 cursor-pointer`}
+        className={`backdrop-blur-xl bg-slate-900/90 hover:bg-slate-800/90 border ${currentRoleConfig.borderClass} ${currentRoleConfig.glowClass} text-slate-100 px-3.5 py-2 rounded-xl shadow-lg flex items-center gap-2.5 transition active:scale-95 cursor-pointer`}
         title={`Logged in as ${session.name} (${session.designation}) - Click for Profile & Logout`}
       >
         {/* Avatar Circle with Status Dot */}
         <div className="relative flex items-center justify-center">
-          <div className="w-7 h-7 rounded-xl bg-slate-950 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">
+          <div className="w-8 h-8 rounded-xl bg-slate-950 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">
             {session.name.charAt(0)}
           </div>
-          <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-slate-950" />
+          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-slate-950" />
         </div>
 
         {/* User Info & Role Pill */}
-        <div className="flex flex-col text-left">
+        <div className="hidden sm:flex flex-col text-left">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-bold text-white max-w-[120px] truncate">
               {session.name}
             </span>
             <span
-              className={`text-[9px] font-black tracking-wider uppercase px-1.5 py-0.2 rounded-md border ${currentRoleConfig.pillClass}`}
+              className={`text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded-md border ${currentRoleConfig.pillClass}`}
             >
               {currentRoleConfig.label}
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 truncate max-w-[130px]">
+          <span className="text-[11px] text-slate-400 truncate max-w-[130px]">
             {session.designation}
           </span>
         </div>
@@ -129,7 +129,7 @@ export const UserProfileBadge: React.FC<UserProfileBadgeProps> = ({ onRoleSwitch
 
       {/* Profile & Session Dropdown Card */}
       {isOpen && (
-        <div className="absolute top-12 right-0 z-[2500] w-72 backdrop-blur-2xl bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.6)] p-3.5 text-xs text-slate-200 animate-in fade-in slide-in-from-top-2 flex flex-col gap-3">
+        <div className="absolute top-14 right-0 z-[2500] w-72 backdrop-blur-2xl bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.6)] p-3.5 text-xs text-slate-200 animate-in fade-in slide-in-from-top-2 flex flex-col gap-3">
           {/* Header Identity Details */}
           <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
             <div className="flex items-center justify-between mb-1.5">

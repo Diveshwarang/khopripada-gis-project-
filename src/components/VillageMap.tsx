@@ -10,7 +10,6 @@ import {
   Locate,
   AlertTriangle,
   FileSpreadsheet,
-  PlusCircle,
   Plus,
   Flame,
   Maximize2,
@@ -31,11 +30,11 @@ import {
   type CachedFacility,
   type CachedIssue,
 } from '../services/offlineDb';
-import { NetworkStatusBar } from './NetworkStatusBar';
 import { GrievanceModal } from './GrievanceModal';
 import { GrievanceListDrawer } from './GrievanceListDrawer';
 import { AddFacilityModal } from './AddFacilityModal';
 import { useAuth } from '../context/AuthContext';
+import type { Role } from '../types/auth';
 import { UserProfileBadge } from './UserProfileBadge';
 import { PanchayatAdminPanel } from './PanchayatAdminPanel';
 import { PhotoLightboxModal } from './PhotoLightboxModal';
@@ -140,10 +139,41 @@ export const VillageMap = () => {
   const allIssuesRef = useRef<CachedIssue[]>([]);
 
   // Auth Context & Role
-  const { session } = useAuth();
+  const { session, loginAsDemoRole } = useAuth();
   const userRole = session?.role || 'user';
   const userRoleRef = useRef(userRole);
   userRoleRef.current = userRole;
+
+  // Portal Switcher state & click-outside ref
+  const [isPortalSwitcherOpen, setIsPortalSwitcherOpen] = useState<boolean>(false);
+  const portalSwitcherRef = useRef<HTMLDivElement>(null);
+
+  // Close portal switcher dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (portalSwitcherRef.current && !portalSwitcherRef.current.contains(e.target as Node)) {
+        setIsPortalSwitcherOpen(false);
+      }
+    };
+    if (isPortalSwitcherOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isPortalSwitcherOpen]);
+
+  // Handler for direct 1-click role/portal switching
+  const handlePortalSwitch = (targetRole: Role) => {
+    loginAsDemoRole(targetRole);
+    setIsPortalSwitcherOpen(false);
+    const roleLabels: Record<Role, string> = {
+      admin: 'Panchayat Admin Mode',
+      officer: 'Field Officer Mode',
+      user: 'Resident / Citizen Mode',
+    };
+    showToast(`⚡ Switched to ${roleLabels[targetRole]}`);
+  };
 
   // Spatial ML: DBSCAN Clusters & Heatmap layers
   const dbscanLayerRef = useRef<L.LayerGroup | null>(null);
@@ -203,6 +233,20 @@ export const VillageMap = () => {
   const [isGrievanceModalOpen, setIsGrievanceModalOpen] = useState(false);
   const [isGrievanceDrawerOpen, setIsGrievanceDrawerOpen] = useState(false);
   const [isSimulatedOffline, setIsSimulatedOffline] = useState(false);
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const isLiveConnected = isOnline && !isSimulatedOffline;
   const [facilityCount, setFacilityCount] = useState(0);
   const [gpsWarningModal, setGpsWarningModal] = useState<{
     open: boolean;
@@ -2039,77 +2083,122 @@ export const VillageMap = () => {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans select-none text-slate-100 flex flex-col">
-      {/* 0. SLIM NETWORK STATUS BANNER & INDEXEDDB TELEMETRY */}
-      <NetworkStatusBar
-        onOpenGrievancesList={() => setIsGrievanceDrawerOpen(true)}
-        isSimulatedOffline={isSimulatedOffline}
-        onToggleSimulateOffline={() => setIsSimulatedOffline(!isSimulatedOffline)}
-      />
-
-      {/* TOAST WARNING MODAL */}
+      {/* TOAST NOTIFICATION BANNER */}
       {toastWarning && (
-        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[3000] px-4 py-3 rounded-xl bg-amber-950/95 border border-amber-500/60 text-amber-200 text-xs shadow-2xl flex items-center gap-2.5 max-w-md animate-in fade-in slide-in-from-top-4">
-          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-          <span>{toastWarning}</span>
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] px-5 py-3 rounded-2xl backdrop-blur-xl bg-slate-900/95 border border-emerald-500/60 text-emerald-100 text-sm font-medium shadow-[0_15px_40px_rgba(0,0,0,0.6)] flex items-center gap-3 max-w-lg animate-in fade-in slide-in-from-top-4">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10b981] flex-shrink-0" />
+          <span className="flex-1">{toastWarning}</span>
+          <button
+            onClick={() => setToastWarning(null)}
+            className="text-slate-400 hover:text-white transition p-1 text-xs cursor-pointer ml-1"
+          >
+            ✕
+          </button>
         </div>
       )}
 
-      {/* 1. TOP NAVIGATION BAR (GLASSMORPHISM, 3 DISTINCT FLEX SECTIONS) */}
-      <header className="relative z-[1100] w-full backdrop-blur-md bg-slate-900/80 border-b border-slate-700/60 shadow-xl flex flex-wrap justify-between items-center px-4 py-2 gap-2">
-        {/* Section 1: Left - Project Logo & Status Badge */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex items-center justify-center">
-              <span className="animate-ping absolute inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_10px_#10b981]"></span>
+      {/* 1. TOP NAVIGATION BAR (HIGH-CONTRAST MODERN GLASSMORPHISM, H-16) */}
+      <header className="relative z-[1100] w-full h-16 bg-slate-900/90 backdrop-blur-md border-b border-slate-700/80 shadow-lg px-6 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
+        {/* Section 1: Left Side (Identity & Status) */}
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-lg shadow-emerald-950/50 border border-emerald-400/40">
+              <Building2 className="w-5 h-5 text-emerald-100" />
             </div>
-            <span className="font-bold text-white text-sm sm:text-base tracking-tight whitespace-nowrap">
-              Khopripada Digital Twin
+            <div className="flex items-center">
+              <span className="text-lg font-bold text-white tracking-wide whitespace-nowrap">
+                Smart Village GIS
+              </span>
+              <span className="hidden sm:inline-flex text-xs font-semibold text-emerald-400 bg-emerald-950/70 border border-emerald-800/80 px-2.5 py-0.5 rounded-full ml-2 whitespace-nowrap">
+                Khopripada • Vasai-Virar
+              </span>
+            </div>
+          </div>
+
+          {/* Live Network Status Indicator */}
+          <div
+            onClick={() => {
+              setIsSimulatedOffline(!isSimulatedOffline);
+              showToast(
+                isSimulatedOffline
+                  ? '🟢 Live Network restored. Syncing with remote database.'
+                  : '🟡 Simulated Offline mode active. Utilizing local IndexedDB.'
+              );
+            }}
+            className="hidden lg:flex items-center gap-2 pl-3 border-l border-slate-700/70 cursor-pointer hover:opacity-80 transition select-none"
+            title="Click to toggle offline mode simulation"
+          >
+            <span className="relative flex h-2.5 w-2.5">
+              <span
+                className={`animate-ping absolute inline-flex h-full w-full rounded-full ${
+                  isLiveConnected ? 'bg-emerald-400 opacity-75' : 'bg-amber-400 opacity-75'
+                }`}
+              ></span>
+              <span
+                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                  isLiveConnected
+                    ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]'
+                    : 'bg-amber-500 shadow-[0_0_8px_#f59e0b]'
+                }`}
+              ></span>
+            </span>
+            <span className="text-xs text-slate-300 whitespace-nowrap font-medium">
+              {isLiveConnected ? 'Online • Live Sync' : 'Offline • Local Cache'}
             </span>
           </div>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 shadow-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            Live
-          </span>
         </div>
 
-        {/* Section 2: Center - Quick Toggles Only */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Locate Me (GPS) */}
-          <button
-            onClick={handleLocateMe}
-            disabled={isLocating}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border active:scale-95 disabled:opacity-50 ${
-              isLocating
-                ? 'bg-blue-600/30 border-blue-400 text-blue-200'
-                : 'bg-slate-800/80 hover:bg-blue-600/20 border-slate-700 hover:border-blue-500/50 text-slate-200'
-            }`}
-            title="High-precision GPS geolocation with Khopripada study corridor boundary check"
-          >
-            <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin text-cyan-400' : 'text-blue-400'}`} />
-            <span className="hidden md:inline">{isLocating ? 'Locating...' : 'Locate Me (GPS)'}</span>
-          </button>
+        {/* Section 2: Center (Map Exploration Tools) - Segmented Capsule */}
+        <div className="flex items-center justify-center flex-shrink-0">
+          <div className="bg-slate-800/80 p-1 rounded-xl border border-slate-700 flex items-center gap-1 shadow-inner">
+            {/* [ 📍 Locate Me ] */}
+            <button
+              onClick={handleLocateMe}
+              disabled={isLocating}
+              className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center gap-2 transition cursor-pointer active:scale-95 disabled:opacity-50 ${
+                isLocating
+                  ? 'bg-blue-600/30 text-blue-200 border border-blue-400/50 shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
+              }`}
+              title="High-precision GPS geolocation with study corridor boundary check"
+            >
+              <Locate className={`w-4 h-4 ${isLocating ? 'animate-spin text-cyan-400' : 'text-blue-400'}`} />
+              <span className="whitespace-nowrap">{isLocating ? 'Locating...' : 'Locate Me'}</span>
+            </button>
 
-          {/* Density Heatmap */}
-          <button
-            onClick={() => toggleHeatmap(!showHeatmap)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border active:scale-95 ${
-              showHeatmap
-                ? 'bg-amber-500/25 border-amber-400/80 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
-                : 'bg-slate-800/80 hover:bg-amber-500/20 border-slate-700 hover:border-amber-500/50 text-slate-300'
-            }`}
-            title="Toggle failure density heatmap & DBSCAN spatial clusters"
-          >
-            <Flame className={`w-3.5 h-3.5 ${showHeatmap ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
-            <span className="hidden md:inline">Density Heatmap</span>
-          </button>
+            {/* [ 🔥 Density Heatmap ] */}
+            <button
+              onClick={() => toggleHeatmap(!showHeatmap)}
+              className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center gap-2 transition cursor-pointer active:scale-95 ${
+                showHeatmap
+                  ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
+              }`}
+              title="Toggle failure density heatmap & DBSCAN spatial clusters"
+            >
+              <Flame className={`w-4 h-4 ${showHeatmap ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
+              <span className="whitespace-nowrap">Density Heatmap</span>
+            </button>
 
-
+            {/* [ 📋 Layers & Drawer ] */}
+            <button
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center gap-2 transition cursor-pointer active:scale-95 ${
+                sidebarOpen
+                  ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
+              }`}
+              title="Toggle Layers & Analytics Drawer"
+            >
+              <Layers className={`w-4 h-4 ${sidebarOpen ? 'text-emerald-400' : 'text-slate-400'}`} />
+              <span className="whitespace-nowrap">Layers & Drawer</span>
+            </button>
+          </div>
         </div>
 
-        {/* Section 3: Right - Action Buttons & Role Badge */}
-        <div className="flex items-center gap-2">
-          {/* + Add Facility / + Add Govt Scheme Asset (Role-Adaptive) */}
+        {/* Section 3: Right Side (Actions & Role Gateway) */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {/* [ + Propose Facility ] Button */}
           <button
             onClick={() => {
               if (isAddFacilityMode) {
@@ -2118,14 +2207,10 @@ export const VillageMap = () => {
                 setIsAddFacilityMode(true);
               }
             }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 ${
+            className={`font-medium px-4 py-2 rounded-xl shadow-md flex items-center gap-2 text-sm transition cursor-pointer active:scale-95 whitespace-nowrap ${
               isAddFacilityMode
-                ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/30'
-                : userRole === 'officer'
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40'
-                : userRole === 'user'
-                ? 'bg-teal-600 hover:bg-teal-500 text-white shadow-teal-950/40'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40'
+                ? 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-rose-950/40'
+                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-950/40'
             }`}
             title={
               userRole === 'officer'
@@ -2135,8 +2220,8 @@ export const VillageMap = () => {
                 : 'Register and publish village asset directly to the live map'
             }
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">
+            <Plus className={`w-4 h-4 ${isAddFacilityMode ? 'rotate-45' : ''}`} />
+            <span>
               {isAddFacilityMode
                 ? 'Cancel Placing'
                 : userRole === 'officer'
@@ -2147,62 +2232,173 @@ export const VillageMap = () => {
             </span>
           </button>
 
-          {/* Report Grievance (Primary Amber button) */}
+          {/* [ ⚠️ Report Grievance ] Button */}
           <button
             onClick={() => setIsGrievanceModalOpen(true)}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shadow-md shadow-amber-950/40 flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-medium px-4 py-2 rounded-xl shadow-md shadow-amber-950/40 flex items-center gap-2 text-sm transition active:scale-95 cursor-pointer whitespace-nowrap"
             title="Report citizen grievance with camera photo capture"
           >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Report Grievance</span>
+            <AlertTriangle className="w-4 h-4 text-amber-200" />
+            <span>Report Grievance</span>
           </button>
 
-          {/* Export Audit (Admin) or Export Worklist (Officer) - Hidden for Villagers */}
+          {/* Export Audit (Admin) or Export Worklist (Officer) */}
           {userRole === 'admin' && (
             <button
               onClick={() => setIsExportAuditModalOpen(true)}
-              className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-md shadow-purple-950/40 flex items-center gap-1.5 transition active:scale-95 cursor-pointer border border-purple-400/30"
+              className="bg-purple-600/25 hover:bg-purple-600/40 border border-purple-500/50 text-purple-200 font-medium px-3.5 py-2 rounded-xl text-sm shadow-md flex items-center gap-2 transition active:scale-95 cursor-pointer whitespace-nowrap"
               title="Open Executive Panchayat Audit & Reporting Engine (PDF & CSV)"
             >
-              <FileText className="w-3.5 h-3.5 text-purple-200" />
-              <span className="hidden sm:inline">Export Audit</span>
+              <FileText className="w-4 h-4 text-purple-300" />
+              <span className="hidden xl:inline">Export Audit</span>
             </button>
           )}
 
           {userRole === 'officer' && (
             <button
               onClick={handleOfficerExportWorklist}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-md shadow-blue-950/40 flex items-center gap-1.5 transition active:scale-95 cursor-pointer border border-blue-400/30"
+              className="bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/50 text-blue-200 font-medium px-3.5 py-2 rounded-xl text-sm shadow-md flex items-center gap-2 transition active:scale-95 cursor-pointer whitespace-nowrap"
               title="Download Field Inspection Worklist PDF"
             >
-              <ClipboardList className="w-3.5 h-3.5 text-blue-200" />
-              <span className="hidden sm:inline">Export Worklist</span>
+              <ClipboardList className="w-4 h-4 text-blue-300" />
+              <span className="hidden xl:inline">Export Worklist</span>
             </button>
           )}
 
+          {/* Role Switcher Gateway Pill & Dropdown */}
+          <div className="relative" ref={portalSwitcherRef}>
+            <button
+              onClick={() => setIsPortalSwitcherOpen(!isPortalSwitcherOpen)}
+              className={`px-3.5 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition cursor-pointer border active:scale-95 whitespace-nowrap ${
+                userRole === 'admin'
+                  ? 'bg-purple-950/80 border-purple-500/60 text-purple-200 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
+                  : userRole === 'officer'
+                  ? 'bg-blue-950/80 border-blue-500/60 text-blue-200 shadow-[0_0_12px_rgba(59,130,246,0.25)]'
+                  : 'bg-emerald-950/80 border-emerald-500/60 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+              }`}
+              title="Switch between Resident, Field Officer, and Panchayat Admin portals"
+            >
+              <span className="text-base">
+                {userRole === 'admin' ? '🏛️' : userRole === 'officer' ? '📋' : '👤'}
+              </span>
+              <span className="hidden sm:inline">
+                {userRole === 'admin'
+                  ? 'Panchayat Admin Console'
+                  : userRole === 'officer'
+                  ? 'Field Officer Portal'
+                  : 'Resident / Citizen View'}
+              </span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                  isPortalSwitcherOpen ? 'rotate-180 text-white' : ''
+                }`}
+              />
+            </button>
+
+            {/* Portal Switcher Dropdown Menu */}
+            {isPortalSwitcherOpen && (
+              <div className="absolute top-12 right-0 z-[2500] w-80 sm:w-96 backdrop-blur-2xl bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] p-3 text-xs text-slate-200 animate-in fade-in slide-in-from-top-2 flex flex-col gap-2">
+                <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between">
+                  <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400">
+                    Switch Portal Gateway
+                  </span>
+                  <span className="text-[10px] text-cyan-400 font-mono font-semibold">
+                    1-Click Access
+                  </span>
+                </div>
+
+                {/* Option 1: Resident / Citizen View */}
+                <button
+                  onClick={() => handlePortalSwitch('user')}
+                  className={`w-full p-3 rounded-xl border text-left transition flex items-start gap-3 cursor-pointer ${
+                    userRole === 'user'
+                      ? 'bg-emerald-950/60 border-emerald-500/70 text-white shadow-sm'
+                      : 'bg-slate-950/50 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-xl p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 flex-shrink-0">
+                    👤
+                  </span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-sm">Switch to Resident Portal</span>
+                      {userRole === 'user' && (
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                          ACTIVE
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                      Free exploration, public amenities, propose assets & report issues.
+                    </p>
+                  </div>
+                </button>
+
+                {/* Option 2: Field Officer Portal */}
+                <button
+                  onClick={() => handlePortalSwitch('officer')}
+                  className={`w-full p-3 rounded-xl border text-left transition flex items-start gap-3 cursor-pointer ${
+                    userRole === 'officer'
+                      ? 'bg-blue-950/60 border-blue-500/70 text-white shadow-sm'
+                      : 'bg-slate-950/50 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-xl p-2 rounded-xl bg-blue-950/80 border border-blue-500/40 flex-shrink-0">
+                    📋
+                  </span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-sm">Switch to Officer Portal</span>
+                      {userRole === 'officer' && (
+                        <span className="text-[10px] font-bold text-blue-400 bg-blue-950 px-2 py-0.5 rounded-full border border-blue-500/40">
+                          ACTIVE
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                      Access Field Inspection Worklist, update repair statuses (In Progress/Resolved), and log Govt Scheme infrastructure.
+                    </p>
+                  </div>
+                </button>
+
+                {/* Option 3: Panchayat Admin Console */}
+                <button
+                  onClick={() => handlePortalSwitch('admin')}
+                  className={`w-full p-3 rounded-xl border text-left transition flex items-start gap-3 cursor-pointer ${
+                    userRole === 'admin'
+                      ? 'bg-purple-950/60 border-purple-500/70 text-white shadow-sm'
+                      : 'bg-slate-950/50 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-xl p-2 rounded-xl bg-purple-950/80 border border-purple-500/40 flex-shrink-0">
+                    🏛️
+                  </span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-sm">Switch to Admin Console</span>
+                      {userRole === 'admin' && (
+                        <span className="text-[10px] font-bold text-purple-400 bg-purple-950 px-2 py-0.5 rounded-full border border-purple-500/40">
+                          ACTIVE
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                      Open Approval Queue for pending submissions, Random Forest ML Priority rankings, and Master PDF Audit export.
+                    </p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Role Profile Pill with dropdown for Logout & Export Audit */}
           <UserProfileBadge onExportAudit={handleExportAuditSummary} />
-
-          {/* Floating toggle button: [ Layers & Analytics ⚙️ ] */}
-          <button
-            onClick={() => setSidebarOpen((prev) => !prev)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border active:scale-95 ${
-              sidebarOpen
-                ? 'bg-emerald-500/25 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
-                : 'bg-slate-800/90 hover:bg-slate-700 border-slate-700 text-slate-200'
-            }`}
-            title="Toggle Layers & Analytics Drawer"
-          >
-            <Layers className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">Layers & Analytics</span>
-            <span>⚙️</span>
-          </button>
         </div>
       </header>
 
       {/* 1.1 ADD FACILITY MODE INSTRUCTION BANNER */}
       {isAddFacilityMode && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[1500] pointer-events-auto animate-in fade-in slide-in-from-top-4 duration-200">
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1500] pointer-events-auto animate-in fade-in slide-in-from-top-4 duration-200">
           <div className="backdrop-blur-2xl bg-slate-900/95 border-2 border-cyan-400/90 rounded-2xl px-5 py-2.5 shadow-[0_0_25px_rgba(6,182,212,0.35)] flex items-center gap-3 text-xs text-white">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] flex-shrink-0"></span>
             <span className="font-semibold text-slate-200">
@@ -2225,7 +2421,7 @@ export const VillageMap = () => {
 
       {/* 2. COLLAPSIBLE RIGHT SIDEBAR ("DRAWER MODE") */}
       <aside
-        className={`fixed top-[49px] right-0 bottom-0 z-[1200] w-88 sm:w-96 bg-slate-900/95 backdrop-blur-xl border-l border-slate-700/70 shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed top-16 right-0 bottom-0 z-[1200] w-88 sm:w-96 bg-slate-900/95 backdrop-blur-xl border-l border-slate-700/70 shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -2565,7 +2761,7 @@ export const VillageMap = () => {
 
       {/* Selected / Inspected Point Floating Card */}
       {inspectedPoint && (
-        <div className="absolute top-16 left-4 z-[1000] pointer-events-auto backdrop-blur-xl bg-slate-900/95 border border-cyan-500/40 text-slate-100 rounded-xl p-3 shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 max-w-sm">
+        <div className="absolute top-20 left-4 z-[1000] pointer-events-auto backdrop-blur-xl bg-slate-900/95 border border-cyan-500/40 text-slate-100 rounded-xl p-3 shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 max-w-sm">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-500/50 flex items-center justify-center text-cyan-400">
               <MapPin className="w-4 h-4" />
