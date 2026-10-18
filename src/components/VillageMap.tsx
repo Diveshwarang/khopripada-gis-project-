@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.heat';
 import {
   Layers,
   MapPin,
   Building2,
-  ChevronRight,
   ChevronDown,
   Locate,
   AlertTriangle,
@@ -137,6 +137,14 @@ export const VillageMap = () => {
   const tileLayersRef = useRef<Record<BasemapType, L.TileLayer> | null>(null);
   const allFacilitiesRef = useRef<CachedFacility[]>([]);
   const allIssuesRef = useRef<CachedIssue[]>([]);
+  const heatLayerRef = useRef<any>(null);
+
+  // Available roles for dedicated Portal Switcher
+  const AVAILABLE_ROLES: { id: Role; label: string; icon: string; desc: string }[] = [
+    { id: 'user', label: 'Resident / Villager', icon: '👤', desc: 'Public map, report issues' },
+    { id: 'officer', label: 'Field Officer', icon: '📋', desc: 'Inspect worklist, govt assets' },
+    { id: 'admin', label: 'Panchayat Admin', icon: '🏛️', desc: 'Approvals, ML priority, audits' },
+  ];
 
   // Auth Context & Role
   const { session, loginAsDemoRole } = useAuth();
@@ -164,15 +172,11 @@ export const VillageMap = () => {
   }, [isPortalSwitcherOpen]);
 
   // Handler for direct 1-click role/portal switching
-  const handlePortalSwitch = (targetRole: Role) => {
+  const handlePortalSwitch = (targetRole: Role, roleLabel?: string) => {
     loginAsDemoRole(targetRole);
     setIsPortalSwitcherOpen(false);
-    const roleLabels: Record<Role, string> = {
-      admin: 'Panchayat Admin Mode',
-      officer: 'Field Officer Mode',
-      user: 'Resident / Citizen Mode',
-    };
-    showToast(`⚡ Switched to ${roleLabels[targetRole]}`);
+    const label = roleLabel || AVAILABLE_ROLES.find((r) => r.id === targetRole)?.label || targetRole;
+    showToast(`Switched to ${label}`);
   };
 
   // Spatial ML: DBSCAN Clusters & Heatmap layers
@@ -1334,19 +1338,89 @@ export const VillageMap = () => {
     }
   };
 
-  const toggleHeatmap = (enable: boolean) => {
-    setShowHeatmap(enable);
-    if (!mapInstanceRef.current || !heatmapLayerRef.current) return;
-    if (enable) {
-      if (!mapInstanceRef.current.hasLayer(heatmapLayerRef.current)) {
-        mapInstanceRef.current.addLayer(heatmapLayerRef.current);
-      }
-      renderDbscanAndHeatmap(allIssuesRef.current, showDbscanClusters, true);
+  // Real-time Leaflet Heatmap Layer (leaflet.heat) for Failure Density & Grievances
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    if (showHeatmap) {
+      const renderHeat = async () => {
+        const points: [number, number, number][] = [];
+
+        // 1. Surveyed issues from CSV
+        allIssuesRef.current.forEach((iss) => {
+          if (iss.latitude && iss.longitude) {
+            const weight =
+              iss.severity === 'critical' || iss.severity === 'high' || iss.severity === 'urgent'
+                ? 1.0
+                : iss.severity === 'medium'
+                ? 0.6
+                : 0.3;
+            points.push([iss.latitude, iss.longitude, weight]);
+          }
+        });
+
+        // 2. Approved and active grievances from IndexedDB
+        try {
+          const allGrievances = await db.offline_grievances.toArray();
+          const visible = allGrievances.filter(
+            (g) => g.approval_status === 'approved' || g.approval_status === undefined
+          );
+          visible.forEach((g) => {
+            if (g.latitude && g.longitude) {
+              const weight =
+                g.severity === 'critical' || g.severity === 'high'
+                  ? 1.0
+                  : g.severity === 'medium'
+                  ? 0.6
+                  : 0.3;
+              points.push([g.latitude, g.longitude, weight]);
+            }
+          });
+        } catch (err) {
+          console.error('Error querying grievances for heatmap:', err);
+        }
+
+        // Clean up previous heatLayer instance if any
+        if (heatLayerRef.current && map.hasLayer(heatLayerRef.current)) {
+          map.removeLayer(heatLayerRef.current);
+          heatLayerRef.current = null;
+        }
+
+        if (points.length > 0) {
+          try {
+            heatLayerRef.current = (L as any)
+              .heatLayer(points, {
+                radius: 30,
+                blur: 20,
+                maxZoom: 17,
+                minOpacity: 0.4,
+                gradient: {
+                  0.2: '#3b82f6',
+                  0.4: '#10b981',
+                  0.6: '#eab308',
+                  0.8: '#f97316',
+                  1.0: '#ef4444',
+                },
+              })
+              .addTo(map);
+          } catch (e) {
+            console.error('Failed to initialize Leaflet heatLayer:', e);
+          }
+        }
+      };
+
+      renderHeat();
     } else {
-      if (mapInstanceRef.current.hasLayer(heatmapLayerRef.current)) {
-        mapInstanceRef.current.removeLayer(heatmapLayerRef.current);
+      if (heatLayerRef.current && map.hasLayer(heatLayerRef.current)) {
+        map.removeLayer(heatLayerRef.current);
+        heatLayerRef.current = null;
       }
     }
+  }, [showHeatmap, issuesList]);
+
+  const toggleHeatmap = (enable: boolean) => {
+    setShowHeatmap(enable);
   };
 
   // Export Handlers for Client-Side Audit & Reporting Engine
@@ -1554,6 +1628,9 @@ export const VillageMap = () => {
     });
 
     mapInstanceRef.current = map;
+
+    // 2.1 Add Zoom Control positioned at bottom right
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     // 3. Add Scale Control
     L.control
@@ -1837,7 +1914,7 @@ export const VillageMap = () => {
       renderIssueMarkers(allIssuesRef.current, facilityFilter);
     }
     refreshGrievanceMarkers();
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'officer') {
       if (
         mapInstanceRef.current &&
         dbscanLayerRef.current &&
@@ -1846,15 +1923,7 @@ export const VillageMap = () => {
       ) {
         mapInstanceRef.current.addLayer(dbscanLayerRef.current);
       }
-      if (
-        mapInstanceRef.current &&
-        heatmapLayerRef.current &&
-        showHeatmap &&
-        !mapInstanceRef.current.hasLayer(heatmapLayerRef.current)
-      ) {
-        mapInstanceRef.current.addLayer(heatmapLayerRef.current);
-      }
-      renderDbscanAndHeatmap(allIssuesRef.current, showDbscanClusters, showHeatmap);
+      renderDbscanAndHeatmap(allIssuesRef.current, showDbscanClusters, false);
     } else {
       if (
         mapInstanceRef.current &&
@@ -1862,13 +1931,6 @@ export const VillageMap = () => {
         mapInstanceRef.current.hasLayer(dbscanLayerRef.current)
       ) {
         mapInstanceRef.current.removeLayer(dbscanLayerRef.current);
-      }
-      if (
-        mapInstanceRef.current &&
-        heatmapLayerRef.current &&
-        mapInstanceRef.current.hasLayer(heatmapLayerRef.current)
-      ) {
-        mapInstanceRef.current.removeLayer(heatmapLayerRef.current);
       }
     }
   }, [
@@ -2097,19 +2159,22 @@ export const VillageMap = () => {
         </div>
       )}
 
-      {/* 1. TOP NAVIGATION BAR (HIGH-CONTRAST MODERN GLASSMORPHISM, H-16) */}
-      <header className="relative z-[1100] w-full h-16 bg-slate-900/90 backdrop-blur-md border-b border-slate-700/80 shadow-lg px-6 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
+      {/* 1. TOP NAVIGATION BAR (HIGH-CONTRAST MODERN GLASSMORPHISM, H-16, RESPONSIVE) */}
+      <header className="relative z-[1100] w-full h-16 bg-slate-900/90 backdrop-blur-md border-b border-slate-700/80 shadow-lg px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
         {/* Section 1: Left Side (Identity & Status) */}
-        <div className="flex items-center gap-4 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-lg shadow-emerald-950/50 border border-emerald-400/40">
-              <Building2 className="w-5 h-5 text-emerald-100" />
+        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-lg shadow-emerald-950/50 border border-emerald-400/40">
+              <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-100" />
             </div>
             <div className="flex items-center">
-              <span className="text-lg font-bold text-white tracking-wide whitespace-nowrap">
+              <span className="md:hidden text-sm sm:text-base font-bold text-white tracking-tight whitespace-nowrap">
+                Khopripada GIS
+              </span>
+              <span className="hidden md:inline text-lg font-bold text-white tracking-wide whitespace-nowrap">
                 Smart Village GIS
               </span>
-              <span className="hidden sm:inline-flex text-xs font-semibold text-emerald-400 bg-emerald-950/70 border border-emerald-800/80 px-2.5 py-0.5 rounded-full ml-2 whitespace-nowrap">
+              <span className="hidden md:inline-flex text-xs font-semibold text-emerald-400 bg-emerald-950/70 border border-emerald-800/80 px-2.5 py-0.5 rounded-full ml-2 whitespace-nowrap">
                 Khopripada • Vasai-Virar
               </span>
             </div>
@@ -2150,55 +2215,55 @@ export const VillageMap = () => {
 
         {/* Section 2: Center (Map Exploration Tools) - Segmented Capsule */}
         <div className="flex items-center justify-center flex-shrink-0">
-          <div className="bg-slate-800/80 p-1 rounded-xl border border-slate-700 flex items-center gap-1 shadow-inner">
+          <div className="bg-slate-800/80 p-0.5 sm:p-1 rounded-xl border border-slate-700 flex items-center gap-0.5 sm:gap-1 shadow-inner">
             {/* [ 📍 Locate Me ] */}
             <button
               onClick={handleLocateMe}
               disabled={isLocating}
-              className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center gap-2 transition cursor-pointer active:scale-95 disabled:opacity-50 ${
+              className={`px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg text-xs sm:text-[13px] font-semibold flex items-center gap-1.5 transition cursor-pointer active:scale-95 disabled:opacity-50 ${
                 isLocating
                   ? 'bg-blue-600/30 text-blue-200 border border-blue-400/50 shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/70 border border-transparent'
               }`}
               title="High-precision GPS geolocation with study corridor boundary check"
             >
               <Locate className={`w-4 h-4 ${isLocating ? 'animate-spin text-cyan-400' : 'text-blue-400'}`} />
-              <span className="whitespace-nowrap">{isLocating ? 'Locating...' : 'Locate Me'}</span>
+              <span className="hidden sm:inline whitespace-nowrap">{isLocating ? 'Locating...' : 'Locate Me'}</span>
             </button>
 
             {/* [ 🔥 Density Heatmap ] */}
             <button
               onClick={() => toggleHeatmap(!showHeatmap)}
-              className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center gap-2 transition cursor-pointer active:scale-95 ${
+              className={`px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg text-xs sm:text-[13px] font-semibold flex items-center gap-1.5 transition cursor-pointer active:scale-95 ${
                 showHeatmap
-                  ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
+                  ? 'border border-orange-500 bg-orange-950/60 text-orange-300 shadow-[0_0_12px_rgba(249,115,22,0.4)]'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/70 border border-transparent'
               }`}
               title="Toggle failure density heatmap & DBSCAN spatial clusters"
             >
-              <Flame className={`w-4 h-4 ${showHeatmap ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
-              <span className="whitespace-nowrap">Density Heatmap</span>
+              <Flame className={`w-4 h-4 ${showHeatmap ? 'text-orange-400 animate-pulse' : 'text-slate-400'}`} />
+              <span className="hidden sm:inline whitespace-nowrap">Density Heatmap</span>
             </button>
 
             {/* [ 📋 Layers & Drawer ] */}
             <button
               onClick={() => setSidebarOpen((prev) => !prev)}
-              className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center gap-2 transition cursor-pointer active:scale-95 ${
+              className={`px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg text-xs sm:text-[13px] font-semibold flex items-center gap-1.5 transition cursor-pointer active:scale-95 ${
                 sidebarOpen
                   ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/70 border border-transparent'
               }`}
               title="Toggle Layers & Analytics Drawer"
             >
               <Layers className={`w-4 h-4 ${sidebarOpen ? 'text-emerald-400' : 'text-slate-400'}`} />
-              <span className="whitespace-nowrap">Layers & Drawer</span>
+              <span className="hidden sm:inline whitespace-nowrap">Layers & Drawer</span>
             </button>
           </div>
         </div>
 
         {/* Section 3: Right Side (Actions & Role Gateway) */}
-        <div className="flex items-center gap-3 flex-shrink-0">
-          {/* [ + Propose Facility ] Button */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+          {/* Desktop [ + Propose Facility ] Button */}
           <button
             onClick={() => {
               if (isAddFacilityMode) {
@@ -2207,7 +2272,7 @@ export const VillageMap = () => {
                 setIsAddFacilityMode(true);
               }
             }}
-            className={`font-medium px-4 py-2 rounded-xl shadow-md flex items-center gap-2 text-sm transition cursor-pointer active:scale-95 whitespace-nowrap ${
+            className={`hidden md:flex font-medium px-4 py-2 rounded-xl shadow-md items-center gap-2 text-sm transition cursor-pointer active:scale-95 whitespace-nowrap ${
               isAddFacilityMode
                 ? 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-rose-950/40'
                 : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-950/40'
@@ -2232,10 +2297,10 @@ export const VillageMap = () => {
             </span>
           </button>
 
-          {/* [ ⚠️ Report Grievance ] Button */}
+          {/* Desktop [ ⚠️ Report Grievance ] Button */}
           <button
             onClick={() => setIsGrievanceModalOpen(true)}
-            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-medium px-4 py-2 rounded-xl shadow-md shadow-amber-950/40 flex items-center gap-2 text-sm transition active:scale-95 cursor-pointer whitespace-nowrap"
+            className="hidden md:flex bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-medium px-4 py-2 rounded-xl shadow-md shadow-amber-950/40 items-center gap-2 text-sm transition active:scale-95 cursor-pointer whitespace-nowrap"
             title="Report citizen grievance with camera photo capture"
           >
             <AlertTriangle className="w-4 h-4 text-amber-200" />
@@ -2246,30 +2311,30 @@ export const VillageMap = () => {
           {userRole === 'admin' && (
             <button
               onClick={() => setIsExportAuditModalOpen(true)}
-              className="bg-purple-600/25 hover:bg-purple-600/40 border border-purple-500/50 text-purple-200 font-medium px-3.5 py-2 rounded-xl text-sm shadow-md flex items-center gap-2 transition active:scale-95 cursor-pointer whitespace-nowrap"
+              className="hidden xl:flex bg-purple-600/25 hover:bg-purple-600/40 border border-purple-500/50 text-purple-200 font-medium px-3.5 py-2 rounded-xl text-sm shadow-md items-center gap-2 transition active:scale-95 cursor-pointer whitespace-nowrap"
               title="Open Executive Panchayat Audit & Reporting Engine (PDF & CSV)"
             >
               <FileText className="w-4 h-4 text-purple-300" />
-              <span className="hidden xl:inline">Export Audit</span>
+              <span>Export Audit</span>
             </button>
           )}
 
           {userRole === 'officer' && (
             <button
               onClick={handleOfficerExportWorklist}
-              className="bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/50 text-blue-200 font-medium px-3.5 py-2 rounded-xl text-sm shadow-md flex items-center gap-2 transition active:scale-95 cursor-pointer whitespace-nowrap"
+              className="hidden xl:flex bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/50 text-blue-200 font-medium px-3.5 py-2 rounded-xl text-sm shadow-md items-center gap-2 transition active:scale-95 cursor-pointer whitespace-nowrap"
               title="Download Field Inspection Worklist PDF"
             >
               <ClipboardList className="w-4 h-4 text-blue-300" />
-              <span className="hidden xl:inline">Export Worklist</span>
+              <span>Export Worklist</span>
             </button>
           )}
 
-          {/* Role Switcher Gateway Pill & Dropdown */}
+          {/* Dedicated High Z-Index Role Switcher Gateway */}
           <div className="relative" ref={portalSwitcherRef}>
             <button
               onClick={() => setIsPortalSwitcherOpen(!isPortalSwitcherOpen)}
-              className={`px-3.5 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition cursor-pointer border active:scale-95 whitespace-nowrap ${
+              className={`px-2.5 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 sm:gap-2 transition cursor-pointer border active:scale-95 whitespace-nowrap ${
                 userRole === 'admin'
                   ? 'bg-purple-950/80 border-purple-500/60 text-purple-200 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
                   : userRole === 'officer'
@@ -2283,10 +2348,10 @@ export const VillageMap = () => {
               </span>
               <span className="hidden sm:inline">
                 {userRole === 'admin'
-                  ? 'Panchayat Admin Console'
+                  ? 'Panchayat Admin'
                   : userRole === 'officer'
-                  ? 'Field Officer Portal'
-                  : 'Resident / Citizen View'}
+                  ? 'Field Officer'
+                  : 'Resident View'}
               </span>
               <ChevronDown
                 className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
@@ -2295,98 +2360,33 @@ export const VillageMap = () => {
               />
             </button>
 
-            {/* Portal Switcher Dropdown Menu */}
+            {/* Dedicated High Z-Index Portal Switcher Dropdown Menu */}
             {isPortalSwitcherOpen && (
-              <div className="absolute top-12 right-0 z-[2500] w-80 sm:w-96 backdrop-blur-2xl bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] p-3 text-xs text-slate-200 animate-in fade-in slide-in-from-top-2 flex flex-col gap-2">
-                <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between">
-                  <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400">
-                    Switch Portal Gateway
-                  </span>
-                  <span className="text-[10px] text-cyan-400 font-mono font-semibold">
-                    1-Click Access
-                  </span>
+              <div className="z-[9999] absolute right-0 mt-2 w-64 sm:w-72 bg-slate-900/95 border border-slate-700 rounded-xl shadow-2xl backdrop-blur-xl p-2 flex flex-col gap-1 animate-in fade-in slide-in-from-top-2">
+                <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-slate-400 border-b border-slate-800 flex items-center justify-between">
+                  <span>Switch Portal</span>
+                  <span className="text-cyan-400 font-mono text-[9px]">1-Click</span>
                 </div>
 
-                {/* Option 1: Resident / Citizen View */}
-                <button
-                  onClick={() => handlePortalSwitch('user')}
-                  className={`w-full p-3 rounded-xl border text-left transition flex items-start gap-3 cursor-pointer ${
-                    userRole === 'user'
-                      ? 'bg-emerald-950/60 border-emerald-500/70 text-white shadow-sm'
-                      : 'bg-slate-950/50 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:border-slate-700'
-                  }`}
-                >
-                  <span className="text-xl p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 flex-shrink-0">
-                    👤
-                  </span>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-white text-sm">Switch to Resident Portal</span>
-                      {userRole === 'user' && (
-                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-500/40">
-                          ACTIVE
-                        </span>
-                      )}
+                {AVAILABLE_ROLES.filter((r) => r.id !== userRole).map((role) => (
+                  <button
+                    key={role.id}
+                    onClick={() => handlePortalSwitch(role.id, role.label)}
+                    className="w-full p-2.5 rounded-lg border border-slate-800/80 bg-slate-950/70 hover:bg-slate-800 hover:border-slate-600 transition flex items-start gap-2.5 text-left cursor-pointer group active:scale-95"
+                  >
+                    <span className="text-lg p-1.5 rounded-lg bg-slate-900 border border-slate-800 flex-shrink-0 group-hover:border-cyan-500/50">
+                      {role.icon}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-white text-xs group-hover:text-cyan-300 transition-colors">
+                        {role.label}
+                      </div>
+                      <div className="text-[10px] text-slate-400 leading-snug mt-0.5">
+                        {role.desc}
+                      </div>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                      Free exploration, public amenities, propose assets & report issues.
-                    </p>
-                  </div>
-                </button>
-
-                {/* Option 2: Field Officer Portal */}
-                <button
-                  onClick={() => handlePortalSwitch('officer')}
-                  className={`w-full p-3 rounded-xl border text-left transition flex items-start gap-3 cursor-pointer ${
-                    userRole === 'officer'
-                      ? 'bg-blue-950/60 border-blue-500/70 text-white shadow-sm'
-                      : 'bg-slate-950/50 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:border-slate-700'
-                  }`}
-                >
-                  <span className="text-xl p-2 rounded-xl bg-blue-950/80 border border-blue-500/40 flex-shrink-0">
-                    📋
-                  </span>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-white text-sm">Switch to Officer Portal</span>
-                      {userRole === 'officer' && (
-                        <span className="text-[10px] font-bold text-blue-400 bg-blue-950 px-2 py-0.5 rounded-full border border-blue-500/40">
-                          ACTIVE
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                      Access Field Inspection Worklist, update repair statuses (In Progress/Resolved), and log Govt Scheme infrastructure.
-                    </p>
-                  </div>
-                </button>
-
-                {/* Option 3: Panchayat Admin Console */}
-                <button
-                  onClick={() => handlePortalSwitch('admin')}
-                  className={`w-full p-3 rounded-xl border text-left transition flex items-start gap-3 cursor-pointer ${
-                    userRole === 'admin'
-                      ? 'bg-purple-950/60 border-purple-500/70 text-white shadow-sm'
-                      : 'bg-slate-950/50 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:border-slate-700'
-                  }`}
-                >
-                  <span className="text-xl p-2 rounded-xl bg-purple-950/80 border border-purple-500/40 flex-shrink-0">
-                    🏛️
-                  </span>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-white text-sm">Switch to Admin Console</span>
-                      {userRole === 'admin' && (
-                        <span className="text-[10px] font-bold text-purple-400 bg-purple-950 px-2 py-0.5 rounded-full border border-purple-500/40">
-                          ACTIVE
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                      Open Approval Queue for pending submissions, Random Forest ML Priority rankings, and Master PDF Audit export.
-                    </p>
-                  </div>
-                </button>
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -2421,7 +2421,7 @@ export const VillageMap = () => {
 
       {/* 2. COLLAPSIBLE RIGHT SIDEBAR ("DRAWER MODE") */}
       <aside
-        className={`fixed top-16 right-0 bottom-0 z-[1200] w-88 sm:w-96 bg-slate-900/95 backdrop-blur-xl border-l border-slate-700/70 shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed top-16 right-0 bottom-0 z-[1200] w-full md:w-96 bg-slate-900/95 backdrop-blur-xl border-l border-slate-700/70 shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -2433,10 +2433,10 @@ export const VillageMap = () => {
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
-            title="Close Drawer (100% full-screen map visibility)"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer text-xs font-semibold"
+            title="Close Drawer"
           >
-            <ChevronRight className="w-4 h-4" />
+            <span>✕ Close</span>
           </button>
         </div>
 
@@ -2556,19 +2556,21 @@ export const VillageMap = () => {
                   />
                 </label>
 
-                {/* DBSCAN Failure Zones */}
-                <label className="flex items-center justify-between p-2 rounded-lg bg-purple-950/30 border border-purple-500/40 hover:border-purple-400 cursor-pointer transition">
-                  <span className="text-xs text-purple-100 flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                    DBSCAN Failure Zones (3 Hotspots)
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={showDbscanClusters}
-                    onChange={(e) => toggleDbscanClusters(e.target.checked)}
-                    className="w-4 h-4 rounded text-purple-500 focus:ring-0 accent-purple-500 cursor-pointer"
-                  />
-                </label>
+                {/* DBSCAN Failure Zones (Admin & Field Officer Portal Only) */}
+                {(userRole === 'admin' || userRole === 'officer') && (
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-purple-950/30 border border-purple-500/40 hover:border-purple-400 cursor-pointer transition">
+                    <span className="text-xs text-purple-100 flex items-center gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                      DBSCAN Failure Zones (3 Hotspots)
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={showDbscanClusters}
+                      onChange={(e) => toggleDbscanClusters(e.target.checked)}
+                      className="w-4 h-4 rounded text-purple-500 focus:ring-0 accent-purple-500 cursor-pointer"
+                    />
+                  </label>
+                )}
 
                 {/* Failure Density Heatmap */}
                 <label className="flex items-center justify-between p-2 rounded-lg bg-amber-950/30 border border-amber-500/40 hover:border-amber-400 cursor-pointer transition">
@@ -2595,35 +2597,37 @@ export const VillageMap = () => {
             >
               <span className="flex items-center gap-1.5">
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${categoryFiltersOpen ? '' : '-rotate-90'}`} />
-                Category Filters
+                Category Filters & Guide
               </span>
               <span className="text-[10px] font-mono text-cyan-400">{facilitiesList.length} Fac</span>
             </button>
 
             {categoryFiltersOpen && (
               <div className="p-3 pt-2 space-y-3 border-t border-slate-800/80">
-                {/* Dataset Switcher */}
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Dataset Model</span>
-                  <div className="grid grid-cols-2 p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px]">
-                    <button
-                      onClick={() => handleSwitchDataset('survey')}
-                      className={`py-1 px-1.5 rounded-md font-semibold text-center transition cursor-pointer ${
-                        activeDataset === 'survey' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Field Survey (22 / 3)
-                    </button>
-                    <button
-                      onClick={() => handleSwitchDataset('unified')}
-                      className={`py-1 px-1.5 rounded-md font-semibold text-center transition cursor-pointer ${
-                        activeDataset === 'unified' ? 'bg-cyan-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      All Model (172 / 203)
-                    </button>
+                {/* Dataset Switcher (Admin & Field Officer Portal Only) */}
+                {(userRole === 'admin' || userRole === 'officer') && (
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Dataset Model</span>
+                    <div className="grid grid-cols-2 p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px]">
+                      <button
+                        onClick={() => handleSwitchDataset('survey')}
+                        className={`py-1 px-1.5 rounded-md font-semibold text-center transition cursor-pointer ${
+                          activeDataset === 'survey' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Field Survey (22 / 3)
+                      </button>
+                      <button
+                        onClick={() => handleSwitchDataset('unified')}
+                        className={`py-1 px-1.5 rounded-md font-semibold text-center transition cursor-pointer ${
+                          activeDataset === 'unified' ? 'bg-cyan-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        All Model (172 / 203)
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Category Filter Buttons */}
                 <div className="grid grid-cols-2 gap-1.5">
@@ -2653,109 +2657,153 @@ export const VillageMap = () => {
                   ))}
                 </div>
 
-                {/* Facility Health Breakdown */}
-                <div className="pt-2 border-t border-slate-800/80">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Facility Health</span>
-                  <div className="grid grid-cols-3 gap-1 text-[10px] p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
-                    <div>
-                      <span className="text-emerald-400 block text-[9px]">● Functional</span>
-                      <strong className="text-slate-200 text-xs">{operationalCounts.functional}</strong>
+                {/* Resident Clean Map Legend & Guide (Resident Portal Only) */}
+                {userRole === 'user' && (
+                  <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Map Legend & Amenities</span>
+                      <span className="text-[10px] font-mono text-emerald-400">Citizen View</span>
                     </div>
-                    <div className="border-x border-slate-800">
-                      <span className="text-amber-400 block text-[9px]">● Partial</span>
-                      <strong className="text-slate-200 text-xs">{operationalCounts.partial}</strong>
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee] flex-shrink-0"></span>
+                        <span className="truncate">💧 Drinking Water</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-400 shadow-[0_0_6px_#60a5fa] flex-shrink-0"></span>
+                        <span className="truncate">🏫 Schools & Balwadi</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24] flex-shrink-0"></span>
+                        <span className="truncate">🏪 Kirana & Vendors</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-400 shadow-[0_0_6px_#f43f5e] flex-shrink-0"></span>
+                        <span className="truncate">🏥 Health Clinics</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399] flex-shrink-0"></span>
+                        <span className="truncate">🏛️ Mandirs & Civic</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-orange-400 shadow-[0_0_6px_#fb923c] flex-shrink-0"></span>
+                        <span className="truncate">⚠️ Civic Issues</span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-rose-400 block text-[9px]">● Degraded</span>
-                      <strong className="text-slate-200 text-xs">{operationalCounts.nonFunctional}</strong>
+                    <div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-400 leading-relaxed">
+                      💡 Click any pin on the map to inspect operational status, business timings, UPI payment availability, and field photos.
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* Issues Severity Breakdown */}
-                <div className="pt-2 border-t border-slate-800/80">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Issues Severity</span>
-                  <div className="grid grid-cols-3 gap-1 text-[10px] p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
-                    <div>
-                      <span className="text-rose-400 block text-[9px]">● High/Crit</span>
-                      <strong className="text-slate-200 text-xs">{issueCounts.high}</strong>
+                {/* Facility Health Breakdown & Issues Severity (Admin & Field Officer Portal Only) */}
+                {(userRole === 'admin' || userRole === 'officer') && (
+                  <>
+                    <div className="pt-2 border-t border-slate-800/80">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Facility Health</span>
+                      <div className="grid grid-cols-3 gap-1 text-[10px] p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
+                        <div>
+                          <span className="text-emerald-400 block text-[9px]">● Functional</span>
+                          <strong className="text-slate-200 text-xs">{operationalCounts.functional}</strong>
+                        </div>
+                        <div className="border-x border-slate-800">
+                          <span className="text-amber-400 block text-[9px]">● Partial</span>
+                          <strong className="text-slate-200 text-xs">{operationalCounts.partial}</strong>
+                        </div>
+                        <div>
+                          <span className="text-rose-400 block text-[9px]">● Degraded</span>
+                          <strong className="text-slate-200 text-xs">{operationalCounts.nonFunctional}</strong>
+                        </div>
+                      </div>
                     </div>
-                    <div className="border-x border-slate-800">
-                      <span className="text-amber-400 block text-[9px]">● Medium</span>
-                      <strong className="text-slate-200 text-xs">{issueCounts.medium}</strong>
+
+                    <div className="pt-2 border-t border-slate-800/80">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Issues Severity</span>
+                      <div className="grid grid-cols-3 gap-1 text-[10px] p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
+                        <div>
+                          <span className="text-rose-400 block text-[9px]">● High/Crit</span>
+                          <strong className="text-slate-200 text-xs">{issueCounts.high}</strong>
+                        </div>
+                        <div className="border-x border-slate-800">
+                          <span className="text-amber-400 block text-[9px]">● Medium</span>
+                          <strong className="text-slate-200 text-xs">{issueCounts.medium}</strong>
+                        </div>
+                        <div>
+                          <span className="text-cyan-400 block text-[9px]">● Low</span>
+                          <strong className="text-slate-200 text-xs">{issueCounts.low}</strong>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-cyan-400 block text-[9px]">● Low</span>
-                      <strong className="text-slate-200 text-xs">{issueCounts.low}</strong>
-                    </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
             )}
           </div>
 
-          {/* ACCORDION 3: > Analytics & Health */}
-          <div className="rounded-2xl bg-slate-950/70 border border-slate-800 overflow-hidden">
-            <button
-              onClick={() => setAnalyticsHealthOpen(!analyticsHealthOpen)}
-              className="w-full flex items-center justify-between p-3 text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white bg-slate-900/60 hover:bg-slate-900 transition cursor-pointer"
-            >
-              <span className="flex items-center gap-1.5">
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${analyticsHealthOpen ? '' : '-rotate-90'}`} />
-                Analytics & Health
-              </span>
-              <span className="text-[10px] font-mono text-purple-400">Decision Support</span>
-            </button>
+          {/* ACCORDION 3: > Analytics & Health (Admin & Field Officer Portal Only) */}
+          {(userRole === 'admin' || userRole === 'officer') && (
+            <div className="rounded-2xl bg-slate-950/70 border border-slate-800 overflow-hidden">
+              <button
+                onClick={() => setAnalyticsHealthOpen(!analyticsHealthOpen)}
+                className="w-full flex items-center justify-between p-3 text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white bg-slate-900/60 hover:bg-slate-900 transition cursor-pointer"
+              >
+                <span className="flex items-center gap-1.5">
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${analyticsHealthOpen ? '' : '-rotate-90'}`} />
+                  Village Analytics & Health
+                </span>
+                <span className="text-[10px] font-mono text-purple-400">Decision Support</span>
+              </button>
 
-            {analyticsHealthOpen && (
-              <div className="p-2 border-t border-slate-800/80">
-                <PanchayatAdminPanel
-                  issues={issuesList}
-                  facilities={facilitiesList}
-                  onFlyToIssue={handleFlyToIssue}
-                  isOpen={true}
-                  onClose={() => {}}
-                  onExportAudit={() => setIsExportAuditModalOpen(true)}
-                  onApproveSubmission={(item) => {
-                    if (item.type === 'facility') {
-                      const updated = allFacilitiesRef.current.map((f) =>
-                        f.facility_id === item.id ? { ...f, approval_status: 'approved' as const } : f
-                      );
-                      allFacilitiesRef.current = updated;
-                      setFacilitiesList(updated);
-                      renderFacilityMarkers(updated, facilityFilter);
-                    } else {
-                      refreshGrievanceMarkers();
-                    }
-                    showToast(`✅ "${item.title}" approved and published to live map!`);
-                  }}
-                  onRejectSubmission={(item) => {
-                    if (item.type === 'facility') {
-                      const updated = allFacilitiesRef.current.map((f) =>
-                        f.facility_id === item.id ? { ...f, approval_status: 'rejected' as const } : f
-                      );
-                      allFacilitiesRef.current = updated;
-                      setFacilitiesList(updated);
-                      renderFacilityMarkers(updated, facilityFilter);
-                    } else {
-                      refreshGrievanceMarkers();
-                    }
-                    showToast(`❌ Submission "${item.title}" rejected.`);
-                  }}
-                  onOpenPhotoLightbox={(data) => {
-                    setLightboxData({
-                      isOpen: true,
-                      photoUrl: data.photoUrl,
-                      title: data.title,
-                      category: data.category,
-                      coords: data.coords,
-                    });
-                  }}
-                  onFlyToCoords={flyToCoords}
-                />
-              </div>
-            )}
-          </div>
+              {analyticsHealthOpen && (
+                <div className="p-2 border-t border-slate-800/80">
+                  <PanchayatAdminPanel
+                    issues={issuesList}
+                    facilities={facilitiesList}
+                    onFlyToIssue={handleFlyToIssue}
+                    isOpen={true}
+                    onClose={() => {}}
+                    onExportAudit={() => setIsExportAuditModalOpen(true)}
+                    onApproveSubmission={(item) => {
+                      if (item.type === 'facility') {
+                        const updated = allFacilitiesRef.current.map((f) =>
+                          f.facility_id === item.id ? { ...f, approval_status: 'approved' as const } : f
+                        );
+                        allFacilitiesRef.current = updated;
+                        setFacilitiesList(updated);
+                        renderFacilityMarkers(updated, facilityFilter);
+                      } else {
+                        refreshGrievanceMarkers();
+                      }
+                      showToast(`✅ "${item.title}" approved and published to live map!`);
+                    }}
+                    onRejectSubmission={(item) => {
+                      if (item.type === 'facility') {
+                        const updated = allFacilitiesRef.current.map((f) =>
+                          f.facility_id === item.id ? { ...f, approval_status: 'rejected' as const } : f
+                        );
+                        allFacilitiesRef.current = updated;
+                        setFacilitiesList(updated);
+                        renderFacilityMarkers(updated, facilityFilter);
+                      } else {
+                        refreshGrievanceMarkers();
+                      }
+                      showToast(`❌ Submission "${item.title}" rejected.`);
+                    }}
+                    onOpenPhotoLightbox={(data) => {
+                      setLightboxData({
+                        isOpen: true,
+                        photoUrl: data.photoUrl,
+                        title: data.title,
+                        category: data.category,
+                        coords: data.coords,
+                      });
+                    }}
+                    onFlyToCoords={flyToCoords}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </aside>
 
@@ -2808,11 +2856,62 @@ export const VillageMap = () => {
       <div
         ref={mapContainerRef}
         id="village-map-canvas"
-        className="w-full h-full z-0 flex-1 relative"
+        className="w-full h-full z-0 flex-1 relative [touch-action:pan-x_pan-y]"
+        style={{ touchAction: 'pan-x pan-y' }}
       />
 
-      {/* 5.1 BOTTOM-LEFT: VILLAGE SUMMARY STATS & QUICK NAVIGATION PILL */}
-      <div className="absolute bottom-6 left-4 z-[1000] pointer-events-none hidden sm:flex items-center gap-3">
+      {/* 5.1 MOBILE FLOATING BOTTOM ACTION BAR (< 768px) */}
+      <div className="md:hidden fixed bottom-4 left-4 right-4 z-[2000] flex items-center gap-2 pointer-events-auto">
+        <button
+          onClick={() => {
+            if (isAddFacilityMode) {
+              cleanupAddFacilityMode();
+            } else {
+              setIsAddFacilityMode(true);
+            }
+          }}
+          className={`flex-1 py-3 px-2.5 rounded-xl font-bold text-xs shadow-xl flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer border ${
+            isAddFacilityMode
+              ? 'bg-rose-600 border-rose-400 text-white shadow-rose-950/60'
+              : 'bg-emerald-600 hover:bg-emerald-500 border-emerald-400/60 text-white shadow-emerald-950/60'
+          }`}
+        >
+          <Plus className={`w-4 h-4 ${isAddFacilityMode ? 'rotate-45' : ''}`} />
+          <span className="truncate">
+            {isAddFacilityMode
+              ? 'Cancel'
+              : userRole === 'officer'
+              ? '+ Govt Asset'
+              : userRole === 'user'
+              ? '+ Propose'
+              : '+ Add Asset'}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setIsGrievanceModalOpen(true)}
+          className="flex-1 py-3 px-2.5 rounded-xl font-bold text-xs shadow-xl bg-gradient-to-r from-amber-600 to-orange-600 border border-amber-400/60 text-white flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-amber-950/60"
+        >
+          <AlertTriangle className="w-4 h-4 text-amber-200" />
+          <span className="truncate">Report</span>
+        </button>
+
+        <button
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          className={`py-3 px-3 rounded-xl font-bold text-xs shadow-xl border flex items-center justify-center gap-1 transition active:scale-95 cursor-pointer flex-shrink-0 ${
+            sidebarOpen
+              ? 'bg-emerald-600 text-white border-emerald-400 shadow-emerald-950/60'
+              : 'bg-slate-900/95 border-slate-700 text-slate-200 hover:text-white shadow-black/60'
+          }`}
+          title="Toggle Layers & Legend"
+        >
+          <Layers className="w-4 h-4 text-cyan-400" />
+          <span className="text-[11px]">Layers</span>
+        </button>
+      </div>
+
+      {/* 5.2 BOTTOM-LEFT: VILLAGE SUMMARY STATS & QUICK NAVIGATION PILL */}
+      <div className="absolute bottom-6 left-4 z-[1000] pointer-events-none hidden md:flex items-center gap-3">
         <div className="pointer-events-auto backdrop-blur-md bg-slate-900/85 border border-slate-800 text-slate-300 rounded-xl px-3.5 py-2 shadow-xl flex items-center gap-3 text-xs">
           <button
             onClick={recenterToKhopripadaCore}
