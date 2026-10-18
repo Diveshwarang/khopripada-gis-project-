@@ -1338,12 +1338,12 @@ export const VillageMap = () => {
     }
   };
 
-  // Real-time Leaflet Heatmap Layer (leaflet.heat) for Failure Density & Grievances
+  // Real-time Leaflet Heatmap Layer (leaflet.heat) for Failure Density & Grievances (Admin & Officer only)
   useEffect(() => {
     if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
 
-    if (showHeatmap) {
+    if (showHeatmap && (userRole === 'admin' || userRole === 'officer')) {
       const renderHeat = async () => {
         const points: [number, number, number][] = [];
 
@@ -1417,7 +1417,7 @@ export const VillageMap = () => {
         heatLayerRef.current = null;
       }
     }
-  }, [showHeatmap, issuesList]);
+  }, [showHeatmap, issuesList, userRole]);
 
   const toggleHeatmap = (enable: boolean) => {
     setShowHeatmap(enable);
@@ -1932,6 +1932,15 @@ export const VillageMap = () => {
       ) {
         mapInstanceRef.current.removeLayer(dbscanLayerRef.current);
       }
+      if (
+        mapInstanceRef.current &&
+        heatLayerRef.current &&
+        mapInstanceRef.current.hasLayer(heatLayerRef.current)
+      ) {
+        mapInstanceRef.current.removeLayer(heatLayerRef.current);
+        heatLayerRef.current = null;
+      }
+      setShowHeatmap(false);
     }
   }, [
     userRole,
@@ -2231,19 +2240,21 @@ export const VillageMap = () => {
               <span className="hidden sm:inline whitespace-nowrap">{isLocating ? 'Locating...' : 'Locate Me'}</span>
             </button>
 
-            {/* [ 🔥 Density Heatmap ] */}
-            <button
-              onClick={() => toggleHeatmap(!showHeatmap)}
-              className={`px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg text-xs sm:text-[13px] font-semibold flex items-center gap-1.5 transition cursor-pointer active:scale-95 ${
-                showHeatmap
-                  ? 'border border-orange-500 bg-orange-950/60 text-orange-300 shadow-[0_0_12px_rgba(249,115,22,0.4)]'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/70 border border-transparent'
-              }`}
-              title="Toggle failure density heatmap & DBSCAN spatial clusters"
-            >
-              <Flame className={`w-4 h-4 ${showHeatmap ? 'text-orange-400 animate-pulse' : 'text-slate-400'}`} />
-              <span className="hidden sm:inline whitespace-nowrap">Density Heatmap</span>
-            </button>
+            {/* [ 🔥 Density Heatmap ] (Admin & Field Officer Portal Only) */}
+            {(userRole === 'admin' || userRole === 'officer') && (
+              <button
+                onClick={() => toggleHeatmap(!showHeatmap)}
+                className={`px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg text-xs sm:text-[13px] font-semibold flex items-center gap-1.5 transition cursor-pointer active:scale-95 ${
+                  showHeatmap
+                    ? 'border border-orange-500 bg-orange-950/60 text-orange-300 shadow-[0_0_12px_rgba(249,115,22,0.4)]'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/70 border border-transparent'
+                }`}
+                title="Toggle failure density heatmap & DBSCAN spatial clusters"
+              >
+                <Flame className={`w-4 h-4 ${showHeatmap ? 'text-orange-400 animate-pulse' : 'text-slate-400'}`} />
+                <span className="hidden sm:inline whitespace-nowrap">Density Heatmap</span>
+              </button>
+            )}
 
             {/* [ 📋 Layers & Drawer ] */}
             <button
@@ -2572,19 +2583,21 @@ export const VillageMap = () => {
                   </label>
                 )}
 
-                {/* Failure Density Heatmap */}
-                <label className="flex items-center justify-between p-2 rounded-lg bg-amber-950/30 border border-amber-500/40 hover:border-amber-400 cursor-pointer transition">
-                  <span className="text-xs text-amber-100 flex items-center gap-2">
-                    <Flame className="w-3.5 h-3.5 text-amber-400" />
-                    Failure Density Heatmap
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={showHeatmap}
-                    onChange={(e) => toggleHeatmap(e.target.checked)}
-                    className="w-4 h-4 rounded text-amber-500 focus:ring-0 accent-amber-500 cursor-pointer"
-                  />
-                </label>
+                {/* Failure Density Heatmap (Admin & Field Officer Portal Only) */}
+                {(userRole === 'admin' || userRole === 'officer') && (
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-amber-950/30 border border-amber-500/40 hover:border-amber-400 cursor-pointer transition">
+                    <span className="text-xs text-amber-100 flex items-center gap-2">
+                      <Flame className="w-3.5 h-3.5 text-amber-400" />
+                      Failure Density Heatmap
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={showHeatmap}
+                      onChange={(e) => toggleHeatmap(e.target.checked)}
+                      className="w-4 h-4 rounded text-amber-500 focus:ring-0 accent-amber-500 cursor-pointer"
+                    />
+                  </label>
+                )}
               </div>
             )}
           </div>
