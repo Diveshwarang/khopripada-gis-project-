@@ -94,7 +94,7 @@ export const UserProfileBadge: React.FC<UserProfileBadgeProps> = ({ onRoleSwitch
       {/* Active User Badge Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-[#F8FAFC] px-3.5 py-2 rounded-xl shadow-md flex items-center gap-2.5 transition active:scale-95 cursor-pointer text-sm`}
+        className="h-10 px-3.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 flex-shrink-0 bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-[#F8FAFC] shadow-sm transition active:scale-95 cursor-pointer"
         title={`Logged in as ${session.name} (${session.designation}) - Click for Profile & Logout`}
       >
         {/* Avatar Circle with Status Dot */}

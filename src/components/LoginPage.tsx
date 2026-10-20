@@ -74,12 +74,12 @@ export const LoginPage: React.FC = () => {
       <div className="fixed inset-0 bg-[radial-gradient(#334B56_1px,transparent_1px)] [background-size:32px_32px] opacity-25 pointer-events-none" />
 
       {/* Responsive Grid Container (2-Column Desktop, 1-Column Mobile) */}
-      <div className="relative z-10 w-full max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+      <div className="relative z-10 w-full max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-center px-6">
         
         {/* Left Column: Hero Info & Governance Credentials */}
-        <div className="flex flex-col justify-center">
+        <div className="flex flex-col justify-center space-y-4">
           {/* Official Emblem & Panchayat Header */}
-          <div className="flex items-center gap-2.5 mb-1.5">
+          <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-[#132228] border border-[#334B56] shadow-md flex items-center justify-center shrink-0">
               <Shield className="w-4 h-4 md:w-5 md:h-5 text-[#38BDF8]" />
             </div>
@@ -93,29 +93,30 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight mt-1 leading-tight">
-            Smart Village GIS: Khopripada
-          </h1>
-
-          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-            Decentralized Geospatial Governance & ML Hotspot Intelligence
-          </p>
+          <div>
+            <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight leading-tight">
+              Smart Village GIS: Khopripada
+            </h1>
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              Decentralized Geospatial Governance & ML Hotspot Intelligence
+            </p>
+          </div>
 
           {/* Key Platform Highlights (HIDDEN ON MOBILE, FULL ON DESKTOP) */}
-          <div className="hidden md:flex flex-col gap-3 mt-5">
-            <div className="flex items-start gap-2.5 text-xs text-[#94A3B8] bg-[#132228]/85 p-3 rounded-xl border border-[#334B56] shadow-sm">
+          <div className="hidden md:flex flex-col space-y-3">
+            <div className="flex items-start gap-2.5 text-xs text-[#94A3B8] bg-[#132228] p-3.5 rounded-xl border border-[#334B56] shadow-sm">
               <CheckCircle2 className="w-4 h-4 text-[#10B981] flex-shrink-0 mt-0.5" />
               <div>
                 <strong className="text-[#F8FAFC]">Role-Segregated Portals:</strong> Admin, Officer, and Villager workflows with granular spatial access control.
               </div>
             </div>
-            <div className="flex items-start gap-2.5 text-xs text-[#94A3B8] bg-[#132228]/85 p-3 rounded-xl border border-[#334B56] shadow-sm">
+            <div className="flex items-start gap-2.5 text-xs text-[#94A3B8] bg-[#132228] p-3.5 rounded-xl border border-[#334B56] shadow-sm">
               <Cpu className="w-4 h-4 text-[#38BDF8] flex-shrink-0 mt-0.5" />
               <div>
                 <strong className="text-[#F8FAFC]">ML Decision Support:</strong> Priority scoring (0–100), DBSCAN failure clustering, and municipal budgeting models.
               </div>
             </div>
-            <div className="flex items-start gap-2.5 text-xs text-[#94A3B8] bg-[#132228]/85 p-3 rounded-xl border border-[#334B56] shadow-sm">
+            <div className="flex items-start gap-2.5 text-xs text-[#94A3B8] bg-[#132228] p-3.5 rounded-xl border border-[#334B56] shadow-sm">
               <Compass className="w-4 h-4 text-[#FCD34D] flex-shrink-0 mt-0.5" />
               <div>
                 <strong className="text-[#F8FAFC]">100% Offline Capability:</strong> Full local IndexedDB and service worker caching for field inspections.
@@ -124,7 +125,7 @@ export const LoginPage: React.FC = () => {
           </div>
 
           {/* Coordinate Telemetry (HIDDEN ON MOBILE, COMPACT ON SM/MD) */}
-          <div className="hidden sm:flex mt-4 pt-3 border-t border-[#334B56]/60 items-center justify-between text-[11px] font-mono text-[#94A3B8]">
+          <div className="hidden sm:flex pt-3 border-t border-[#334B56]/60 items-center justify-between text-[11px] font-mono text-[#94A3B8]">
             <span className="flex items-center gap-1.5 text-[#38BDF8]">
               <MapPin className="w-3.5 h-3.5" />
               19.3551°N, 72.8846°E
@@ -136,7 +137,7 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* Right Column: Authentication Gateway & Form */}
-        <div className="w-full bg-[#132228]/95 backdrop-blur-xl border border-[#334B56] rounded-2xl p-5 sm:p-7 shadow-2xl space-y-4">
+        <div className="w-full bg-[#132228] border border-[#334B56] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-4">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>

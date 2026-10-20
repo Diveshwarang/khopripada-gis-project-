@@ -82,8 +82,8 @@ export const ExportAuditModal: React.FC<ExportAuditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[2200] flex items-center justify-center p-4 bg-[#0C171C]/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl bg-[#132228] border border-[#334B56] rounded-2xl shadow-2xl overflow-hidden text-[#F8FAFC] flex flex-col max-h-[92dvh] overscroll-contain">
+    <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg bg-[#132228] border border-[#334B56] rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto text-[#F8FAFC]">
         {/* Header */}
         <div className="px-5 py-4 border-b border-[#334B56] bg-[#0C171C]/90 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -264,11 +264,11 @@ export const ExportAuditModal: React.FC<ExportAuditModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-5 py-3 border-t border-[#334B56] bg-[#0C171C]/90 flex items-center justify-end">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#334B56]">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-[#1B2F38] hover:bg-[#233B46] text-[#94A3B8] hover:text-[#F8FAFC] text-xs font-semibold transition cursor-pointer border border-[#334B56]"
+            className="px-5 py-2 rounded-xl bg-[#1B2F38] hover:bg-[#233B46] text-[#94A3B8] hover:text-[#F8FAFC] text-xs font-semibold transition cursor-pointer border border-[#334B56]"
           >
             Close
           </button>

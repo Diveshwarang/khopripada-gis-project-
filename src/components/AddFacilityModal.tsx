@@ -203,12 +203,12 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[2500] flex items-center justify-center p-4 bg-[#0C171C]/80 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[4000] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget && !verificationNotice) onClose();
       }}
     >
-      <div className="relative w-full max-w-lg bg-[#132228] border border-[#334B56] rounded-2xl shadow-2xl overflow-hidden text-[#F8FAFC] flex flex-col max-h-[92dvh] overscroll-contain">
+      <div className="relative w-full max-w-lg bg-[#132228] border border-[#334B56] rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto text-[#F8FAFC]">
         {/* Verification Success Notice for Resident / Villager */}
         {verificationNotice ? (
           <div className="p-6 text-center flex flex-col items-center gap-4 my-auto">
@@ -825,7 +825,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
               </div>
 
               {/* Modal Actions */}
-              <div className="pt-3 border-t border-[#334B56] flex items-center justify-between gap-3">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#334B56]">
                 <button
                   type="button"
                   onClick={onClose}

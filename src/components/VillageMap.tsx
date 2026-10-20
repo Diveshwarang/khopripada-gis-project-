@@ -62,9 +62,9 @@ import {
 import { GrievanceModal } from './GrievanceModal';
 import { GrievanceListDrawer } from './GrievanceListDrawer';
 import { AddFacilityModal } from './AddFacilityModal';
+import { Navbar } from './Navbar';
 import { useAuth } from '../context/AuthContext';
 import type { Role } from '../types/auth';
-import { UserProfileBadge } from './UserProfileBadge';
 import { PanchayatAdminPanel } from './PanchayatAdminPanel';
 import { PhotoLightboxModal } from './PhotoLightboxModal';
 import { ExportAuditModal } from './ExportAuditModal';
@@ -628,6 +628,27 @@ export const VillageMap = () => {
     // Prevent any layout jump or tile freeze
     mapInstanceRef.current.invalidateSize();
   }, [isAddFacilityMode]);
+
+  // Window resize handler for Leaflet canvas normalization
+  useEffect(() => {
+    const handleResize = () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Invalidate size on sidebar toggle to ensure 100% viewport fill
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [sidebarOpen]);
 
   // Global Photo Lightbox trigger hook for Leaflet popup HTML
   useEffect(() => {
@@ -2085,15 +2106,15 @@ export const VillageMap = () => {
 
     mapInstanceRef.current = map;
 
-    // 2.1 Add Zoom Control positioned at bottom right
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    // 2.1 Add Zoom Control positioned cleanly at bottom left (bottom-6 left-6 on desktop)
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
-    // 3. Add Scale Control
+    // 3. Add Scale Control positioned at bottom right
     L.control
       .scale({
         imperial: false,
         metric: true,
-        position: 'bottomleft',
+        position: 'bottomright',
       })
       .addTo(map);
 
@@ -2729,7 +2750,7 @@ export const VillageMap = () => {
   }, [userRole, mobileSheet]);
 
   return (
-    <div className="relative w-screen h-[100dvh] overflow-hidden bg-[#132228] font-sans select-none text-[#F8FAFC] flex flex-col overscroll-none [touch-action:pan-x_pan-y]">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0D161A] font-sans select-none text-[#F8FAFC] overscroll-none [touch-action:pan-x_pan-y]">
       {/* TOAST NOTIFICATION BANNER */}
       {toastWarning && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] px-5 py-3 rounded-2xl backdrop-blur-xl bg-[#132228]/95 border border-[#334B56] text-[#F8FAFC] text-sm font-medium shadow-[0_15px_40px_rgba(12,23,28,0.7)] flex items-center gap-3 max-w-lg animate-in fade-in slide-from-top-4">
@@ -2744,334 +2765,48 @@ export const VillageMap = () => {
         </div>
       )}
 
-      {/* 1.0 SLIM MOBILE TOP BAR (HEIGHT: 52PX / H-13, SCREENS < 768PX) */}
-      <header className="flex md:hidden h-13 w-full bg-[#132228]/95 backdrop-blur-md border-b border-[#334B56] px-3 items-center justify-between gap-1.5 z-[1100] flex-shrink-0 select-none">
-        {/* Left: Compact icon + "Khopripada" */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <div className="w-7 h-7 rounded-lg bg-[#1B2F38] border border-[#334B56] flex items-center justify-center text-[#38BDF8] shadow-sm shrink-0">
-            <Building2 className="w-4 h-4" />
-          </div>
-          <span className="text-xs font-bold text-white tracking-wide shrink-0">
-            Khopripada
-          </span>
-        </div>
+      {/* 1. RESPONSIVE UNIFIED TOP NAVIGATION BAR */}
+      <Navbar
+        userRole={userRole}
+        isLiveConnected={isLiveConnected}
+        isSimulatedOffline={isSimulatedOffline}
+        onToggleSimulatedOffline={() => {
+          setIsSimulatedOffline(!isSimulatedOffline);
+          showToast(
+            isSimulatedOffline
+              ? '🟢 Live Network restored. Syncing with remote database.'
+              : '🟡 Simulated Offline mode active. Utilizing local IndexedDB.'
+          );
+        }}
+        isLocating={isLocating}
+        onLocateMe={handleLocateMe}
+        showHeatmap={showHeatmap}
+        onToggleHeatmap={toggleHeatmap}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        isAddFacilityMode={isAddFacilityMode}
+        onToggleAddFacilityMode={() => {
+          if (isAddFacilityMode) {
+            cleanupAddFacilityMode();
+          } else {
+            setIsAddFacilityMode(true);
+          }
+        }}
+        onOpenGrievanceModal={() => setIsGrievanceModalOpen(true)}
+        onOpenExportAuditModal={handleExportAuditSummary}
+        onOfficerExportWorklist={handleOfficerExportWorklist}
+        onPortalSwitch={handlePortalSwitch}
+        onMobileLogout={handleMobileLogout}
+        onOpenMobileSheet={(sheet) => setMobileSheet(sheet)}
+        mobileSheet={mobileSheet}
+      />
 
-        {/* Center: Clean Administrative Role Badge */}
-        <button
-          onClick={() => setMobileSheet('role')}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#1B2F38] border border-[#334B56] text-[#38BDF8] text-xs font-medium tracking-wide cursor-pointer active:scale-95 transition"
-          title={`${getPanchayatId(userRole)} • Tap to switch portal`}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8]"></span>
-          <span>{userRole === 'admin' ? 'PANCHAYAT EXEC' : userRole === 'officer' ? 'FIELD OPS' : 'WARD 01'}</span>
-          <span className="text-[10px] text-slate-400 font-mono">▼</span>
-        </button>
+      {/* 2. MAIN DASHBOARD VIEWPORT (MAP + SIDEBAR SPLIT) */}
+      <div className="flex flex-1 w-full min-h-0 overflow-hidden relative">
 
-        {/* Right: Action icons in a unified group with 40x40px touch targets */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          {/* GPS Locate Me */}
-          <button
-            onClick={handleLocateMe}
-            disabled={isLocating}
-            className={`w-10 h-10 min-w-[40px] min-h-[40px] rounded-xl border transition active:scale-95 flex items-center justify-center cursor-pointer ${
-              isLocating
-                ? 'bg-[#38BDF8]/20 border-[#38BDF8] text-[#38BDF8]'
-                : 'bg-[#1B2F38] border-[#334B56] text-[#38BDF8] hover:text-[#F8FAFC]'
-            }`}
-            title="Locate Me (GPS)"
-            aria-label="Locate me on map"
-          >
-            <Locate className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
-          </button>
-
-          {/* Basemap Switcher */}
-          <button
-            onClick={() => setMobileSheet(mobileSheet === 'layers' ? null : 'layers')}
-            className={`w-10 h-10 min-w-[40px] min-h-[40px] rounded-xl border transition active:scale-95 flex items-center justify-center cursor-pointer ${
-              mobileSheet === 'layers'
-                ? 'bg-[#38BDF8]/20 border-[#38BDF8] text-[#38BDF8]'
-                : 'bg-[#1B2F38] border-[#334B56] text-[#38BDF8] hover:text-[#F8FAFC]'
-            }`}
-            title="Layers & Basemaps"
-            aria-label="Toggle layers bottom sheet"
-          >
-            <Layers className="w-4 h-4" />
-          </button>
-
-          {/* Sign Out Session */}
-          <button
-            onClick={handleMobileLogout}
-            className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-xl bg-[#E05A47]/15 hover:bg-[#E05A47]/30 border border-[#E05A47]/40 text-[#FCA5A5] hover:text-[#F8FAFC] flex items-center justify-center cursor-pointer active:scale-95 transition"
-            title="Sign Out Session"
-            aria-label="Sign Out Session"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
-      </header>
-
-      {/* 1.1 DESKTOP TOP NAVIGATION BAR (SCREENS >= 768PX) */}
-      <header className="hidden md:flex relative z-[1100] w-full h-16 bg-[#132228]/95 backdrop-blur-md border-b border-[#334B56] shadow-lg px-3 sm:px-6 py-3 items-center justify-between gap-2 sm:gap-4 flex-shrink-0">
-        {/* Section 1: Left Side (Identity & Status) */}
-        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#1B2F38] flex items-center justify-center text-[#F8FAFC] shadow-md border border-[#334B56]">
-              <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-[#38BDF8]" />
-            </div>
-            <div className="flex items-center">
-              <span className="md:hidden text-sm sm:text-base font-bold text-[#F8FAFC] tracking-tight whitespace-nowrap">
-                Khopripada GIS
-              </span>
-              <span className="hidden md:inline text-lg font-bold text-[#F8FAFC] tracking-wide whitespace-nowrap">
-                Smart Village GIS
-              </span>
-              <span className="hidden md:inline-flex text-xs font-semibold px-2.5 py-1 rounded-md bg-[#1B2F38] text-[#38BDF8] border border-[#38BDF8]/40 ml-2 whitespace-nowrap">
-                Khopripada • Digital Twin
-              </span>
-            </div>
-          </div>
-
-          {/* Live Network Status Indicator */}
-          <div
-            onClick={() => {
-              setIsSimulatedOffline(!isSimulatedOffline);
-              showToast(
-                isSimulatedOffline
-                  ? '🟢 Live Network restored. Syncing with remote database.'
-                  : '🟡 Simulated Offline mode active. Utilizing local IndexedDB.'
-              );
-            }}
-            className="hidden lg:flex items-center gap-2 pl-3 border-l border-[#334B56] cursor-pointer hover:opacity-85 transition select-none"
-            title="Click to toggle offline mode simulation"
-          >
-            <span className="relative flex h-2.5 w-2.5">
-              <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full ${
-                  isLiveConnected ? 'bg-[#10B981] opacity-75' : 'bg-[#E05A47] opacity-75'
-                }`}
-              ></span>
-              <span
-                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                  isLiveConnected
-                    ? 'bg-[#10B981] shadow-[0_0_8px_#10B981]'
-                    : 'bg-[#E05A47] shadow-[0_0_8px_#E05A47]'
-                }`}
-              ></span>
-            </span>
-            <span className="text-xs text-[#94A3B8] whitespace-nowrap font-medium">
-              {isLiveConnected ? 'Online • Live Sync' : 'Offline • Local Cache'}
-            </span>
-          </div>
-        </div>
-
-        {/* Section 2: Center (Map Exploration Tools) - Segmented Capsule */}
-        <div className="flex items-center justify-center flex-shrink-0">
-          <div className="bg-[#0C171C] border border-[#334B56] p-1 rounded-xl flex items-center gap-1 shadow-inner">
-            {/* [ 📍 Locate Me ] */}
-            <button
-              onClick={handleLocateMe}
-              disabled={isLocating}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 disabled:opacity-50 ${
-                isLocating
-                  ? 'bg-[#38BDF8]/20 text-[#38BDF8] border border-[#38BDF8]/60 shadow-sm'
-                  : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1B2F38] border border-transparent'
-              }`}
-              title="High-precision GPS geolocation with study corridor boundary check"
-            >
-              <Locate className={`w-4 h-4 ${isLocating ? 'animate-spin text-[#38BDF8]' : 'text-[#94A3B8]'}`} />
-              <span className="hidden sm:inline whitespace-nowrap">{isLocating ? 'Locating...' : 'Locate Me'}</span>
-            </button>
-
-            {/* [ 🔥 Density Heatmap ] (Admin & Field Officer Portal Only) */}
-            {(userRole === 'admin' || userRole === 'officer') && (
-              <button
-                onClick={() => toggleHeatmap(!showHeatmap)}
-                className={`px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
-                  showHeatmap
-                    ? 'bg-[#E05A47]/20 text-[#FCA5A5] border border-[#E05A47]/60 shadow-sm'
-                    : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1B2F38] border border-transparent'
-                }`}
-                title="Toggle failure density heatmap & DBSCAN spatial clusters"
-              >
-                <Flame className={`w-4 h-4 ${showHeatmap ? 'text-[#FCA5A5] animate-pulse' : 'text-[#94A3B8]'}`} />
-                <span className="hidden sm:inline whitespace-nowrap">Density Heatmap</span>
-              </button>
-            )}
-
-            {/* [ 📋 Layers & Drawer ] */}
-            <button
-              onClick={() => setSidebarOpen((prev) => !prev)}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
-                sidebarOpen
-                  ? 'bg-[#1B2F38] text-[#F8FAFC] border border-[#334B56] shadow-sm'
-                  : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1B2F38] border border-transparent'
-              }`}
-              title="Toggle Layers & Analytics Drawer"
-            >
-              <Layers className={`w-4 h-4 ${sidebarOpen ? 'text-[#38BDF8]' : 'text-[#94A3B8]'}`} />
-              <span className="hidden sm:inline whitespace-nowrap">Layers & Drawer</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Section 3: Right Side (Actions & Role Gateway) */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          {/* Desktop [ + Propose Facility ] Button */}
-          <button
-            onClick={() => {
-              if (isAddFacilityMode) {
-                cleanupAddFacilityMode();
-              } else {
-                setIsAddFacilityMode(true);
-              }
-            }}
-            className={`hidden md:flex font-semibold px-4 py-2 rounded-xl text-sm shadow-md items-center gap-2 transition active:scale-95 whitespace-nowrap cursor-pointer ${
-              isAddFacilityMode
-                ? 'bg-[#E05A47] hover:brightness-110 text-[#F8FAFC]'
-                : 'bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC]'
-            }`}
-            title={
-              userRole === 'officer'
-                ? 'Register Government-sanctioned scheme asset by clicking on the map'
-                : userRole === 'user'
-                ? 'Propose a community facility for Panchayat verification'
-                : 'Register and publish village asset directly to the live map'
-            }
-          >
-            <Plus className={`w-4 h-4 ${isAddFacilityMode ? 'rotate-45' : ''}`} />
-            <span>
-              {isAddFacilityMode
-                ? 'Cancel Placing'
-                : userRole === 'officer'
-                ? '+ Add Govt Scheme Asset'
-                : userRole === 'user'
-                ? '+ Propose Facility'
-                : '+ Add Facility'}
-            </span>
-          </button>
-
-          {/* Desktop [ ⚠️ Report Grievance ] Button */}
-          <button
-            onClick={() => setIsGrievanceModalOpen(true)}
-            className="hidden md:flex bg-gradient-to-r from-[#D9534F] to-[#E05A47] hover:brightness-110 text-[#F8FAFC] font-semibold px-4 py-2 rounded-xl text-sm shadow-md items-center gap-2 transition active:scale-95 cursor-pointer whitespace-nowrap"
-            title="Report citizen grievance with camera photo capture"
-          >
-            <AlertTriangle className="w-4 h-4 text-[#F8FAFC]" />
-            <span>Report Grievance</span>
-          </button>
-
-          {/* Export Audit (Admin) or Export Worklist (Officer) */}
-          {userRole === 'admin' && (
-            <button
-              onClick={() => setIsExportAuditModalOpen(true)}
-              className="hidden xl:flex bg-[#1B2F38] hover:bg-[#233B46] text-[#F8FAFC] border border-[#334B56] px-3.5 py-2 rounded-xl text-sm shadow-sm items-center gap-2 transition active:scale-95 cursor-pointer whitespace-nowrap"
-              title="Open Executive Panchayat Audit & Reporting Engine (PDF & CSV)"
-            >
-              <FileText className="w-4 h-4 text-[#38BDF8]" />
-              <span>Export Audit</span>
-            </button>
-          )}
-
-          {userRole === 'officer' && (
-            <button
-              onClick={handleOfficerExportWorklist}
-              className="hidden xl:flex bg-[#1B2F38] hover:bg-[#233B46] text-[#F8FAFC] border border-[#334B56] px-3.5 py-2 rounded-xl text-sm shadow-sm items-center gap-2 transition active:scale-95 cursor-pointer whitespace-nowrap"
-              title="Download Field Inspection Worklist PDF"
-            >
-              <ClipboardList className="w-4 h-4 text-[#38BDF8]" />
-              <span>Export Worklist</span>
-            </button>
-          )}
-
-          {/* Dedicated High Z-Index Role Switcher Gateway */}
-          <div className="relative" ref={portalSwitcherRef}>
-            <button
-              onClick={() => setIsPortalSwitcherOpen(!isPortalSwitcherOpen)}
-              className="bg-[#1B2F38] hover:bg-[#233B46] text-[#F8FAFC] border border-[#38BDF8]/40 px-3.5 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition cursor-pointer active:scale-95 whitespace-nowrap shadow-sm"
-              title="Switch between Resident, Field Officer, and Panchayat Admin portals"
-            >
-              <span className="flex items-center">
-                {getRoleIcon(userRole)}
-              </span>
-              <span className="hidden sm:inline font-medium">
-                {userRole === 'admin'
-                  ? 'Panchayat Admin'
-                  : userRole === 'officer'
-                  ? 'Field Officer'
-                  : 'Resident View'}
-              </span>
-              <ChevronDown
-                className={`w-3.5 h-3.5 text-[#94A3B8] transition-transform duration-200 ${
-                  isPortalSwitcherOpen ? 'rotate-180 text-[#F8FAFC]' : ''
-                }`}
-              />
-            </button>
-
-            {/* Dedicated High Z-Index Portal Switcher Dropdown Menu */}
-            {isPortalSwitcherOpen && (
-              <div className="z-[9999] absolute right-0 mt-2 w-64 sm:w-72 bg-[#132228]/95 border border-[#334B56] rounded-xl shadow-2xl backdrop-blur-xl p-2 flex flex-col gap-1 animate-in fade-in slide-in-from-top-2">
-                <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-[#94A3B8] border-b border-[#334B56] flex items-center justify-between">
-                  <span>Switch Portal</span>
-                  <span className="text-[#38BDF8] font-mono text-[9px]">1-Click</span>
-                </div>
-
-                {AVAILABLE_ROLES.filter((r) => r.id !== userRole).map((role) => (
-                  <button
-                    key={role.id}
-                    onClick={() => handlePortalSwitch(role.id, role.label)}
-                    className="w-full p-2.5 rounded-lg border border-[#334B56] bg-[#1B2F38]/80 hover:bg-[#233B46] hover:border-[#38BDF8]/50 transition flex items-start gap-2.5 text-left cursor-pointer group active:scale-95"
-                  >
-                    <div className="p-1.5 rounded-lg bg-[#0C171C] border border-[#334B56] flex-shrink-0 flex items-center justify-center">
-                      {getRoleIcon(role.id)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-[#F8FAFC] text-xs group-hover:text-[#38BDF8] transition-colors">
-                        {role.label}
-                      </div>
-                      <div className="text-[10px] text-[#94A3B8] leading-snug mt-0.5">
-                        {role.desc}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Role Profile Pill with dropdown for Logout & Export Audit */}
-          <UserProfileBadge onExportAudit={handleExportAuditSummary} />
-        </div>
-      </header>
-
-      {/* 1.1 ADD FACILITY MODE INSTRUCTION BANNER */}
-      {isAddFacilityMode && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1500] pointer-events-auto animate-in fade-in slide-in-from-top-4 duration-200">
-          <div className="backdrop-blur-2xl bg-[#132228]/98 border border-[#334B56] rounded-2xl px-5 py-2.5 shadow-[0_10px_30px_rgba(12,23,28,0.7)] flex items-center gap-3 text-xs text-[#F8FAFC]">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] shadow-[0_0_8px_#10B981] flex-shrink-0"></span>
-            <span className="font-semibold text-[#F8FAFC]">
-              {userRole === 'officer'
-                ? 'Click on the map to place Government Scheme Asset GPS point'
-                : userRole === 'user'
-                ? 'Click on the map to propose Community Facility GPS point'
-                : 'Click anywhere on the map to place the new facility'}{' '}
-              <span className="text-[#94A3B8] font-mono text-[11px]">(Press Esc to cancel)</span>
-            </span>
-            <button
-              onClick={cleanupAddFacilityMode}
-              className="px-2.5 py-1 rounded-lg bg-[#1B2F38] hover:bg-[#233B46] text-[#F8FAFC] border border-[#334B56] transition cursor-pointer text-[11px] font-bold"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 2. COLLAPSIBLE RIGHT SIDEBAR ("DRAWER MODE") */}
-      <aside
-        className={`fixed top-16 right-0 bottom-0 z-[1200] w-full md:w-96 bg-[#132228]/98 backdrop-blur-2xl border-l border-[#334B56] text-[#F8FAFC] shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-      >
+        {/* 2.1 RIGHT ANALYTICS & DECISION DRAWER (DESKTOP DOCKED, MOBILE SLIDE-OVER) */}
+        {sidebarOpen && (
+          <aside className="order-2 fixed inset-y-0 right-0 z-[2200] w-full sm:w-96 md:static md:flex md:flex-col md:w-96 xl:w-[420px] md:h-full md:flex-shrink-0 bg-[#132228]/95 backdrop-blur-xl md:border-l border-[#334B56] overflow-y-auto p-5 space-y-5 shadow-2xl transition-all">
         {/* Drawer Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#334B56] bg-[#0C171C]/90 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -3452,11 +3187,37 @@ export const VillageMap = () => {
             </div>
           )}
         </div>
-      </aside>
+          </aside>
+        )}
 
-      {/* Selected / Inspected Point Floating Card */}
-      {inspectedPoint && (
-        <div className="absolute top-20 left-4 z-[1000] pointer-events-auto backdrop-blur-xl bg-[#132228]/95 border border-[#334B56] text-[#F8FAFC] rounded-xl p-3 shadow-[0_10px_30px_rgba(12,23,28,0.7)] flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 max-w-sm">
+        {/* 2.2 MAP CANVAS CONTAINER */}
+        <div className="order-1 flex-1 min-w-0 relative h-full flex flex-col">
+          {/* Add Facility Mode Instruction Banner */}
+          {isAddFacilityMode && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1500] pointer-events-auto animate-in fade-in slide-in-from-top-4 duration-200">
+              <div className="backdrop-blur-2xl bg-[#132228]/98 border border-[#334B56] rounded-2xl px-5 py-2.5 shadow-[0_10px_30px_rgba(12,23,28,0.7)] flex items-center gap-3 text-xs text-[#F8FAFC]">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] shadow-[0_0_8px_#10B981] flex-shrink-0"></span>
+                <span className="font-semibold text-[#F8FAFC]">
+                  {userRole === 'officer'
+                    ? 'Click on the map to place Government Scheme Asset GPS point'
+                    : userRole === 'user'
+                    ? 'Click on the map to propose Community Facility GPS point'
+                    : 'Click anywhere on the map to place the new facility'}{' '}
+                  <span className="text-[#94A3B8] font-mono text-[11px]">(Press Esc to cancel)</span>
+                </span>
+                <button
+                  onClick={cleanupAddFacilityMode}
+                  className="px-2.5 py-1 rounded-lg bg-[#1B2F38] hover:bg-[#233B46] text-[#F8FAFC] border border-[#334B56] transition cursor-pointer text-[11px] font-bold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Selected / Inspected Point Floating Card */}
+          {inspectedPoint && (
+            <div className="absolute top-4 left-4 sm:left-6 z-[1000] pointer-events-auto backdrop-blur-xl bg-[#132228]/95 border border-[#334B56] text-[#F8FAFC] rounded-xl p-3 shadow-[0_10px_30px_rgba(12,23,28,0.7)] flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 max-w-sm">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-[#1B2F38] border border-[#334B56] flex items-center justify-center text-[#38BDF8]">
               <MapPin className="w-4 h-4" />
@@ -4884,7 +4645,7 @@ export const VillageMap = () => {
       )}
 
       {/* 5.2 BOTTOM-LEFT: VILLAGE SUMMARY STATS & QUICK NAVIGATION PILL */}
-      <div className="absolute bottom-6 left-4 z-[1000] pointer-events-none hidden md:flex items-center gap-3">
+      <div className="absolute bottom-6 left-24 z-[1000] pointer-events-none hidden md:flex items-center gap-3">
         <div className="pointer-events-auto backdrop-blur-md bg-[#132228]/95 border border-[#334B56] text-[#94A3B8] rounded-xl px-3.5 py-2 shadow-xl flex items-center gap-3 text-xs">
           <button
             onClick={recenterToKhopripadaCore}
@@ -4920,6 +4681,8 @@ export const VillageMap = () => {
           </button>
         </div>
       </div>
+    </div>
+  </div>
 
       {/* 6. REPORT GRIEVANCE MODAL */}
       <GrievanceModal
@@ -4967,8 +4730,8 @@ export const VillageMap = () => {
 
       {/* 8. GPS OUT-OF-BOUNDS MODAL (WITH SIMULATE OPTION) */}
       {gpsWarningModal?.open && (
-        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-[#0C171C]/80 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-md bg-[#132228] border border-[#334B56] rounded-2xl shadow-[0_10px_30px_rgba(12,23,28,0.7)] p-5 text-[#F8FAFC] flex flex-col gap-4">
+        <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-lg bg-[#132228] border border-[#334B56] rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto text-[#F8FAFC]">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-[#E05A47]/20 border border-[#E05A47]/40 flex items-center justify-center text-[#FCA5A5] flex-shrink-0">
                 <AlertTriangle className="w-5 h-5" />
@@ -4989,10 +4752,10 @@ export const VillageMap = () => {
               <span>For field verification outside the corridor, you can simulate a high-accuracy GNSS fix at Khopripada Core.</span>
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-1">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#334B56]">
               <button
                 onClick={() => setGpsWarningModal(null)}
-                className="px-3.5 py-2 text-xs font-semibold text-[#94A3B8] hover:text-[#F8FAFC] bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] rounded-xl transition cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold text-[#94A3B8] hover:text-[#F8FAFC] bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] rounded-xl transition cursor-pointer"
               >
                 Dismiss
               </button>

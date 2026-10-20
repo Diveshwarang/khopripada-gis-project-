@@ -106,14 +106,15 @@
   height: 15px;
 }
 
-/* Zoom Control (Bottom Right) styling */
-.leaflet-bottom.leaflet-right .leaflet-control-zoom {
+/* Zoom Control (Bottom Left on Desktop: bottom-6 left-6) styling */
+.leaflet-bottom.leaflet-left .leaflet-control-zoom {
   margin-bottom: 24px;
-  margin-right: 16px;
+  margin-left: 24px;
   border: 1px solid #334B56 !important;
-  border-radius: 10px !important;
+  border-radius: 12px !important;
   overflow: hidden;
-  box-shadow: 0 10px 25px rgba(12, 23, 28, 0.5) !important;
+  box-shadow: 0 10px 25px rgba(12, 23, 28, 0.6) !important;
+  z-index: 800 !important;
 }
 
 @media (max-width: 768px) {

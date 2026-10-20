@@ -162,8 +162,8 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-[#0C171C]/80 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-lg bg-[#132228] border border-[#334B56] rounded-2xl shadow-2xl overflow-hidden text-[#F8FAFC] flex flex-col max-h-[92dvh] overscroll-contain">
+    <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
+      <div className="relative w-full max-w-lg bg-[#132228] border border-[#334B56] rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto text-[#F8FAFC]">
         {/* Verification Success Notice for Resident */}
         {verificationNotice ? (
           <div className="p-6 text-center flex flex-col items-center gap-4 my-auto">
@@ -251,7 +251,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                 </div>
 
                 {/* Category & Status/Severity Grid */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-[#94A3B8] mb-1">
                       Category Badge
@@ -311,7 +311,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                     </span>
                     <span className="text-[10px] text-[#94A3B8] font-mono">Auto-filled</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                  <div className="grid grid-cols-2 gap-4 text-xs font-mono">
                     <div>
                       <span className="text-[#94A3B8] text-[10px]">Lat:</span>
                       <input
@@ -445,11 +445,11 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                 </div>
 
                 {/* Submit Action */}
-                <div className="pt-2 flex items-center justify-end gap-2.5">
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#334B56]">
                   <button
                     type="button"
                     onClick={onClose}
-                    className="px-4 py-2 text-xs font-medium text-[#94A3B8] hover:text-[#F8FAFC] bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] rounded-xl transition cursor-pointer"
+                    className="px-4 py-2 text-xs font-semibold text-[#94A3B8] hover:text-[#F8FAFC] bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] rounded-xl transition cursor-pointer"
                   >
                     Cancel
                   </button>

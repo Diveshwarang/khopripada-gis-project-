@@ -23,7 +23,7 @@ function DashboardGateway() {
   }
 
   return (
-    <main className="w-screen h-[100dvh] overflow-hidden bg-[#132228] relative overscroll-none">
+    <main className="w-screen h-screen overflow-hidden bg-[#0D161A] relative overscroll-none">
       <VillageMap />
     </main>
   );

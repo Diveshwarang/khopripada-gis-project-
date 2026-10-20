@@ -33,7 +33,7 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[3500] flex items-center justify-center p-3 sm:p-6 bg-[#0C171C]/85 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[4000] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
