@@ -23,6 +23,7 @@ import {
   X,
   ShieldCheck,
   Download,
+  LogOut,
 } from 'lucide-react';
 import {
   getCurrentPosition,
@@ -159,10 +160,29 @@ export const VillageMap = () => {
   ];
 
   // Auth Context & Role
-  const { session, loginAsDemoRole } = useAuth();
+  const { session, loginAsDemoRole, logout } = useAuth();
   const userRole = session?.role || 'user';
   const userRoleRef = useRef(userRole);
   userRoleRef.current = userRole;
+
+  // Mobile Log Out handler (cleans up any open sheet first to prevent visual ghosts)
+  const handleMobileLogout = () => {
+    setMobileSheet(null);
+    logout();
+  };
+
+  // Official Panchayat Identifiers
+  const getPanchayatId = (role: Role) => {
+    if (role === 'admin') return 'Panchayat ID: GP-KHOP-001 • Sarpanch Admin';
+    if (role === 'officer') return 'Officer ID: GS-MH-4012 • Gram Sevak Field Desk';
+    return 'Resident Portal • Khopripada Ward 1';
+  };
+
+  const getPanchayatIdShort = (role: Role) => {
+    if (role === 'admin') return 'GP-KHOP-001';
+    if (role === 'officer') return 'GS-MH-4012';
+    return 'Ward 1';
+  };
 
   // Portal Switcher state & click-outside ref
   const [isPortalSwitcherOpen, setIsPortalSwitcherOpen] = useState<boolean>(false);
@@ -2363,6 +2383,13 @@ export const VillageMap = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Guard: Strictly prevent Resident from viewing Analytics sheet on mobile
+  useEffect(() => {
+    if (userRole === 'user' && mobileSheet === 'analytics') {
+      setMobileSheet(null);
+    }
+  }, [userRole, mobileSheet]);
+
   return (
     <div className="relative w-screen h-[100dvh] overflow-hidden bg-[#132228] font-sans select-none text-[#F8FAFC] flex flex-col overscroll-none [touch-action:pan-x_pan-y]">
       {/* TOAST NOTIFICATION BANNER */}
@@ -2380,14 +2407,14 @@ export const VillageMap = () => {
       )}
 
       {/* 1.0 SLIM MOBILE TOP BAR (HEIGHT: 48PX, SCREENS < 768PX) */}
-      <header className="flex md:hidden h-12 w-full bg-[#132228]/95 backdrop-blur-md border-b border-[#334B56] px-3 items-center justify-between z-[1100] flex-shrink-0 select-none">
+      <header className="flex md:hidden h-12 w-full bg-[#132228]/95 backdrop-blur-md border-b border-[#334B56] px-2.5 items-center justify-between z-[1100] flex-shrink-0 select-none">
         {/* Left: Compact Brand Icon + "Khopripada GIS" + Live Sync Dot */}
-        <div className="flex items-center gap-2 flex-shrink-0 min-w-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
           <div className="w-7 h-7 rounded-lg bg-[#1B2F38] border border-[#334B56] flex items-center justify-center text-[#38BDF8] shadow-sm flex-shrink-0">
             <Building2 className="w-4 h-4" />
           </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-sm font-bold text-[#F8FAFC] tracking-tight truncate">
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="text-xs sm:text-sm font-bold text-[#F8FAFC] tracking-tight truncate">
               Khopripada GIS
             </span>
             <span
@@ -2397,28 +2424,31 @@ export const VillageMap = () => {
           </div>
         </div>
 
-        {/* Center: Active Role Badge (Tapping opens Role Switcher Sheet) */}
+        {/* Center: Active Role Badge + Panchayat Identifier (Tapping opens Role Switcher Sheet) */}
         <button
           onClick={() => setMobileSheet('role')}
-          className="px-2.5 py-1 rounded-full bg-[#1B2F38] border border-[#38BDF8]/40 text-[11px] font-semibold text-[#F8FAFC] flex items-center gap-1 active:scale-95 transition shadow-sm min-h-[36px] cursor-pointer"
-          title="Tap to switch active portal"
+          className="px-2 py-1 rounded-full bg-[#1B2F38] border border-[#38BDF8]/40 text-[11px] font-semibold text-[#F8FAFC] flex items-center gap-1 active:scale-95 transition shadow-sm min-h-[34px] cursor-pointer max-w-[145px]"
+          title={`${getPanchayatId(userRole)} • Tap to switch portal`}
         >
-          <span>
+          <span className="truncate">
             {userRole === 'admin'
               ? '🏛️ Admin'
               : userRole === 'officer'
               ? '📋 Officer'
               : '👤 Citizen'}
           </span>
-          <ChevronDown className="w-3 h-3 text-[#38BDF8]" />
+          <span className="text-[9px] font-mono text-[#38BDF8] bg-[#0C171C] px-1 py-0.5 rounded border border-[#334B56] flex-shrink-0">
+            {getPanchayatIdShort(userRole)}
+          </span>
+          <ChevronDown className="w-3 h-3 text-[#38BDF8] flex-shrink-0" />
         </button>
 
-        {/* Right: GPS Locate Me + Quick Layers/Basemap Toggle */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        {/* Right: GPS Locate Me + Quick Layers + Log Out */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={handleLocateMe}
             disabled={isLocating}
-            className={`p-2 rounded-xl border transition active:scale-95 min-w-[38px] min-h-[38px] flex items-center justify-center cursor-pointer ${
+            className={`p-1.5 rounded-xl border transition active:scale-95 min-w-[34px] min-h-[34px] flex items-center justify-center cursor-pointer ${
               isLocating
                 ? 'bg-[#38BDF8]/20 border-[#38BDF8] text-[#38BDF8]'
                 : 'bg-[#1B2F38] border-[#334B56] text-[#38BDF8] hover:text-[#F8FAFC]'
@@ -2426,11 +2456,11 @@ export const VillageMap = () => {
             title="Locate Me (GPS)"
             aria-label="Locate me on map"
           >
-            <Locate className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
+            <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={() => setMobileSheet(mobileSheet === 'layers' ? null : 'layers')}
-            className={`p-2 rounded-xl border transition active:scale-95 min-w-[38px] min-h-[38px] flex items-center justify-center cursor-pointer ${
+            className={`p-1.5 rounded-xl border transition active:scale-95 min-w-[34px] min-h-[34px] flex items-center justify-center cursor-pointer ${
               mobileSheet === 'layers'
                 ? 'bg-[#38BDF8]/20 border-[#38BDF8] text-[#38BDF8]'
                 : 'bg-[#1B2F38] border-[#334B56] text-[#38BDF8] hover:text-[#F8FAFC]'
@@ -2438,7 +2468,15 @@ export const VillageMap = () => {
             title="Layers & Basemaps"
             aria-label="Toggle layers bottom sheet"
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={handleMobileLogout}
+            className="p-1.5 rounded-xl bg-[#E05A47]/15 hover:bg-[#E05A47]/30 border border-[#E05A47]/40 text-[#FCA5A5] hover:text-[#F8FAFC] min-w-[34px] min-h-[34px] flex items-center justify-center cursor-pointer active:scale-95 transition"
+            title="Sign Out / Log Out"
+            aria-label="Log Out from Portal"
+          >
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </header>
@@ -3188,24 +3226,26 @@ export const VillageMap = () => {
           </button>
         </div>
 
-        {/* Tab 4: Analytics & ML */}
-        <button
-          onClick={() => {
-            setMobileSheet(mobileSheet === 'analytics' ? null : 'analytics');
-            setActiveMobileTab('analytics');
-          }}
-          className={`flex flex-col items-center justify-center min-w-[54px] min-h-[44px] rounded-xl transition active:scale-95 cursor-pointer ${
-            mobileSheet === 'analytics'
-              ? 'text-[#38BDF8]'
-              : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-          }`}
-          title="Decision Support & ML Priorities"
-        >
-          <BarChart3 className="w-5 h-5 mb-0.5" />
-          <span className="text-[10px] font-semibold">Analytics</span>
-        </button>
+        {/* Tab 4: Analytics & ML (STRICTLY HIDDEN for Resident / userRole === 'user') */}
+        {(userRole === 'admin' || userRole === 'officer') && (
+          <button
+            onClick={() => {
+              setMobileSheet(mobileSheet === 'analytics' ? null : 'analytics');
+              setActiveMobileTab('analytics');
+            }}
+            className={`flex flex-col items-center justify-center min-w-[54px] min-h-[44px] rounded-xl transition active:scale-95 cursor-pointer ${
+              mobileSheet === 'analytics'
+                ? 'text-[#38BDF8]'
+                : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+            }`}
+            title="Decision Support & ML Priorities"
+          >
+            <BarChart3 className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px] font-semibold">Analytics</span>
+          </button>
+        )}
 
-        {/* Tab 5: Worklist / Queue */}
+        {/* Tab 5 (or Tab 4 for Resident): Worklist / Approvals / Submissions */}
         <button
           onClick={() => {
             setMobileSheet(mobileSheet === 'worklist' ? null : 'worklist');
@@ -3216,7 +3256,13 @@ export const VillageMap = () => {
               ? 'text-[#38BDF8]'
               : 'text-[#94A3B8] hover:text-[#F8FAFC]'
           }`}
-          title="Field Worklist / Approvals"
+          title={
+            userRole === 'officer'
+              ? 'Field Worklist'
+              : userRole === 'admin'
+              ? 'Pending Approvals Queue'
+              : 'My Field Reports & Submissions'
+          }
         >
           <ClipboardList className="w-5 h-5 mb-0.5" />
           <span className="text-[10px] font-semibold">
@@ -3224,7 +3270,7 @@ export const VillageMap = () => {
               ? 'Worklist'
               : userRole === 'admin'
               ? 'Approvals'
-              : 'Reports'}
+              : 'Submissions'}
           </span>
         </button>
       </nav>
@@ -3422,25 +3468,171 @@ export const VillageMap = () => {
                     </div>
                   </div>
 
-                  {/* Facility Condition Health */}
-                  <div className="p-3.5 rounded-xl bg-[#1B2F38] border border-[#334B56] space-y-2">
-                    <span className="text-xs font-bold text-[#F8FAFC] block uppercase tracking-wider">
-                      Facility Operational Status
-                    </span>
-                    <div className="grid grid-cols-3 gap-1.5 text-center">
-                      <div className="p-2 rounded-lg bg-[#0C171C] border border-[#334B56]">
-                        <span className="text-[#6EE7B7] text-[10px] block font-semibold">● Functional</span>
-                        <strong className="text-base font-mono text-[#F8FAFC]">{operationalCounts.functional}</strong>
-                      </div>
-                      <div className="p-2 rounded-lg bg-[#0C171C] border border-[#334B56]">
-                        <span className="text-[#FDE68A] text-[10px] block font-semibold">● Partial</span>
-                        <strong className="text-base font-mono text-[#F8FAFC]">{operationalCounts.partial}</strong>
-                      </div>
-                      <div className="p-2 rounded-lg bg-[#0C171C] border border-[#334B56]">
-                        <span className="text-[#FCA5A5] text-[10px] block font-semibold">● Broken</span>
-                        <strong className="text-base font-mono text-[#F8FAFC]">{operationalCounts.nonFunctional}</strong>
+                  {/* Facility Condition Health Donut Chart & Legend */}
+                  <div className="p-3.5 rounded-xl bg-[#1B2F38] border border-[#334B56] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#F8FAFC] block uppercase tracking-wider">
+                        Facility Operational Health
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-[#10B981] bg-[#10B981]/15 px-2 py-0.5 rounded-full border border-[#10B981]/40">
+                        {Math.round(((operationalCounts.functional) / (facilitiesList.length || 1)) * 100)}% Functional
+                      </span>
+                    </div>
+
+                    {/* Donut Chart SVG Container with explicit aspect ratio */}
+                    <div className="flex items-center justify-center py-1">
+                      <div className="relative w-40 h-40 flex items-center justify-center">
+                        {(() => {
+                          const total = facilitiesList.length || 1;
+                          const func = operationalCounts.functional;
+                          const part = operationalCounts.partial;
+
+                          const funcPct = Math.round((func / total) * 100);
+                          const partPct = Math.round((part / total) * 100);
+                          const nonFuncPct = Math.max(0, 100 - funcPct - partPct);
+
+                          const radius = 54;
+                          const circumference = 2 * Math.PI * radius; // ~339.29
+
+                          const funcLen = (funcPct / 100) * circumference;
+                          const partLen = (partPct / 100) * circumference;
+                          const nonFuncLen = (nonFuncPct / 100) * circumference;
+
+                          const funcOffset = 0;
+                          const partOffset = -funcLen;
+                          const nonFuncOffset = -(funcLen + partLen);
+
+                          return (
+                            <>
+                              <svg
+                                viewBox="0 0 160 160"
+                                className="w-full h-full transform -rotate-90 drop-shadow-md"
+                              >
+                                {/* Base Track Ring */}
+                                <circle
+                                  cx="80"
+                                  cy="80"
+                                  r={radius}
+                                  fill="none"
+                                  stroke="#0C171C"
+                                  strokeWidth="16"
+                                />
+
+                                {/* Functional Segment (Emerald) */}
+                                {funcLen > 0 && (
+                                  <circle
+                                    cx="80"
+                                    cy="80"
+                                    r={radius}
+                                    fill="none"
+                                    stroke="#10B981"
+                                    strokeWidth="16"
+                                    strokeDasharray={`${funcLen} ${circumference}`}
+                                    strokeDashoffset={funcOffset}
+                                    strokeLinecap="butt"
+                                  />
+                                )}
+
+                                {/* Degraded / Partial Segment (Amber) */}
+                                {partLen > 0 && (
+                                  <circle
+                                    cx="80"
+                                    cy="80"
+                                    r={radius}
+                                    fill="none"
+                                    stroke="#F59E0B"
+                                    strokeWidth="16"
+                                    strokeDasharray={`${partLen} ${circumference}`}
+                                    strokeDashoffset={partOffset}
+                                    strokeLinecap="butt"
+                                  />
+                                )}
+
+                                {/* Broken / Non-Functional Segment (Terracotta/Red) */}
+                                {nonFuncLen > 0 && (
+                                  <circle
+                                    cx="80"
+                                    cy="80"
+                                    r={radius}
+                                    fill="none"
+                                    stroke="#E05A47"
+                                    strokeWidth="16"
+                                    strokeDasharray={`${nonFuncLen} ${circumference}`}
+                                    strokeDashoffset={nonFuncOffset}
+                                    strokeLinecap="butt"
+                                  />
+                                )}
+                              </svg>
+
+                              {/* Center Donut Hub Stats */}
+                              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                                <span className="text-2xl font-bold font-mono text-[#F8FAFC] leading-none">
+                                  {facilitiesList.length}
+                                </span>
+                                <span className="text-[9px] font-bold text-[#94A3B8] tracking-widest uppercase mt-1">
+                                  Assets
+                                </span>
+                                <span className="text-[10px] font-bold text-[#10B981] mt-0.5">
+                                  {funcPct}% Active
+                                </span>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
+
+                    {/* Touch-Friendly Legend Pills with Counts and Percentages */}
+                    {(() => {
+                      const total = facilitiesList.length || 1;
+                      const func = operationalCounts.functional;
+                      const part = operationalCounts.partial;
+                      const nonFunc = operationalCounts.nonFunctional;
+
+                      const funcPct = Math.round((func / total) * 100);
+                      const partPct = Math.round((part / total) * 100);
+                      const nonFuncPct = Math.max(0, 100 - funcPct - partPct);
+
+                      return (
+                        <div className="grid grid-cols-3 gap-2 pt-1">
+                          {/* 🟢 Functional */}
+                          <div className="p-2 rounded-xl bg-[#0C171C] border border-[#10B981]/40 flex flex-col items-center justify-center text-center shadow-sm min-h-[44px]">
+                            <div className="flex items-center gap-1.5 text-[#6EE7B7] text-[11px] font-bold mb-0.5">
+                              <span className="w-2 h-2 rounded-full bg-[#10B981] shadow-[0_0_6px_#10B981] flex-shrink-0" />
+                              <span className="truncate">Functional</span>
+                            </div>
+                            <span className="text-sm font-mono font-bold text-[#F8FAFC]">
+                              {func}
+                            </span>
+                            <span className="text-[10px] text-[#6EE7B7] font-semibold">{funcPct}%</span>
+                          </div>
+
+                          {/* 🟡 Degraded */}
+                          <div className="p-2 rounded-xl bg-[#0C171C] border border-[#F59E0B]/40 flex flex-col items-center justify-center text-center shadow-sm min-h-[44px]">
+                            <div className="flex items-center gap-1.5 text-[#FDE68A] text-[11px] font-bold mb-0.5">
+                              <span className="w-2 h-2 rounded-full bg-[#F59E0B] shadow-[0_0_6px_#F59E0B] flex-shrink-0" />
+                              <span className="truncate">Degraded</span>
+                            </div>
+                            <span className="text-sm font-mono font-bold text-[#F8FAFC]">
+                              {part}
+                            </span>
+                            <span className="text-[10px] text-[#FDE68A] font-semibold">{partPct}%</span>
+                          </div>
+
+                          {/* 🔴 Broken */}
+                          <div className="p-2 rounded-xl bg-[#0C171C] border border-[#E05A47]/40 flex flex-col items-center justify-center text-center shadow-sm min-h-[44px]">
+                            <div className="flex items-center gap-1.5 text-[#FCA5A5] text-[11px] font-bold mb-0.5">
+                              <span className="w-2 h-2 rounded-full bg-[#E05A47] shadow-[0_0_6px_#E05A47] flex-shrink-0" />
+                              <span className="truncate">Broken</span>
+                            </div>
+                            <span className="text-sm font-mono font-bold text-[#F8FAFC]">
+                              {nonFunc}
+                            </span>
+                            <span className="text-[10px] text-[#FCA5A5] font-semibold">{nonFuncPct}%</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Native Mobile Download Buttons */}
@@ -3972,15 +4164,26 @@ export const VillageMap = () => {
               {/* VIEW 5: ROLE / PORTAL SWITCHER */}
               {mobileSheet === 'role' && (
                 <div className="space-y-3">
-                  <div className="p-3.5 rounded-2xl bg-[#0C171C] border border-[#334B56] flex items-center justify-between">
+                  {/* Official Panchayat Identifier Card */}
+                  <div className="p-3.5 rounded-2xl bg-[#0C171C] border border-[#334B56] space-y-2">
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-[#94A3B8] block">Current Session</span>
-                      <strong className="text-sm text-[#F8FAFC]">{session?.name || 'Authorized User'}</strong>
-                      <span className="text-xs text-[#38BDF8] block mt-0.5">{session?.designation}</span>
+                      <span className="text-[10px] uppercase font-bold text-[#94A3B8] tracking-wider block">
+                        Official Panchayat Identifier
+                      </span>
+                      <div className="text-xs font-mono font-bold text-[#38BDF8] break-words mt-0.5">
+                        {getPanchayatId(userRole)}
+                      </div>
                     </div>
-                    <span className="px-3 py-1 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] text-xs font-mono font-bold">
-                      {userRole.toUpperCase()}
-                    </span>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-[#334B56]/50">
+                      <div>
+                        <strong className="text-sm text-[#F8FAFC] block">{session?.name || 'Authorized User'}</strong>
+                        <span className="text-xs text-[#94A3B8]">{session?.designation}</span>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] text-xs font-mono font-bold">
+                        {userRole.toUpperCase()}
+                      </span>
+                    </div>
                   </div>
 
                   <span className="text-xs font-bold text-[#F8FAFC] block uppercase tracking-wider pt-1">
@@ -4024,6 +4227,17 @@ export const VillageMap = () => {
                       className="w-full py-3 min-h-[44px] rounded-xl bg-[#0C171C] hover:bg-[#1B2F38] border border-[#334B56] text-[#94A3B8] hover:text-[#F8FAFC] font-semibold text-xs transition cursor-pointer"
                     >
                       Reset to Default Citizen View
+                    </button>
+                  </div>
+
+                  {/* Prominent Log Out Button */}
+                  <div className="pt-2 border-t border-[#334B56]/60">
+                    <button
+                      onClick={handleMobileLogout}
+                      className="w-full py-3 min-h-[48px] rounded-xl bg-[#E05A47]/15 hover:bg-[#E05A47]/25 border border-[#E05A47]/50 text-[#FCA5A5] hover:text-[#F8FAFC] font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2 active:scale-98 shadow-sm"
+                    >
+                      <LogOut className="w-4 h-4 text-[#E05A47]" />
+                      <span>🚪 Sign Out / Log Out from Portal</span>
                     </button>
                   </div>
                 </div>
