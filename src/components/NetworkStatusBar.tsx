@@ -76,25 +76,25 @@ export const NetworkStatusBar: React.FC<NetworkStatusBarProps> = ({
     <div
       className={`w-full z-[1001] px-4 py-1.5 flex items-center justify-between text-xs transition-colors border-b shadow-md backdrop-blur-md select-none ${
         effectivelyOnline
-          ? 'bg-slate-900/90 border-emerald-500/30 text-slate-200'
-          : 'bg-amber-950/90 border-amber-500/50 text-amber-100'
+          ? 'bg-[#132228]/95 border-[#334B56] text-[#F8FAFC]'
+          : 'bg-[#132228]/95 border-[#E05A47]/60 text-[#F8FAFC]'
       }`}
     >
       {/* Left: Connection Status Badge */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           {effectivelyOnline ? (
-            <span className="flex items-center gap-1.5 font-semibold text-emerald-400">
+            <span className="flex items-center gap-1.5 font-semibold text-[#6EE7B7]">
               <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10B981] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#10B981]"></span>
               </span>
-              <Wifi className="w-3.5 h-3.5" />
+              <Wifi className="w-3.5 h-3.5 text-[#10B981]" />
               <span>Online • Live Mapping</span>
             </span>
           ) : (
-            <span className="flex items-center gap-1.5 font-semibold text-amber-400 animate-pulse">
-              <WifiOff className="w-3.5 h-3.5" />
+            <span className="flex items-center gap-1.5 font-semibold text-[#FCA5A5] animate-pulse">
+              <WifiOff className="w-3.5 h-3.5 text-[#E05A47]" />
               <span>Offline Mode • Serving Cached Tiles & Local IndexedDB</span>
             </span>
           )}
@@ -102,8 +102,8 @@ export const NetworkStatusBar: React.FC<NetworkStatusBarProps> = ({
 
         {/* Network telemetry (if supported) */}
         {effectivelyOnline && (networkType || downlink) && (
-          <div className="hidden md:flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-slate-950/60 px-2 py-0.5 rounded border border-slate-800">
-            <Radio className="w-3 h-3 text-emerald-400" />
+          <div className="hidden md:flex items-center gap-1.5 text-[11px] font-mono text-[#94A3B8] bg-[#0C171C] px-2 py-0.5 rounded border border-[#334B56]">
+            <Radio className="w-3 h-3 text-[#38BDF8]" />
             <span>{networkType || 'Broadband'}</span>
             {downlink && <span>• {downlink} Mbps</span>}
           </div>
@@ -115,12 +115,12 @@ export const NetworkStatusBar: React.FC<NetworkStatusBarProps> = ({
         {/* Offline Grievances Counter */}
         <button
           onClick={onOpenGrievancesList}
-          className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 transition active:scale-95 cursor-pointer text-xs"
+          className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-[#F8FAFC] transition active:scale-95 cursor-pointer text-xs"
           title="Click to view local IndexedDB grievance records"
         >
-          <Database className="w-3.5 h-3.5 text-cyan-400" />
+          <Database className="w-3.5 h-3.5 text-[#94A3B8]" />
           <span>Offline Grievances:</span>
-          <span className="font-bold text-cyan-300 font-mono bg-cyan-950/80 px-1.5 rounded border border-cyan-500/40">
+          <span className="font-bold text-[#38BDF8] font-mono bg-[#0C171C] px-1.5 rounded border border-[#334B56]">
             {grievanceCount}
           </span>
         </button>
@@ -131,12 +131,12 @@ export const NetworkStatusBar: React.FC<NetworkStatusBarProps> = ({
             onClick={onToggleSimulateOffline}
             className={`hidden sm:flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border transition active:scale-95 cursor-pointer ${
               isSimulatedOffline
-                ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-medium'
-                : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
+                ? 'bg-[#E05A47]/20 border-[#E05A47]/60 text-[#FCA5A5] font-medium'
+                : 'bg-[#1B2F38] border-[#334B56] text-[#94A3B8] hover:text-[#F8FAFC]'
             }`}
             title="Toggle simulated offline state to test caching and local operations"
           >
-            {isSimulatedOffline ? <CloudOff className="w-3 h-3 text-amber-400" /> : <RefreshCw className="w-3 h-3" />}
+            {isSimulatedOffline ? <CloudOff className="w-3.5 h-3.5 text-[#FCA5A5]" /> : <RefreshCw className="w-3.5 h-3.5 text-[#94A3B8]" />}
             <span>{isSimulatedOffline ? 'Simulating Offline' : 'Test Offline'}</span>
           </button>
         )}
@@ -156,10 +156,10 @@ export const NetworkStatusBar: React.FC<NetworkStatusBarProps> = ({
             }
             window.location.reload();
           }}
-          className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-rose-500/40 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 transition active:scale-95 cursor-pointer"
+          className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-[#E05A47]/60 bg-[#E05A47]/20 hover:bg-[#E05A47]/30 text-[#FCA5A5] transition active:scale-95 cursor-pointer"
           title="Force-clear Service Worker & tile cache, and reload latest code"
         >
-          <RotateCcw className="w-3 h-3 text-rose-400" />
+          <RotateCcw className="w-3 h-3 text-[#FCA5A5]" />
           <span>Reset Cache</span>
         </button>
       </div>

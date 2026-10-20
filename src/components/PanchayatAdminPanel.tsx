@@ -161,7 +161,6 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
     const unresolved = issues.filter(
       (iss) => (iss.status || '').toLowerCase() !== 'resolved'
     ).length;
-    // Fallback to 15 if issues list is in field survey mode or empty, as specified in prompt
     return unresolved > 0 ? unresolved : 15;
   }, [issues]);
 
@@ -264,25 +263,25 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
   const broLen = (conditionData.broken.pct / 100) * donutCircumference;
 
   return (
-    <div className="pointer-events-auto backdrop-blur-2xl bg-slate-950/92 border border-slate-700/70 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden w-84 sm:w-96 text-slate-100 transition-all flex flex-col max-h-[calc(100vh-140px)] animate-in fade-in slide-in-from-right-4">
+    <div className="pointer-events-auto backdrop-blur-2xl bg-[#132228]/95 border border-[#334B56] rounded-2xl shadow-[0_10px_30px_rgba(12,23,28,0.7)] overflow-hidden w-84 sm:w-96 text-[#F8FAFC] transition-all flex flex-col max-h-[calc(100vh-140px)] animate-in fade-in slide-in-from-right-4">
       {/* Header Banner */}
-      <div className="p-3.5 bg-gradient-to-r from-slate-900 via-indigo-950/50 to-purple-950/60 border-b border-slate-800 flex items-center justify-between">
+      <div className="p-3.5 bg-[#1B2F38] border-b border-[#334B56] flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.3)]">
-            <Brain className="w-4 h-4 text-purple-400" />
+          <div className="w-8 h-8 rounded-xl bg-[#10B981]/20 border border-[#10B981]/60 flex items-center justify-center text-[#6EE7B7] shadow-sm">
+            <Brain className="w-4 h-4 text-[#6EE7B7]" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 bg-purple-950/90 px-1.5 py-0.5 rounded border border-purple-500/40">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#6EE7B7] bg-[#10B981]/20 px-1.5 py-0.5 rounded border border-[#10B981]/60">
                 Panchayat Admin
               </span>
-              <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-0.5">
+              <span className="text-[10px] text-[#38BDF8] font-mono font-bold flex items-center gap-0.5">
                 <ShieldCheck className="w-3 h-3" /> Live Twin
               </span>
             </div>
-            <h3 className="text-xs font-bold text-white tracking-tight flex items-center gap-1 mt-0.5">
+            <h3 className="text-xs font-bold text-[#F8FAFC] tracking-tight flex items-center gap-1 mt-0.5">
               Executive Decision Console
-              <Sparkles className="w-3 h-3 text-amber-400" />
+              <Sparkles className="w-3 h-3 text-[#38BDF8]" />
             </h3>
           </div>
         </div>
@@ -291,17 +290,17 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
           {onExportAudit && (
             <button
               onClick={onExportAudit}
-              className="px-2.5 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 font-bold text-[10px] flex items-center gap-1 transition cursor-pointer active:scale-95 shadow-sm"
+              className="px-2.5 py-1 rounded-lg bg-[#1B2F38] hover:bg-[#233B46] border border-[#38BDF8]/40 text-[#38BDF8] font-bold text-[10px] flex items-center gap-1 transition cursor-pointer active:scale-95 shadow-sm"
               title="Open Executive Panchayat Audit (PDF & CSV)"
             >
-              <FileText className="w-3 h-3 text-purple-400" />
+              <FileText className="w-3 h-3 text-[#38BDF8]" />
               <span>Export Audit</span>
             </button>
           )}
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              className="p-1 rounded-lg text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1B2F38] transition cursor-pointer"
               title="Close Panel"
             >
               <X className="w-4 h-4" />
@@ -310,37 +309,37 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
         </div>
       </div>
 
-      <div className="overflow-y-auto flex-1 p-3 space-y-3.5 scrollbar-thin scrollbar-thumb-slate-700">
+      <div className="overflow-y-auto flex-1 p-3 space-y-3.5 scrollbar-thin">
         {/* PROMINENT SECTION: 📋 Pending Submissions Queue */}
-        <div className="rounded-xl border border-amber-500/40 bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-950 overflow-hidden shadow-lg shadow-amber-950/20">
+        <div className="rounded-xl border border-[#334B56] bg-[#1B2F38] overflow-hidden shadow-md">
           <button
             type="button"
             onClick={() => setIsPendingQueueOpen(!isPendingQueueOpen)}
-            className="w-full px-3 py-2.5 bg-slate-950/80 hover:bg-slate-900/90 border-b border-amber-500/30 flex items-center justify-between transition cursor-pointer text-left"
+            className="w-full px-3 py-2.5 bg-[#1B2F38] hover:bg-[#233B46] border-b border-[#334B56] flex items-center justify-between transition cursor-pointer text-left"
           >
             <div className="flex items-center gap-2">
-              <ClipboardCheck className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-bold text-white tracking-tight">
+              <ClipboardCheck className="w-4 h-4 text-[#38BDF8]" />
+              <span className="text-xs font-bold text-[#F8FAFC] tracking-tight">
                 Pending Submissions Queue
               </span>
               <span
                 className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
                   pendingItems.length > 0
-                    ? 'bg-amber-500/25 text-amber-300 border-amber-400 animate-pulse'
-                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                    ? 'bg-[#E05A47]/20 text-[#FCA5A5] border-[#E05A47]/60 animate-pulse'
+                    : 'bg-[#0C171C] text-[#94A3B8] border-[#334B56]'
                 }`}
               >
                 {pendingItems.length} Pending
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <span className="text-[10px] text-slate-400 font-mono">
+            <div className="flex items-center gap-1.5 text-[#94A3B8]">
+              <span className="text-[10px] text-[#94A3B8] font-mono">
                 {isPendingQueueOpen ? 'Collapse' : 'Expand'}
               </span>
               {isPendingQueueOpen ? (
-                <ChevronUp className="w-3.5 h-3.5 text-amber-400" />
+                <ChevronUp className="w-3.5 h-3.5 text-[#94A3B8]" />
               ) : (
-                <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-[#94A3B8]" />
               )}
             </div>
           </button>
@@ -348,17 +347,17 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
           {isPendingQueueOpen && (
             <div className="p-2.5 space-y-2.5">
               {actionSuccessMsg && (
-                <div className="p-2 rounded-lg bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-[11px] font-semibold flex items-center gap-1.5 animate-in fade-in">
+                <div className="p-2 rounded-lg bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] text-[11px] font-semibold flex items-center gap-1.5 animate-in fade-in">
                   <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
                   <span>{actionSuccessMsg}</span>
                 </div>
               )}
 
               {pendingItems.length === 0 ? (
-                <div className="p-3 text-center rounded-lg bg-slate-950/60 border border-slate-800 text-slate-400 text-xs flex flex-col items-center gap-1">
-                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  <span className="font-semibold text-slate-300">All submissions verified</span>
-                  <span className="text-[10px] text-slate-500">
+                <div className="p-3 text-center rounded-lg bg-[#0C171C]/80 border border-[#334B56] text-[#94A3B8] text-xs flex flex-col items-center gap-1">
+                  <ShieldCheck className="w-5 h-5 text-[#10B981]" />
+                  <span className="font-semibold text-[#F8FAFC]">All submissions verified</span>
+                  <span className="text-[10px] text-[#94A3B8]">
                     No pending facility proposals or civic grievances awaiting review.
                   </span>
                 </div>
@@ -366,21 +365,21 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                 pendingItems.map((item) => (
                   <div
                     key={`${item.type}-${item.id}`}
-                    className="p-3 rounded-xl bg-slate-950/90 border border-slate-800 hover:border-slate-700 transition flex flex-col gap-2 shadow-sm"
+                    className="p-3 rounded-xl bg-[#0C171C]/90 border border-[#334B56] hover:border-[#38BDF8]/50 transition flex flex-col gap-2 shadow-sm"
                   >
                     {/* Item Type & Submitter Role */}
                     <div className="flex items-center justify-between gap-1.5 flex-wrap">
                       <span
                         className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
                           item.type === 'facility'
-                            ? 'bg-cyan-950/90 text-cyan-300 border-cyan-500/40'
-                            : 'bg-amber-950/90 text-amber-300 border-amber-500/40'
+                            ? 'bg-[#10B981]/20 text-[#6EE7B7] border-[#10B981]/60'
+                            : 'bg-[#E05A47]/20 text-[#FCA5A5] border-[#E05A47]/60'
                         }`}
                       >
                         {item.type === 'facility' ? '🏢 Facility Proposal' : '⚠️ Civic Grievance'}
                       </span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
-                        By: <strong className="text-white">{item.submitted_by}</strong>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1B2F38] border border-[#334B56] text-[#94A3B8]">
+                        By: <strong className="text-[#F8FAFC]">{item.submitted_by}</strong>
                       </span>
                     </div>
 
@@ -397,7 +396,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                             });
                           }
                         }}
-                        className="relative w-full h-28 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 group cursor-pointer"
+                        className="relative w-full h-28 rounded-lg overflow-hidden border border-[#334B56] bg-[#0C171C] group cursor-pointer"
                         title="Click to inspect high-resolution photo"
                       >
                         <img
@@ -405,11 +404,11 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                           alt={item.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent flex items-end justify-between p-2">
-                          <span className="text-[9px] text-emerald-300 font-mono bg-slate-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#132228]/95 via-transparent to-transparent flex items-end justify-between p-2">
+                          <span className="text-[9px] text-[#38BDF8] font-mono bg-[#132228]/90 px-1.5 py-0.5 rounded border border-[#38BDF8]/40 flex items-center gap-1">
                             <ImageIcon className="w-3 h-3" /> Photo Attached
                           </span>
-                          <span className="text-[9px] text-cyan-300 underline font-semibold flex items-center gap-0.5">
+                          <span className="text-[9px] text-[#38BDF8] underline font-semibold flex items-center gap-0.5">
                             <ExternalLink className="w-2.5 h-2.5" /> Inspect
                           </span>
                         </div>
@@ -418,18 +417,18 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
 
                     {/* Title & Category */}
                     <div>
-                      <h4 className="text-xs font-bold text-white tracking-tight leading-snug">
+                      <h4 className="text-xs font-semibold text-[#F8FAFC] tracking-tight leading-snug">
                         {item.title}
                       </h4>
-                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400">
-                        <span className="capitalize text-slate-300 font-mono">
+                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#94A3B8]">
+                        <span className="capitalize text-[#94A3B8] font-mono">
                           Category: {item.category.replace(/_/g, ' ')}
                         </span>
                         <span>•</span>
                         <button
                           type="button"
                           onClick={() => onFlyToCoords && onFlyToCoords(item.coords)}
-                          className="text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5 cursor-pointer font-mono"
+                          className="text-[#38BDF8] hover:text-[#F8FAFC] flex items-center gap-0.5 cursor-pointer font-mono font-medium"
                           title="Fly to GPS Coordinates on Map"
                         >
                           <MapPin className="w-2.5 h-2.5" />
@@ -439,17 +438,17 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                     </div>
 
                     {item.description && (
-                      <p className="text-[10px] text-slate-300 bg-slate-900/80 p-2 rounded-lg border border-slate-800 line-clamp-2 italic">
+                      <p className="text-[10px] text-[#94A3B8] bg-[#1B2F38] p-2 rounded-lg border border-[#334B56] line-clamp-2 italic">
                         "{item.description}"
                       </p>
                     )}
 
                     {/* Action Buttons: [✅ Approve & Publish] and [❌ Reject] */}
-                    <div className="flex items-center gap-2 pt-1 border-t border-slate-900">
+                    <div className="flex items-center gap-2 pt-1 border-t border-[#334B56]">
                       <button
                         type="button"
                         onClick={() => handleApprove(item)}
-                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/40 transition cursor-pointer active:scale-95"
+                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-semibold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer active:scale-95"
                         title="Approve item and publish immediately to the live GIS map"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -458,7 +457,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                       <button
                         type="button"
                         onClick={() => handleReject(item)}
-                        className="py-1.5 px-3 rounded-lg bg-rose-950/80 hover:bg-rose-900/90 text-rose-300 border border-rose-500/40 hover:border-rose-400 font-bold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer active:scale-95"
+                        className="py-1.5 px-3 rounded-lg bg-[#E05A47]/20 hover:bg-[#E05A47]/30 text-[#FCA5A5] border border-[#E05A47]/60 font-semibold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer active:scale-95"
                         title="Reject submission"
                       >
                         <XCircle className="w-3.5 h-3.5" />
@@ -472,71 +471,71 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
           )}
         </div>
 
-        {/* SUB-SECTION A: High-Contrast Summary Stats Tiles */}
+        {/* SUB-SECTION A: High-Contrast Summary Stats Tiles (KPI Metric Tiles) */}
         <div className="grid grid-cols-2 gap-2.5">
-          {/* Tile 1: 15 Active Issues */}
-          <div className="p-3 rounded-xl bg-gradient-to-br from-rose-950/60 to-slate-900/90 border border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.15)] flex flex-col justify-between">
+          {/* Tile 1: Active Issues */}
+          <div className="bg-[#1B2F38] border border-[#334B56] p-4 rounded-xl flex flex-col justify-between shadow-sm">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] uppercase font-bold text-rose-300 tracking-wider">
+              <span className="text-xs tracking-wider uppercase font-semibold text-[#94A3B8]">
                 Priority
               </span>
-              <div className="w-6 h-6 rounded-lg bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-rose-400">
+              <div className="w-6 h-6 rounded-lg bg-[#E05A47]/20 border border-[#E05A47]/60 flex items-center justify-center text-[#FCA5A5]">
                 <AlertOctagon className="w-3.5 h-3.5" />
               </div>
             </div>
-            <div className="text-xl font-mono font-black text-white tracking-tight">
+            <div className="text-2xl font-bold font-mono text-[#F8FAFC] tracking-tight">
               {activeIssuesCount}
             </div>
-            <div className="text-[10px] font-semibold text-rose-300/90 leading-tight mt-0.5">
+            <div className="text-xs tracking-wider uppercase font-semibold text-[#94A3B8] leading-tight mt-1">
               Active Issues
             </div>
-            <div className="text-[9px] text-slate-400 mt-1">Field Audited</div>
+            <div className="text-[10px] text-[#94A3B8]/80 mt-0.5">Field Audited</div>
           </div>
 
-          {/* Tile 2: 3 DBSCAN Clusters */}
-          <div className="p-3 rounded-xl bg-gradient-to-br from-purple-950/60 to-slate-900/90 border border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)] flex flex-col justify-between">
+          {/* Tile 2: DBSCAN Clusters */}
+          <div className="bg-[#1B2F38] border border-[#334B56] p-4 rounded-xl flex flex-col justify-between shadow-sm">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] uppercase font-bold text-purple-300 tracking-wider">
+              <span className="text-xs tracking-wider uppercase font-semibold text-[#94A3B8]">
                 Hotspots
               </span>
-              <div className="w-6 h-6 rounded-lg bg-purple-500/20 border border-purple-500/50 flex items-center justify-center text-purple-400">
+              <div className="w-6 h-6 rounded-lg bg-[#E05A47]/20 border border-[#E05A47]/60 flex items-center justify-center text-[#FCA5A5]">
                 <Flame className="w-3.5 h-3.5" />
               </div>
             </div>
-            <div className="text-xl font-mono font-black text-white tracking-tight">
+            <div className="text-2xl font-bold font-mono text-[#38BDF8] tracking-tight">
               {dbscanClustersCount}
             </div>
-            <div className="text-[10px] font-semibold text-purple-300/90 leading-tight mt-0.5">
+            <div className="text-xs tracking-wider uppercase font-semibold text-[#94A3B8] leading-tight mt-1">
               DBSCAN Clusters
             </div>
-            <div className="text-[9px] text-slate-400 mt-1">Danger Hotspots (ε=85m)</div>
+            <div className="text-[10px] text-[#94A3B8]/80 mt-0.5">Danger Hotspots (ε=85m)</div>
           </div>
         </div>
 
-        {/* SUB-SECTION B: Decision Support (Collapsible) */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900/80 overflow-hidden shadow-sm">
+        {/* SUB-SECTION B: Decision Support (Decision Support Hotspot Cards) */}
+        <div className="rounded-xl border border-[#334B56] bg-[#1B2F38] overflow-hidden shadow-sm">
           <button
             type="button"
             onClick={() => setIsDecisionSupportOpen(!isDecisionSupportOpen)}
-            className="w-full px-3 py-2.5 bg-slate-950/70 hover:bg-slate-900/90 border-b border-slate-800 flex items-center justify-between transition cursor-pointer text-left"
+            className="w-full px-3 py-2.5 bg-[#1B2F38] hover:bg-[#233B46] border-b border-[#334B56] flex items-center justify-between transition cursor-pointer text-left"
           >
             <div className="flex items-center gap-2">
-              <Brain className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-xs font-bold text-slate-100 tracking-tight">
+              <Brain className="w-3.5 h-3.5 text-[#38BDF8]" />
+              <span className="text-xs font-bold text-[#F8FAFC] tracking-tight">
                 Decision Support
               </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-500/40">
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#0C171C] text-[#38BDF8] border border-[#334B56]">
                 Top 5
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <span className="text-[10px] text-slate-400 font-mono">
+            <div className="flex items-center gap-1.5 text-[#94A3B8]">
+              <span className="text-[10px] text-[#94A3B8] font-mono">
                 {isDecisionSupportOpen ? 'Collapse' : 'Expand'}
               </span>
               {isDecisionSupportOpen ? (
-                <ChevronUp className="w-3.5 h-3.5 text-purple-400" />
+                <ChevronUp className="w-3.5 h-3.5 text-[#94A3B8]" />
               ) : (
-                <ChevronDown className="w-3.5 h-3.5 text-purple-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-[#94A3B8]" />
               )}
             </div>
           </button>
@@ -544,17 +543,17 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
           {isDecisionSupportOpen && (
             <div className="p-2 space-y-2">
               {/* Financial Capex summary */}
-              <div className="px-2.5 py-1.5 rounded-lg bg-slate-950/80 border border-slate-800 flex items-center justify-between text-[10px]">
-                <span className="text-slate-400 flex items-center gap-1">
-                  <Coins className="w-3 h-3 text-amber-400" />
+              <div className="px-2.5 py-1.5 rounded-lg bg-[#0C171C] border border-[#334B56] flex items-center justify-between text-[10px]">
+                <span className="text-[#94A3B8] flex items-center gap-1 font-medium">
+                  <Coins className="w-3 h-3 text-[#FCD34D]" />
                   Top 5 Est. Works Capex:
                 </span>
-                <span className="font-mono font-bold text-emerald-400">
+                <span className="font-mono font-bold text-[#38BDF8]">
                   ₹{totalTopBudget.toLocaleString('en-IN')}
                 </span>
               </div>
 
-              {/* Top 5 Priority Items */}
+              {/* Top 5 Priority Items (Hotspot Cards) */}
               {topIssues.map((issue, idx) => {
                 const rank = issue.ai_rank || idx + 1;
                 const score = issue.ai_priority_score || (99 - idx * 4);
@@ -568,42 +567,42 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                       setSelectedIssueId(issue.issue_id);
                       onFlyToIssue(issue);
                     }}
-                    className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                    className={`bg-[#1B2F38] hover:bg-[#233B46] border-l-4 border-l-[#E05A47] border border-[#334B56] rounded-xl p-3 mb-2 transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-purple-950/60 border-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
-                        : 'bg-slate-950/60 border-slate-800 hover:border-purple-500/40 hover:bg-slate-900'
+                        ? 'bg-[#233B46] ring-1 ring-[#38BDF8]'
+                        : ''
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1.5 mb-1">
+                    <div className="flex items-center justify-between gap-1.5 mb-1.5">
                       <div className="flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-md bg-purple-900/90 border border-purple-500/50 text-[9px] font-bold font-mono text-purple-200 flex items-center justify-center">
+                        <span className="w-5 h-5 rounded-md bg-[#0C171C] border border-[#334B56] text-[9px] font-bold font-mono text-[#F8FAFC] flex items-center justify-center">
                           #{rank}
                         </span>
-                        <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-rose-950/90 border border-rose-500/40 text-rose-300">
+                        <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5]">
                           Urgent
                         </span>
-                        <span className="text-[10px] font-mono text-slate-400">
+                        <span className="text-[10px] font-mono text-[#94A3B8]">
                           {issue.issue_id}
                         </span>
                       </div>
-                      <div className="text-[10px] font-mono font-bold text-rose-400 bg-rose-950/60 px-1.5 py-0.2 rounded border border-rose-900/80">
+                      <div className="bg-[#E05A47]/20 text-[#FCA5A5] px-2 py-0.5 rounded-full text-xs font-bold">
                         Score: {score}/100
                       </div>
                     </div>
 
-                    <h4 className="text-[11px] font-bold text-white leading-tight line-clamp-1 mb-1">
+                    <h4 className="text-xs font-semibold text-[#F8FAFC] leading-tight line-clamp-1 mb-1">
                       {issue.title}
                     </h4>
 
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                    <div className="flex items-center justify-between text-[10px] text-[#94A3B8] mb-1.5">
                       <span className="capitalize">{issue.category.replace(/_/g, ' ')}</span>
-                      <span className="font-mono text-emerald-400 font-semibold">
-                        ₹{budget.toLocaleString('en-IN')}
+                      <span className="font-mono text-[#38BDF8] font-semibold">
+                        Est: ₹{budget.toLocaleString('en-IN')}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[10px]">
-                      <span className="font-mono text-slate-500 text-[9px]">
+                    <div className="flex items-center justify-between pt-1.5 border-t border-[#334B56] text-[10px]">
+                      <span className="font-mono text-[#38BDF8] font-medium text-[10px]">
                         {issue.latitude.toFixed(4)}°N, {issue.longitude.toFixed(4)}°E
                       </span>
                       <button
@@ -613,9 +612,9 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                           setSelectedIssueId(issue.issue_id);
                           onFlyToIssue(issue);
                         }}
-                        className="px-2 py-0.5 rounded bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/50 text-purple-200 text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-[#F8FAFC] text-[10px] font-semibold transition flex items-center gap-1 cursor-pointer active:scale-95"
                       >
-                        <Navigation className="w-2.5 h-2.5" />
+                        <Navigation className="w-2.5 h-2.5 text-[#38BDF8]" />
                         <span>Fly to Asset</span>
                       </button>
                     </div>
@@ -627,29 +626,29 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
         </div>
 
         {/* SUB-SECTION C: Village Analytics (Charts) (Collapsible) */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900/80 overflow-hidden shadow-sm">
+        <div className="rounded-xl border border-[#334B56] bg-[#1B2F38] overflow-hidden shadow-sm">
           <button
             type="button"
             onClick={() => setIsAnalyticsOpen(!isAnalyticsOpen)}
-            className="w-full px-3 py-2.5 bg-slate-950/70 hover:bg-slate-900/90 border-b border-slate-800 flex items-center justify-between transition cursor-pointer text-left"
+            className="w-full px-3 py-2.5 bg-[#1B2F38] hover:bg-[#233B46] border-b border-[#334B56] flex items-center justify-between transition cursor-pointer text-left"
           >
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-xs font-bold text-slate-100 tracking-tight">
+              <BarChart3 className="w-3.5 h-3.5 text-[#38BDF8]" />
+              <span className="text-xs font-bold text-[#F8FAFC] tracking-tight">
                 Village Analytics
               </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/40">
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#0C171C] text-[#38BDF8] border border-[#334B56]">
                 2 Visual Charts
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <span className="text-[10px] text-slate-400 font-mono">
+            <div className="flex items-center gap-1.5 text-[#94A3B8]">
+              <span className="text-[10px] text-[#94A3B8] font-mono">
                 {isAnalyticsOpen ? 'Collapse' : 'Expand'}
               </span>
               {isAnalyticsOpen ? (
-                <ChevronUp className="w-3.5 h-3.5 text-cyan-400" />
+                <ChevronUp className="w-3.5 h-3.5 text-[#94A3B8]" />
               ) : (
-                <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-[#94A3B8]" />
               )}
             </div>
           </button>
@@ -659,16 +658,16 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
               {/* Chart 1: Bar Chart (Issue Categories) */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
-                    <BarChart3 className="w-3 h-3 text-cyan-400" />
+                  <div className="text-[11px] font-bold text-[#F8FAFC] flex items-center gap-1.5">
+                    <BarChart3 className="w-3 h-3 text-[#38BDF8]" />
                     Issue Categories Breakdown
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono">
+                  <span className="text-[10px] text-[#94A3B8] font-mono">
                     {hoveredCategory ? `Focus: ${hoveredCategory}` : `${issues.length} Total Issues`}
                   </span>
                 </div>
 
-                <div className="space-y-1.5 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                <div className="space-y-1.5 bg-[#0C171C] p-2.5 rounded-xl border border-[#334B56]">
                   {categoryData.map((cat) => (
                     <div
                       key={cat.name}
@@ -677,25 +676,25 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                       className="group cursor-default"
                     >
                       <div className="flex items-center justify-between text-[10px] mb-0.5">
-                        <span className="font-semibold text-slate-300 group-hover:text-cyan-300 transition-colors">
+                        <span className="font-semibold text-[#94A3B8] group-hover:text-[#F8FAFC] transition-colors">
                           {cat.name}
                         </span>
-                        <span className="font-mono text-slate-400">
-                          <strong className="text-white">{cat.count}</strong> faults ({cat.pct}%)
+                        <span className="font-mono text-[#94A3B8]">
+                          <strong className="text-[#F8FAFC]">{cat.count}</strong> faults ({cat.pct}%)
                         </span>
                       </div>
-                      <div className="w-full h-2 rounded-full bg-slate-800/80 overflow-hidden relative">
+                      <div className="w-full h-2 rounded-full bg-[#1B2F38] overflow-hidden relative">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${
                             cat.name === 'Roads'
-                              ? 'bg-gradient-to-r from-amber-500 to-rose-500'
+                              ? 'bg-gradient-to-r from-[#D9534F] to-[#E05A47]'
                               : cat.name === 'Water'
-                              ? 'bg-gradient-to-r from-cyan-500 to-blue-500'
+                              ? 'bg-gradient-to-r from-[#0D9488] to-[#10B981]'
                               : cat.name === 'Drainage'
-                              ? 'bg-gradient-to-r from-teal-500 to-emerald-500'
+                              ? 'bg-gradient-to-r from-[#0284C7] to-[#38BDF8]'
                               : cat.name === 'Sanitation'
-                              ? 'bg-gradient-to-r from-purple-500 to-indigo-500'
-                              : 'bg-gradient-to-r from-yellow-500 to-amber-500'
+                              ? 'bg-gradient-to-r from-[#E05A47] to-[#FCD34D]'
+                              : 'bg-gradient-to-r from-[#10B981] to-[#38BDF8]'
                           }`}
                           style={{ width: `${Math.max(cat.pct, 8)}%` }}
                         />
@@ -708,16 +707,16 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
               {/* Chart 2: Donut Chart (Facility Conditions) */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
-                    <PieChart className="w-3 h-3 text-emerald-400" />
+                  <div className="text-[11px] font-bold text-[#F8FAFC] flex items-center gap-1.5">
+                    <PieChart className="w-3 h-3 text-[#38BDF8]" />
                     Facility Conditions (Health)
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono">
+                  <span className="text-[10px] text-[#94A3B8] font-mono">
                     {conditionData.total} Assets
                   </span>
                 </div>
 
-                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between gap-3">
+                <div className="p-3 rounded-xl bg-[#0C171C] border border-[#334B56] flex items-center justify-between gap-3">
                   {/* Circular SVG Donut */}
                   <div className="relative w-28 h-28 flex items-center justify-center flex-shrink-0">
                     <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
@@ -726,16 +725,16 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                         cx="50"
                         cy="50"
                         r={donutRadius}
-                        stroke="#1e293b"
+                        stroke="#1B2F38"
                         strokeWidth={strokeWidth}
                         fill="transparent"
                       />
-                      {/* Functional (Green) */}
+                      {/* Functional (Emerald) */}
                       <circle
                         cx="50"
                         cy="50"
                         r={donutRadius}
-                        stroke="#10b981"
+                        stroke="#10B981"
                         strokeWidth={strokeWidth}
                         strokeDasharray={`${funcLen} ${donutCircumference}`}
                         strokeDashoffset="0"
@@ -743,12 +742,12 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                         strokeLinecap="round"
                         className="transition-all duration-700 hover:opacity-80"
                       />
-                      {/* Degraded (Yellow) */}
+                      {/* Degraded (Amber Gold) */}
                       <circle
                         cx="50"
                         cy="50"
                         r={donutRadius}
-                        stroke="#f59e0b"
+                        stroke="#F59E0B"
                         strokeWidth={strokeWidth}
                         strokeDasharray={`${degLen} ${donutCircumference}`}
                         strokeDashoffset={`-${funcLen}`}
@@ -756,12 +755,12 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                         strokeLinecap="round"
                         className="transition-all duration-700 hover:opacity-80"
                       />
-                      {/* Broken (Red) */}
+                      {/* Broken (Terracotta) */}
                       <circle
                         cx="50"
                         cy="50"
                         r={donutRadius}
-                        stroke="#ef4444"
+                        stroke="#E05A47"
                         strokeWidth={strokeWidth}
                         strokeDasharray={`${broLen} ${donutCircumference}`}
                         strokeDashoffset={`-${funcLen + degLen}`}
@@ -773,10 +772,10 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
 
                     {/* Donut Center Label */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-sm font-mono font-black text-emerald-400">
+                      <span className="text-sm font-mono font-black text-[#6EE7B7]">
                         {conditionData.functional.pct}%
                       </span>
-                      <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400">
+                      <span className="text-[8px] font-bold uppercase tracking-wider text-[#94A3B8]">
                         Healthy
                       </span>
                     </div>
@@ -784,32 +783,32 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
 
                   {/* Donut Legend */}
                   <div className="flex-1 space-y-1.5 text-[10px]">
-                    <div className="flex items-center justify-between p-1 rounded bg-slate-900/60 border border-emerald-500/20">
+                    <div className="flex items-center justify-between p-1.5 rounded-lg bg-[#1B2F38] border border-[#10B981]/40">
                       <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]"></span>
-                        <span className="font-semibold text-slate-200">Functional</span>
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]"></span>
+                        <span className="font-semibold text-[#F8FAFC]">Functional</span>
                       </div>
-                      <span className="font-mono text-emerald-400 font-bold">
+                      <span className="font-mono text-[#6EE7B7] font-bold">
                         {conditionData.functional.count} ({conditionData.functional.pct}%)
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between p-1 rounded bg-slate-900/60 border border-amber-500/20">
+                    <div className="flex items-center justify-between p-1.5 rounded-lg bg-[#1B2F38] border border-[#F59E0B]/40">
                       <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_6px_#f59e0b]"></span>
-                        <span className="font-semibold text-slate-200">Degraded</span>
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]"></span>
+                        <span className="font-semibold text-[#F8FAFC]">Degraded</span>
                       </div>
-                      <span className="font-mono text-amber-400 font-bold">
+                      <span className="font-mono text-[#FDE68A] font-bold">
                         {conditionData.degraded.count} ({conditionData.degraded.pct}%)
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between p-1 rounded bg-slate-900/60 border border-rose-500/20">
+                    <div className="flex items-center justify-between p-1.5 rounded-lg bg-[#1B2F38] border border-[#E05A47]/40">
                       <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_#ef4444]"></span>
-                        <span className="font-semibold text-slate-200">Broken</span>
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#E05A47]"></span>
+                        <span className="font-semibold text-[#F8FAFC]">Broken</span>
                       </div>
-                      <span className="font-mono text-rose-400 font-bold">
+                      <span className="font-mono text-[#FCA5A5] font-bold">
                         {conditionData.broken.count} ({conditionData.broken.pct}%)
                       </span>
                     </div>

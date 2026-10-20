@@ -7,11 +7,11 @@ function DashboardGateway() {
 
   if (isLoading) {
     return (
-      <div className="w-screen h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-200">
-        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center animate-pulse mb-3">
-          <span className="w-4 h-4 rounded-full bg-emerald-400" />
+      <div className="w-screen h-[100dvh] flex flex-col items-center justify-center bg-[#132228] text-[#F8FAFC]">
+        <div className="w-12 h-12 rounded-2xl bg-[#1B2F38] border border-[#38BDF8]/50 flex items-center justify-center animate-pulse mb-3 shadow-[0_0_20px_rgba(56,189,248,0.3)]">
+          <span className="w-4 h-4 rounded-full bg-[#38BDF8]" />
         </div>
-        <div className="text-xs font-mono text-emerald-400 tracking-wider">
+        <div className="text-xs font-mono text-[#38BDF8] tracking-wider">
           Initializing Smart Village GIS Security Context...
         </div>
       </div>
@@ -23,7 +23,7 @@ function DashboardGateway() {
   }
 
   return (
-    <main className="w-screen h-screen overflow-hidden bg-slate-950">
+    <main className="w-screen h-[100dvh] overflow-hidden bg-[#132228] relative overscroll-none">
       <VillageMap />
     </main>
   );

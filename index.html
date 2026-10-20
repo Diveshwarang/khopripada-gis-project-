@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>Smart Village GIS: Khopripada Digital Twin</title>
     <!-- Leaflet CSS fallback / CDN -->
     <link
@@ -20,7 +23,7 @@
       rel="stylesheet"
     />
   </head>
-  <body class="m-0 p-0 overflow-hidden w-screen h-screen bg-slate-950 text-slate-100 select-none">
+  <body class="m-0 p-0 overflow-hidden w-screen h-[100dvh] bg-[#132228] text-[#F8FAFC] select-none overscroll-none [touch-action:pan-x_pan-y]">
     <div id="root" class="w-full h-full"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

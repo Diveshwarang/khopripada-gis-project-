@@ -43,14 +43,20 @@ export interface CachedFacility {
   operational_hours?: string;
   grade_levels?: string;
   midday_meal?: boolean;
+  midday_meal_available?: boolean;
   filtered_water?: boolean;
+  drinking_water_available?: boolean;
   supply_timings?: string;
+  water_supply_timings?: string;
   potability_status?: string;
+  water_potability?: string;
   maintenance_authority?: string;
   community_usage?: string;
   seating_capacity?: string;
   fixture_type?: string;
+  lighting_fixture_type?: string;
   power_grid?: string;
+  power_grid_feeder?: string;
 }
 
 
