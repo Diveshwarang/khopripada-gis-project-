@@ -204,11 +204,11 @@ export const buildFacilityContextAttributesHtml = (fac: CachedFacility): string 
           ${paymentBadge}
         </div>
         <div class="flex items-center justify-between text-[#94A3B8] pt-1.5 border-t border-[#334B56]/50">
-          <span class="text-[#94A3B8] flex items-center gap-1">🕒 Business Hours:</span>
+          <span class="text-[#94A3B8]">Business Hours:</span>
           <span class="font-semibold text-[#F8FAFC]">${businessHours}</span>
         </div>
         <div class="flex items-center justify-between text-[#94A3B8]">
-          <span class="text-[#94A3B8] flex items-center gap-1">🛒 Service Type:</span>
+          <span class="text-[#94A3B8]">Service Type:</span>
           <span class="font-semibold text-[#38BDF8] truncate max-w-[150px] text-right">${serviceType}</span>
         </div>
       </div>
@@ -220,10 +220,10 @@ export const buildFacilityContextAttributesHtml = (fac: CachedFacility): string 
     const isPrivateOrUpi = fac.upi_available === true;
     const schemeBadge = isPrivateOrUpi
       ? `<div class="flex items-center gap-1.5 text-[10px] font-bold text-[#FCA5A5] bg-[#E05A47]/20 border border-[#E05A47]/60 px-2 py-0.5 rounded-lg">
-           <span>💳</span> <span>UPI / PM-JAY Card Accepted</span>
+           <span>UPI / PM-JAY Card Accepted</span>
          </div>`
       : `<div class="flex items-center gap-1.5 text-[10px] font-bold text-[#6EE7B7] bg-[#10B981]/20 border border-[#10B981]/60 px-2 py-0.5 rounded-lg">
-           <span>🏥</span> <span>Govt NHM Free Public Care</span>
+           <span>Govt NHM Free Public Care</span>
          </div>`;
 
     const healthServices = fac.health_services || (notes.includes('BHMS') ? 'OPD Consultation, Primary First Aid & Medicine' : 'Primary First Aid & Maternal Health');
@@ -236,11 +236,11 @@ export const buildFacilityContextAttributesHtml = (fac: CachedFacility): string 
           ${schemeBadge}
         </div>
         <div class="flex items-center justify-between text-[#94A3B8] pt-1.5 border-t border-[#334B56]/50">
-          <span class="text-[#94A3B8] flex items-center gap-1">🩺 Care Focus:</span>
+          <span class="text-[#94A3B8]">Care Focus:</span>
           <span class="font-semibold text-[#38BDF8] truncate max-w-[150px] text-right">${healthServices}</span>
         </div>
         <div class="flex items-center justify-between text-[#94A3B8]">
-          <span class="text-[#94A3B8] flex items-center gap-1">🕒 Doctor Timings:</span>
+          <span class="text-[#94A3B8]">Doctor Timings:</span>
           <span class="font-semibold text-[#F8FAFC] text-right">${operationalHours}</span>
         </div>
       </div>
@@ -255,15 +255,15 @@ export const buildFacilityContextAttributesHtml = (fac: CachedFacility): string 
     return `
       <div class="mb-2 p-2.5 rounded-xl bg-[#1B2F38] border border-[#334B56] text-[10px] space-y-1.5 shadow-sm">
         <div class="flex items-center justify-between text-[#94A3B8]">
-          <span class="text-[#94A3B8] flex items-center gap-1">🎓 Curriculum/Grades:</span>
+          <span class="text-[#94A3B8]">Curriculum/Grades:</span>
           <span class="font-semibold text-[#F8FAFC] truncate max-w-[150px] text-right">${gradeLevels}</span>
         </div>
         <div class="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-[#334B56]/50">
-          <div class="flex items-center gap-1 text-[9px] font-semibold text-[#6EE7B7] bg-[#10B981]/20 border border-[#10B981]/60 px-2.5 py-1 rounded-lg">
-            <span>🍱</span> <span>PM-POSHAN Meal</span>
+          <div class="flex items-center gap-1.5 text-[9px] font-semibold text-[#6EE7B7] bg-[#10B981]/20 border border-[#10B981]/60 px-2.5 py-1 rounded-lg">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span> <span>PM-POSHAN Meal</span>
           </div>
-          <div class="flex items-center gap-1 text-[9px] font-semibold text-[#38BDF8] bg-[#1B2F38] border border-[#334B56] px-2.5 py-1 rounded-lg">
-            <span>🚰</span> <span>Filtered Water</span>
+          <div class="flex items-center gap-1.5 text-[9px] font-semibold text-[#38BDF8] bg-[#1B2F38] border border-[#334B56] px-2.5 py-1 rounded-lg">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#38BDF8]"></span> <span>Filtered Water</span>
           </div>
         </div>
       </div>
@@ -318,8 +318,8 @@ export const buildFacilityContextAttributesHtml = (fac: CachedFacility): string 
 
     const potabilityStatus = fac.potability_status || (
       isFunctional
-        ? '✅ Potable Drinking Water (Chlorinated)'
-        : '⚠️ Ground Testing Needed'
+        ? 'Potable Drinking Water (Chlorinated)'
+        : 'Ground Testing Needed'
     );
 
     const authority = fac.maintenance_authority || 'Gram Panchayat Khopripada Water Dept';
@@ -327,7 +327,7 @@ export const buildFacilityContextAttributesHtml = (fac: CachedFacility): string 
     return `
       <div class="mb-2 p-2.5 rounded-xl bg-[#1B2F38] border border-[#334B56] text-[10px] space-y-1.5 shadow-sm">
         <div class="flex items-center justify-between text-[#94A3B8]">
-          <span class="text-[#94A3B8] flex items-center gap-1">💧 Supply Timings:</span>
+          <span class="text-[#94A3B8]">Supply Timings:</span>
           <span class="font-semibold text-[#F8FAFC] truncate max-w-[150px] text-right">${supplyTimings}</span>
         </div>
         <div class="flex items-center justify-between pt-1.5 border-t border-[#334B56]/50">
@@ -335,7 +335,7 @@ export const buildFacilityContextAttributesHtml = (fac: CachedFacility): string 
           <span class="font-bold text-[9px] ${isFunctional ? 'text-[#6EE7B7]' : 'text-[#FDE68A]'}">${potabilityStatus}</span>
         </div>
         <div class="flex items-center justify-between text-[#94A3B8] text-[9px]">
-          <span>🏛️ Maintenance:</span>
+          <span>Maintenance:</span>
           <span class="text-[#38BDF8] font-semibold truncate max-w-[140px]">${authority}</span>
         </div>
       </div>
@@ -350,11 +350,11 @@ export const buildFacilityContextAttributesHtml = (fac: CachedFacility): string 
     return `
       <div class="mb-2 p-2.5 rounded-xl bg-[#1B2F38] border border-[#334B56] text-[10px] space-y-1.5 shadow-sm">
         <div class="flex items-center justify-between text-[#94A3B8]">
-          <span class="text-[#94A3B8] flex items-center gap-1">🏛️ Utilization:</span>
+          <span class="text-[#94A3B8]">Utilization:</span>
           <span class="font-semibold text-[#F8FAFC] truncate max-w-[150px] text-right">${usage}</span>
         </div>
         <div class="flex items-center justify-between text-[#94A3B8] pt-1.5 border-t border-[#334B56]/50">
-          <span class="text-[#94A3B8] flex items-center gap-1">👥 Seating:</span>
+          <span class="text-[#94A3B8]">Seating:</span>
           <span class="font-semibold text-[#94A3B8]">${capacity}</span>
         </div>
       </div>

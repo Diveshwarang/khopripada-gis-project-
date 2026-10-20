@@ -238,12 +238,12 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                       onChange={(e) => setCategory(e.target.value as OfflineGrievance['category'])}
                       className="w-full px-3 py-2 text-xs bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
                     >
-                      <option value="water">💧 Water Supply</option>
-                      <option value="roads">🛣️ Roads / Access</option>
-                      <option value="sanitation">🧹 Drainage & Waste</option>
-                      <option value="electricity">⚡ Electricity</option>
-                      <option value="health">🏥 Public Health</option>
-                      <option value="other">📌 Other Infrastructure</option>
+                      <option value="water">Water Supply</option>
+                      <option value="roads">Roads / Access</option>
+                      <option value="sanitation">Drainage & Waste</option>
+                      <option value="electricity">Electricity</option>
+                      <option value="health">Public Health</option>
+                      <option value="other">Other Infrastructure</option>
                     </select>
                   </div>
 
@@ -256,10 +256,10 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                       onChange={(e) => setSeverity(e.target.value as OfflineGrievance['severity'])}
                       className="w-full px-3 py-2 text-xs bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
                     >
-                      <option value="low">🟢 Solved / Low Priority</option>
-                      <option value="medium">🟡 In Progress / Medium</option>
-                      <option value="high">🟠 New / High Priority</option>
-                      <option value="critical">🔴 Critical / Urgent Hotspot</option>
+                      <option value="low">Solved / Low Priority</option>
+                      <option value="medium">In Progress / Medium</option>
+                      <option value="high">New / High Priority</option>
+                      <option value="critical">Critical / Urgent Hotspot</option>
                     </select>
                   </div>
                 </div>
@@ -274,8 +274,8 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                     onChange={(e) => setMonsoonCondition(e.target.value)}
                     className="w-full px-3 py-2 text-xs bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
                   >
-                    <option value="floods">⚠️ Floods/Isolated (Inundated or Cut Off)</option>
-                    <option value="year_round">✅ Year-round (Passable Access)</option>
+                    <option value="floods">Floods / Isolated (Inundated or Cut Off)</option>
+                    <option value="year_round">Year-round (Passable Access)</option>
                   </select>
                 </div>
 
@@ -351,7 +351,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                         ) : (
                           <>
                             <Camera className="w-4 h-4 text-[#38BDF8]" />
-                            <span>📷 Upload Photo / Take Pic</span>
+                            <span>Upload Evidence Photo</span>
                           </>
                         )}
                       </button>

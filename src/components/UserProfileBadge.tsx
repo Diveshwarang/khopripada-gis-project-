@@ -8,6 +8,8 @@ import {
   Clock,
   Mail,
   RefreshCw,
+  Shield,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import type { Role } from '../types/auth';
@@ -174,7 +176,15 @@ export const UserProfileBadge: React.FC<UserProfileBadgeProps> = ({ onRoleSwitch
                       : 'bg-[#0C171C] border-[#334B56] text-[#94A3B8] hover:bg-[#1B2F38] hover:text-[#F8FAFC]'
                   }`}
                 >
-                  <span>{r === 'admin' ? '🏛️' : r === 'officer' ? '📋' : '👤'}</span>
+                  <span className="shrink-0">
+                    {r === 'admin' ? (
+                      <Shield className="w-3 h-3 text-[#F59E0B]" />
+                    ) : r === 'officer' ? (
+                      <ClipboardCheck className="w-3 h-3 text-[#38BDF8]" />
+                    ) : (
+                      <User className="w-3 h-3 text-[#10B981]" />
+                    )}
+                  </span>
                   <span className="capitalize">{r === 'user' ? 'Resident' : r}</span>
                 </button>
               ))}

@@ -12,6 +12,8 @@ import {
   Lock,
   Cpu,
   Compass,
+  User,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useAuth, DEMO_ACCOUNTS } from '../context/AuthContext';
 import type { Role } from '../types/auth';
@@ -157,19 +159,19 @@ export const LoginPage: React.FC = () => {
               {
                 id: 'user',
                 label: 'Villager',
-                icon: '👤',
+                icon: <User className="w-4 h-4 text-[#10B981]" />,
                 activeClass: 'bg-[#1B2F38] border-[#10B981] text-[#6EE7B7] shadow-sm',
               },
               {
                 id: 'officer',
                 label: 'Field Officer',
-                icon: '📋',
+                icon: <ClipboardCheck className="w-4 h-4 text-[#38BDF8]" />,
                 activeClass: 'bg-[#1B2F38] border-[#38BDF8] text-[#38BDF8] shadow-sm',
               },
               {
                 id: 'admin',
                 label: 'Panchayat Admin',
-                icon: '🏛️',
+                icon: <Shield className="w-4 h-4 text-[#E05A47]" />,
                 activeClass: 'bg-[#1B2F38] border-[#E05A47] text-[#FCA5A5] shadow-sm',
               },
             ].map((tab) => (
@@ -183,7 +185,7 @@ export const LoginPage: React.FC = () => {
                     : 'bg-[#0B1417] border-[#334B56] text-[#94A3B8] hover:border-[#38BDF8]/40 hover:text-white'
                 }`}
               >
-                <span className="text-base">{tab.icon}</span>
+                <span>{tab.icon}</span>
                 <span className="text-xs leading-tight truncate w-full">{tab.label}</span>
               </button>
             ))}
@@ -191,8 +193,14 @@ export const LoginPage: React.FC = () => {
 
           {/* Active Role Mini Description */}
           <div className="p-2.5 rounded-xl bg-[#0B1417] border border-[#334B56] text-xs text-[#94A3B8] flex items-center gap-2">
-            <span className="text-sm">
-              {selectedRole === 'admin' ? '🏛️' : selectedRole === 'officer' ? '📋' : '👤'}
+            <span className="shrink-0">
+              {selectedRole === 'admin' ? (
+                <Shield className="w-3.5 h-3.5 text-[#E05A47]" />
+              ) : selectedRole === 'officer' ? (
+                <ClipboardCheck className="w-3.5 h-3.5 text-[#38BDF8]" />
+              ) : (
+                <User className="w-3.5 h-3.5 text-[#10B981]" />
+              )}
             </span>
             <div className="truncate">
               <strong className="text-slate-200">{DEMO_ACCOUNTS[selectedRole].designation}:</strong>{' '}
@@ -284,23 +292,26 @@ export const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => loginAsDemoRole('user')}
-                className="bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-xs font-medium py-2 rounded-xl text-center text-slate-200 active:scale-95 transition cursor-pointer"
+                className="bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-xs font-medium py-2 rounded-xl text-center text-slate-200 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5"
               >
-                👤 Villager
+                <User className="w-3.5 h-3.5 text-[#10B981]" />
+                <span>Villager</span>
               </button>
               <button
                 type="button"
                 onClick={() => loginAsDemoRole('officer')}
-                className="bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-xs font-medium py-2 rounded-xl text-center text-slate-200 active:scale-95 transition cursor-pointer"
+                className="bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-xs font-medium py-2 rounded-xl text-center text-slate-200 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5"
               >
-                📋 Officer
+                <ClipboardCheck className="w-3.5 h-3.5 text-[#38BDF8]" />
+                <span>Officer</span>
               </button>
               <button
                 type="button"
                 onClick={() => loginAsDemoRole('admin')}
-                className="bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-xs font-medium py-2 rounded-xl text-center text-slate-200 active:scale-95 transition cursor-pointer"
+                className="bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-xs font-medium py-2 rounded-xl text-center text-slate-200 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5"
               >
-                🏛️ Admin
+                <Shield className="w-3.5 h-3.5 text-[#E05A47]" />
+                <span>Admin</span>
               </button>
             </div>
 

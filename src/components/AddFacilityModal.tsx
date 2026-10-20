@@ -58,7 +58,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
   const [middayMeal, setMiddayMeal] = useState<boolean>(true);
   const [filteredWater, setFilteredWater] = useState<boolean>(true);
   const [supplyTimings, setSupplyTimings] = useState<string>('Morning 6:30 AM – 9:00 AM (Gravity Tank)');
-  const [potabilityStatus, setPotabilityStatus] = useState<string>('✅ Potable Drinking Water');
+  const [potabilityStatus, setPotabilityStatus] = useState<string>('Potable Drinking Water');
   const [maintenanceAuthority, setMaintenanceAuthority] = useState<string>('Gram Panchayat Khopripada Water Dept');
   const [communityUsage, setCommunityUsage] = useState<string>('Public Gatherings & Gram Sabha Meetings');
   const [seatingCapacity, setSeatingCapacity] = useState<string>('Capacity: ~150 Persons');
@@ -363,40 +363,40 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                   >
                     {userRole === 'officer' ? (
                       <>
-                        <option value="jal_jeevan_tap">🚰 Jal Jeevan Mission Public Tap Stand (jal_jeevan_tap)</option>
-                        <option value="zp_school_infrastructure">🏫 Z.P. Primary School Amenity (zp_school_infrastructure)</option>
-                        <option value="anganwadi_govt">🎒 Govt ICDS Anganwadi Nutrition Center (anganwadi_govt)</option>
-                        <option value="govt_sub_center">🏥 National Health Mission Sub-Center (govt_sub_center)</option>
-                        <option value="solar_highmast">💡 Panchayat Solar Streetlight Project (solar_highmast)</option>
-                        <option value="pm_gram_sadak_drain">🌊 Government Stormwater Concrete Drain (pm_gram_sadak_drain)</option>
+                        <option value="jal_jeevan_tap">Jal Jeevan Mission Public Tap Stand (jal_jeevan_tap)</option>
+                        <option value="zp_school_infrastructure">Z.P. Primary School Amenity (zp_school_infrastructure)</option>
+                        <option value="anganwadi_govt">Govt ICDS Anganwadi Nutrition Center (anganwadi_govt)</option>
+                        <option value="govt_sub_center">National Health Mission Sub-Center (govt_sub_center)</option>
+                        <option value="solar_highmast">Panchayat Solar Streetlight Project (solar_highmast)</option>
+                        <option value="pm_gram_sadak_drain">Government Stormwater Concrete Drain (pm_gram_sadak_drain)</option>
                       </>
                     ) : userRole === 'user' ? (
                       <>
-                        <option value="vendor">🏪 Local Shop / Kirana / Flour Mill (vendor)</option>
-                        <option value="water_borewell">💧 Community Borewell / Hand Pump (water_borewell)</option>
-                        <option value="water_standpost">🚰 Private / Shared Drinking Water Point (water_standpost)</option>
-                        <option value="social_civic">🏛️ Mandir / Temple / Community Civic Space (social_civic)</option>
-                        <option value="anganwadi">🎒 Balwadi / Community Childcare (anganwadi)</option>
+                        <option value="vendor">Local Shop / Kirana / Flour Mill (vendor)</option>
+                        <option value="water_borewell">Community Borewell / Hand Pump (water_borewell)</option>
+                        <option value="water_standpost">Private / Shared Drinking Water Point (water_standpost)</option>
+                        <option value="social_civic">Mandir / Temple / Community Civic Space (social_civic)</option>
+                        <option value="anganwadi">Balwadi / Community Childcare (anganwadi)</option>
                       </>
                     ) : (
                       <>
                         <optgroup label="Government Schemes">
-                          <option value="jal_jeevan_tap">🚰 Jal Jeevan Mission Public Tap Stand</option>
-                          <option value="zp_school_infrastructure">🏫 Z.P. Primary School Infrastructure</option>
-                          <option value="anganwadi_govt">🎒 Govt ICDS Anganwadi Center</option>
-                          <option value="govt_sub_center">🏥 National Health Mission Sub-Center</option>
-                          <option value="solar_highmast">💡 Panchayat Solar Highmast Light</option>
-                          <option value="pm_gram_sadak_drain">🌊 Government Stormwater Concrete Drain</option>
+                          <option value="jal_jeevan_tap">Jal Jeevan Mission Public Tap Stand</option>
+                          <option value="zp_school_infrastructure">Z.P. Primary School Infrastructure</option>
+                          <option value="anganwadi_govt">Govt ICDS Anganwadi Center</option>
+                          <option value="govt_sub_center">National Health Mission Sub-Center</option>
+                          <option value="solar_highmast">Panchayat Solar Highmast Light</option>
+                          <option value="pm_gram_sadak_drain">Government Stormwater Concrete Drain</option>
                         </optgroup>
                         <optgroup label="Village & Community Assets">
-                          <option value="water_standpost">💧 Public Tap (water_standpost)</option>
-                          <option value="water_borewell">💧 Borewell / Hand Pump (water_borewell)</option>
-                          <option value="water_tank">💧 Storage Tank (water_tank)</option>
-                          <option value="school">🏫 Z.P. School / Primary (school)</option>
-                          <option value="anganwadi">🎒 Childcare / Nutrition Center (anganwadi)</option>
-                          <option value="health">🏥 Sub-center / Clinic (health)</option>
-                          <option value="vendor">🏪 Kirana / Flour Mill / Local Stall (vendor)</option>
-                          <option value="social_civic">🏛️ Community Hall / Mandir / Panchayat (social_civic)</option>
+                          <option value="water_standpost">Public Tap (water_standpost)</option>
+                          <option value="water_borewell">Borewell / Hand Pump (water_borewell)</option>
+                          <option value="water_tank">Storage Tank (water_tank)</option>
+                          <option value="school">Z.P. School / Primary (school)</option>
+                          <option value="anganwadi">Childcare / Nutrition Center (anganwadi)</option>
+                          <option value="health">Sub-center / Clinic (health)</option>
+                          <option value="vendor">Kirana / Flour Mill / Local Stall (vendor)</option>
+                          <option value="social_civic">Community Hall / Mandir / Panchayat (social_civic)</option>
                         </optgroup>
                       </>
                     )}
@@ -439,9 +439,9 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                     onChange={(e) => setMonsoonAccessible(e.target.value)}
                     className="w-full bg-[#0C171C] border border-[#334B56] rounded-xl px-3.5 py-2.5 text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] text-xs transition cursor-pointer appearance-none"
                   >
-                    <option value="year_round">✅ Year-round (Fully Accessible)</option>
-                    <option value="waterlogged">⚠️ Floods/Isolated (Waterlogged in Rains)</option>
-                    <option value="cut_off">⛔ Floods/Isolated (Completely Cut Off)</option>
+                    <option value="year_round">Year-round (Fully Accessible)</option>
+                    <option value="waterlogged">Seasonal (Waterlogged in Rains)</option>
+                    <option value="cut_off">Floods / Cut Off (Isolated in Monsoon)</option>
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#94A3B8] text-xs">
                     ▼
@@ -454,7 +454,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                 <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-[#38BDF8] flex items-center gap-1.5">
-                      <span>🏪</span> Commercial & Retail Details
+                      Commercial & Retail Details
                     </span>
                     <span className="text-[10px] text-[#94A3B8] font-mono">Payment & Services</span>
                   </div>
@@ -509,7 +509,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                 <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-[#E05A47] flex items-center gap-1.5">
-                      <span>🏥</span> Healthcare Facility & OPD Details
+                      Healthcare Facility & OPD Details
                     </span>
                     <span className="text-[10px] text-[#94A3B8] font-mono">Medical Specifics</span>
                   </div>
@@ -564,7 +564,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                 <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-[#38BDF8] flex items-center gap-1.5">
-                      <span>🏫</span> Educational Institution Amenities
+                      Educational Institution Amenities
                     </span>
                     <span className="text-[10px] text-[#94A3B8] font-mono">No Payment Applied</span>
                   </div>
@@ -591,7 +591,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         className="w-3.5 h-3.5 rounded text-[#10B981] bg-[#132228] border-[#334B56] focus:ring-0 cursor-pointer accent-[#10B981]"
                       />
                       <span className="text-[10px] text-[#F8FAFC] font-semibold">
-                        🍱 PM-POSHAN Midday Meal Active
+                        PM-POSHAN Midday Meal Active
                       </span>
                     </label>
 
@@ -603,7 +603,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         className="w-3.5 h-3.5 rounded text-[#10B981] bg-[#132228] border-[#334B56] focus:ring-0 cursor-pointer accent-[#10B981]"
                       />
                       <span className="text-[10px] text-[#F8FAFC] font-semibold">
-                        🚰 Filtered Drinking Tap Available
+                        Filtered Drinking Tap Available
                       </span>
                     </label>
                   </div>
@@ -614,7 +614,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                 <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-[#10B981] flex items-center gap-1.5">
-                      <span>🚰</span> Drinking Water Source Details
+                      Drinking Water Source Details
                     </span>
                     <span className="text-[10px] text-[#94A3B8] font-mono">No Payment Applied</span>
                   </div>
@@ -641,8 +641,8 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         onChange={(e) => setPotabilityStatus(e.target.value)}
                         className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8] cursor-pointer"
                       >
-                        <option value="✅ Potable Drinking Water">✅ Potable Drinking Water (Chlorinated)</option>
-                        <option value="⚠️ Ground Testing Needed">⚠️ Ground Testing Needed (Unfiltered)</option>
+                        <option value="Potable Drinking Water">Potable Drinking Water (Chlorinated)</option>
+                        <option value="Ground Testing Needed">Ground Testing Needed (Unfiltered)</option>
                       </select>
                     </div>
                   </div>
@@ -666,7 +666,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                 <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-[#FCD34D] flex items-center gap-1.5">
-                      <span>🏛️</span> Civic & Cultural Space Details
+                      Civic & Cultural Space Details
                     </span>
                     <span className="text-[10px] text-[#94A3B8] font-mono">Community Hall / Temple</span>
                   </div>
@@ -704,7 +704,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                 <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-[#38BDF8] flex items-center gap-1.5">
-                      <span>💡</span> Public Lighting & Utility Specs
+                      Public Lighting & Utility Specs
                     </span>
                     <span className="text-[10px] text-[#94A3B8] font-mono">No Payment Applied</span>
                   </div>
@@ -777,7 +777,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                       ) : (
                         <>
                           <Camera className="w-4 h-4 text-[#38BDF8]" />
-                          <span>📷 Upload Photo / Take Pic</span>
+                          <span>Upload Inspection Photo</span>
                         </>
                       )}
                     </button>

@@ -266,7 +266,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
           grievances.map((g) => {
             const hasPhoto = Boolean(g.photoBase64);
             const isFloods = (g.description || '').toLowerCase().includes('flood') || (g.description || '').toLowerCase().includes('inundat') || g.severity === 'critical';
-            const monsoonBadge = isFloods ? '⚠️ Floods/Isolated' : '✅ Year-round';
+            const monsoonBadge = isFloods ? 'Floods / Isolated' : 'Year-round';
             const isApproved = g.approval_status === 'approved' || g.approval_status === undefined;
             const currentStatus = g.status || 'reported';
 
@@ -284,7 +284,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                       className="w-full h-full object-cover"
                     />
                     <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-[#132228]/95 text-[#38BDF8] border border-[#38BDF8]/40">
-                      📷 Photo Evidence
+                      Photo Evidence
                     </span>
                   </div>
                 ) : null}
@@ -316,7 +316,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                           ? 'bg-[#E05A47]/30 text-[#FCA5A5] border-[#E05A47]'
                           : 'bg-[#F59E0B]/20 text-[#FDE68A] border-[#F59E0B]/50'
                       }`}>
-                        {isApproved ? '✓ Verified' : g.approval_status === 'rejected' ? '✗ Rejected' : '⏳ Pending Approval'}
+                        {isApproved ? 'Verified' : g.approval_status === 'rejected' ? 'Rejected' : 'Pending Approval'}
                       </span>
                     </div>
 
