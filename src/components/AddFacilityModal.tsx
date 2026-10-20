@@ -12,6 +12,7 @@ import {
 import { type CachedFacility } from '../services/offlineDb';
 import { compressImageToBase64 } from '../utils/imageUtils';
 import type { UserRole } from '../types';
+import { upsertFacility } from '../services/dataService';
 import {
   isCommercialCategory,
   isHealthCategory,
@@ -180,6 +181,9 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
         lighting_fixture_type: isUtil ? fixtureType : undefined,
         power_grid_feeder: isUtil ? powerGrid : undefined,
       };
+
+      // Realtime cross-device sync via Supabase dataService
+      await upsertFacility(newFacility);
 
       if (isResident) {
         onFacilitySaved(newFacility);

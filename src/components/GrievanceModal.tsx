@@ -12,6 +12,7 @@ import {
 import { db, type OfflineGrievance } from '../services/offlineDb';
 import { compressImageToBase64 } from '../utils/imageUtils';
 import type { UserRole } from '../types';
+import { upsertIssue } from '../services/dataService';
 
 interface GrievanceModalProps {
   isOpen: boolean;
@@ -96,6 +97,12 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
       const isOfficer = userRole === 'officer';
       const isAdmin = userRole === 'admin';
 
+      const initialStatus = isResident
+        ? 'pending_initial_approval'
+        : isOfficer
+        ? 'assigned_for_inspection'
+        : 'under_inspection';
+
       const newGrievance: OfflineGrievance = {
         title: title.trim(),
         category,
@@ -107,19 +114,35 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
         description: fullDescription,
         reporterName: reporterName.trim() || (isResident ? 'Khopripada Resident' : isOfficer ? 'Field Officer' : 'Panchayat Admin'),
         photoBase64: photoBase64 || undefined,
-        approval_status: isAdmin ? 'approved' : isResident ? 'pending_approval' : 'approved',
+        approval_status: isAdmin ? 'approved' : 'pending_approval',
         submitted_by: isResident ? 'Resident' : isOfficer ? 'Officer' : 'Admin',
-        status: isResident ? 'reported' : 'under_inspection',
+        status: initialStatus,
       };
 
       const id = await db.offline_grievances.add(newGrievance);
       newGrievance.id = id;
 
+      // Realtime cross-device sync via Supabase dataService
+      await upsertIssue({
+        id,
+        title: newGrievance.title,
+        category: newGrievance.category,
+        severity: newGrievance.severity,
+        latitude: newGrievance.latitude,
+        longitude: newGrievance.longitude,
+        description: newGrievance.description,
+        reporter_name: newGrievance.reporterName,
+        photoBase64: newGrievance.photoBase64,
+        approval_status: newGrievance.approval_status,
+        submitted_by: newGrievance.submitted_by,
+        status: newGrievance.status,
+      });
+
       onGrievanceSaved(newGrievance);
 
       if (isResident) {
         setVerificationNotice(
-          'Submitted for Panchayat Verification. Your submission will appear on the map once reviewed and approved by the Sarpanch/Admin.'
+          'Submitted to Gram Panchayat. Awaiting Sarpanch/Admin verification.'
         );
       } else {
         setSuccessMsg(true);

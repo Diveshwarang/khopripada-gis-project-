@@ -28,6 +28,7 @@ import {
   User,
   Shield,
   SlidersHorizontal,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   getCurrentPosition,
@@ -41,12 +42,23 @@ import {
   seedIssuesFromCsv,
   approveFacility,
   rejectFacility,
-  approveGrievance,
   rejectGrievance,
   type CachedFacility,
   type CachedIssue,
   type OfflineGrievance,
 } from '../services/offlineDb';
+import {
+  fetchIssues,
+  fetchFacilities,
+  subscribeToPanchayatSync,
+  transitionToAssignedForInspection,
+  transitionToInspectionVerification,
+  transitionToUnderInspection,
+  transitionToResolutionApproval,
+  transitionToResolved,
+  upsertIssue,
+  upsertFacility,
+} from '../services/dataService';
 import { GrievanceModal } from './GrievanceModal';
 import { GrievanceListDrawer } from './GrievanceListDrawer';
 import { AddFacilityModal } from './AddFacilityModal';
@@ -56,7 +68,7 @@ import { UserProfileBadge } from './UserProfileBadge';
 import { PanchayatAdminPanel } from './PanchayatAdminPanel';
 import { PhotoLightboxModal } from './PhotoLightboxModal';
 import { ExportAuditModal } from './ExportAuditModal';
-import { DEFAULT_INSPECTION_PLACEHOLDER } from '../utils/imageUtils';
+import { DEFAULT_INSPECTION_PLACEHOLDER, compressImageToBase64 } from '../utils/imageUtils';
 import {
   generatePanchayatPDF,
   generateOfficerWorklistPDF,
@@ -222,6 +234,7 @@ export const VillageMap = () => {
   const [showDbscanClusters, setShowDbscanClusters] = useState<boolean>(true);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(false);
   const handleUpdateIssueStatusRef = useRef<((id: string, st: string) => Promise<void>) | null>(null);
+  const refreshGrievanceMarkersRef = useRef<(() => Promise<void>) | null>(null);
 
   // Map state
   const [currentZoom, setCurrentZoom] = useState<number>(DEFAULT_ZOOM);
@@ -342,6 +355,9 @@ export const VillageMap = () => {
   const [mobileSheet, setMobileSheet] = useState<'action' | 'analytics' | 'worklist' | 'layers' | 'role' | null>(null);
   const [activeMobileTab, setActiveMobileTab] = useState<'map' | 'filters' | 'heatmap' | 'analytics' | 'worklist' | null>('map');
   const [mobileGrievanceList, setMobileGrievanceList] = useState<OfflineGrievance[]>([]);
+  const [mobileAdminQueueStep, setMobileAdminQueueStep] = useState<1 | 2 | 3>(1);
+  const [officerNotesMap, setOfficerNotesMap] = useState<Record<string | number, string>>({});
+  const [officerPhotoMap, setOfficerPhotoMap] = useState<Record<string | number, string>>({});
   const [pendingSubmissionsList, setPendingSubmissionsList] = useState<{
     id: string | number;
     type: 'facility' | 'grievance';
@@ -351,6 +367,7 @@ export const VillageMap = () => {
     coords: [number, number];
     photoUrl?: string;
     description?: string;
+    status?: string;
   }[]>([]);
 
   // Function to refresh mobile worklist data
@@ -358,12 +375,14 @@ export const VillageMap = () => {
     try {
       const records = await db.offline_grievances.reverse().toArray();
       if (userRole === 'officer') {
-        const approved = records.filter(
+        const fieldTasks = records.filter(
           (g) =>
-            (g.approval_status === 'approved' || g.approval_status === undefined) &&
-            (g.status || '').toLowerCase() !== 'resolved'
+            g.status === 'assigned_for_inspection' ||
+            g.status === 'pending_inspection_verification' ||
+            g.status === 'under_inspection' ||
+            g.status === 'pending_resolution_approval'
         );
-        setMobileGrievanceList(approved);
+        setMobileGrievanceList(fieldTasks);
       } else {
         setMobileGrievanceList(records);
       }
@@ -372,12 +391,16 @@ export const VillageMap = () => {
     }
   }, [userRole]);
 
-  // Load pending submissions for Admin approvals on mobile
+  // Load pending submissions for Admin Step 1 on mobile
   const loadMobilePendingSubmissions = useCallback(async () => {
     try {
       const grievances = await db.offline_grievances.toArray();
       const pendingGrievances = grievances
-        .filter((g) => g.approval_status === 'pending_approval')
+        .filter(
+          (g) =>
+            g.status === 'pending_initial_approval' ||
+            (g.approval_status === 'pending_approval' && (!g.status || g.status === 'reported'))
+        )
         .map((g) => ({
           id: g.id!,
           type: 'grievance' as const,
@@ -387,6 +410,7 @@ export const VillageMap = () => {
           coords: [g.latitude, g.longitude] as [number, number],
           photoUrl: g.photoBase64,
           description: g.description,
+          status: 'pending_initial_approval',
         }));
 
       const pendingFacilities = facilitiesList
@@ -400,6 +424,7 @@ export const VillageMap = () => {
           coords: [f.latitude, f.longitude] as [number, number],
           photoUrl: f.photoBase64 || f.photo_url,
           description: f.notes,
+          status: 'pending_initial_approval',
         }));
 
       setPendingSubmissionsList([...pendingFacilities, ...pendingGrievances]);
@@ -429,25 +454,106 @@ export const VillageMap = () => {
       .slice(0, 5);
   }, [issuesList]);
 
-  const handleMobileApprove = async (item: { id: string | number; type: 'facility' | 'grievance'; title: string }) => {
+  // Step 1: Admin [Approve & Assign to Officer]
+  const handleMobileAssignToOfficer = async (item: { id: string | number; type: 'facility' | 'grievance'; title: string }) => {
     try {
       if (item.type === 'facility') {
         await approveFacility(item.id as string);
+        await upsertFacility({ facility_id: item.id as string, approval_status: 'approved' });
         const updated = allFacilitiesRef.current.map((f) =>
           f.facility_id === item.id ? { ...f, approval_status: 'approved' as const } : f
         );
         allFacilitiesRef.current = updated;
         setFacilitiesList(updated);
         renderFacilityMarkers(updated, facilityFilter);
+        showToast(`Facility "${item.title}" approved & published to map.`);
       } else {
-        await approveGrievance(item.id as number);
+        await transitionToAssignedForInspection(item.id, 'Field Officer Rahul');
+        showToast(`Assigned "${item.title}" to Field Officer for ground inspection.`);
         refreshGrievanceMarkers();
       }
-      showToast(`"${item.title}" approved & published to live map.`);
-      loadMobilePendingSubmissions();
-      refreshMobileWorklist();
+      await loadMobilePendingSubmissions();
+      await refreshMobileWorklist();
     } catch (err) {
-      console.error('Failed to approve on mobile:', err);
+      console.error('Failed to assign to officer on mobile:', err);
+    }
+  };
+
+  // Step 2: Admin [Authorize Inspection Phase]
+  const handleMobileAuthorizeInspection = async (item: { id: string | number; title: string }) => {
+    try {
+      await transitionToUnderInspection(item.id, 'Sarpanch Admin');
+      showToast(`Inspection phase authorized for "${item.title}". Marker live in AMBER.`);
+      refreshGrievanceMarkers();
+      await refreshMobileWorklist();
+    } catch (err) {
+      console.error('Failed to authorize inspection on mobile:', err);
+    }
+  };
+
+  // Step 3: Admin [Verify & Mark Officially Resolved]
+  const handleMobileVerifyResolution = async (item: { id: string | number; title: string }) => {
+    try {
+      await transitionToResolved(item.id, 'Sarpanch Admin');
+      showToast(`"${item.title}" verified & marked Officially Resolved. Marker turned GREEN.`);
+      refreshGrievanceMarkers();
+      await refreshMobileWorklist();
+    } catch (err) {
+      console.error('Failed to verify resolution on mobile:', err);
+    }
+  };
+
+  // Officer Action 1: [Start Field Inspection]
+  const handleOfficerStartInspection = async (item: { id: string | number; title: string }) => {
+    try {
+      await transitionToInspectionVerification(item.id, 'Field Officer');
+      showToast('Inspection request sent to Admin for sign-off');
+      refreshGrievanceMarkers();
+      await refreshMobileWorklist();
+    } catch (err) {
+      console.error('Failed to start field inspection:', err);
+    }
+  };
+
+  // Officer Action 2: Photo evidence selection
+  const handleOfficerPhotoSelect = async (itemId: string | number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImageToBase64(file, 800, 800, 0.75);
+      setOfficerPhotoMap((prev) => ({ ...prev, [itemId]: compressed }));
+      showToast('Repair proof photo attached.');
+    } catch (err) {
+      console.error('Failed to compress repair photo:', err);
+      showToast('Failed to process image file.');
+    }
+  };
+
+  // Officer Action 3: [Submit Resolution & Photo]
+  const handleOfficerSubmitResolution = async (item: { id: string | number; title: string }) => {
+    const photo = officerPhotoMap[item.id];
+    const notes = officerNotesMap[item.id] || 'Field repair completed as per standard specification.';
+    if (!photo) {
+      showToast('Please capture or attach repair proof photo before submitting.');
+      return;
+    }
+    try {
+      await transitionToResolutionApproval(item.id, photo, notes, 'Field Officer');
+      showToast('Resolution & photo proof submitted for Admin audit.');
+      setOfficerPhotoMap((prev) => {
+        const copy = { ...prev };
+        delete copy[item.id];
+        return copy;
+      });
+      setOfficerNotesMap((prev) => {
+        const copy = { ...prev };
+        delete copy[item.id];
+        return copy;
+      });
+      refreshGrievanceMarkers();
+      await refreshMobileWorklist();
+    } catch (err) {
+      console.error('Failed to submit resolution on mobile:', err);
     }
   };
 
@@ -470,17 +576,6 @@ export const VillageMap = () => {
       refreshMobileWorklist();
     } catch (err) {
       console.error('Failed to reject on mobile:', err);
-    }
-  };
-
-  const handleMobileUpdateGrievanceStatus = async (id: number, newStatus: string) => {
-    try {
-      await db.offline_grievances.update(id, { status: newStatus });
-      refreshGrievanceMarkers();
-      refreshMobileWorklist();
-      showToast(`Status updated to ${newStatus.replace(/_/g, ' ')}`);
-    } catch (err) {
-      console.error('Failed to update status on mobile:', err);
     }
   };
 
@@ -852,6 +947,66 @@ export const VillageMap = () => {
     []
   );
 
+  // 5-Stage Visual Progress Tracker for Issue/Grievance Popups
+  const buildStepTrackerHtml = (status: string = 'pending_initial_approval') => {
+    const st = (status || '').toLowerCase();
+    let currentStage = 1;
+    if (st === 'assigned_for_inspection') currentStage = 2;
+    else if (st === 'pending_inspection_verification') currentStage = 2;
+    else if (st === 'under_inspection') currentStage = 3;
+    else if (st === 'pending_resolution_approval') currentStage = 4;
+    else if (st === 'resolved') currentStage = 5;
+
+    const stages = [
+      { num: 1, label: 'Reported' },
+      { num: 2, label: 'Assigned' },
+      { num: 3, label: 'Insp. Auth' },
+      { num: 4, label: 'Repaired' },
+      { num: 5, label: 'Audit Closed' },
+    ];
+
+    const stageNodes = stages
+      .map((s) => {
+        const isCompleted = s.num < currentStage || (currentStage === 5 && st === 'resolved');
+        const isActive = s.num === currentStage && st !== 'resolved';
+
+        const circleClass = isCompleted
+          ? 'bg-[#10B981] text-white border-[#10B981]'
+          : isActive
+          ? 'bg-[#F59E0B] text-[#0C171C] border-[#F59E0B] ring-2 ring-[#F59E0B]/50 animate-pulse font-extrabold shadow-[0_0_8px_rgba(245,158,11,0.6)]'
+          : 'bg-[#1B2F38] text-[#64748B] border-[#334B56]';
+
+        const textClass = isCompleted
+          ? 'text-[#10B981] font-semibold'
+          : isActive
+          ? 'text-[#F59E0B] font-bold'
+          : 'text-[#64748B]';
+
+        return `
+          <div class="flex flex-col items-center flex-1 relative z-10">
+            <div class="w-5 h-5 rounded-full border text-[9px] flex items-center justify-center font-mono ${circleClass}">
+              ${isCompleted ? '✓' : s.num}
+            </div>
+            <span class="text-[8px] text-center mt-1 leading-tight tracking-tight ${textClass}">${s.label}</span>
+          </div>
+        `;
+      })
+      .join('');
+
+    return `
+      <div class="my-2 p-2 rounded-xl bg-[#0C171C] border border-[#334B56]">
+        <div class="text-[9px] uppercase font-bold tracking-wider text-[#94A3B8] mb-1.5 flex items-center justify-between">
+          <span>Verification Lifecycle</span>
+          <span class="font-mono ${st === 'resolved' ? 'text-[#10B981]' : 'text-[#F59E0B]'}">Stage ${currentStage}/5</span>
+        </div>
+        <div class="relative flex items-start justify-between">
+          <div class="absolute top-2.5 left-2 right-2 h-0.5 bg-[#1B2F38] z-0"></div>
+          ${stageNodes}
+        </div>
+      </div>
+    `;
+  };
+
   // Render Status & Severity Coded Issue Markers & Inspection Popups
   const renderIssueMarkers = useCallback(
     (issues: CachedIssue[], filter: FacilityCategoryFilter = 'all') => {
@@ -860,11 +1015,25 @@ export const VillageMap = () => {
       group.clearLayers();
 
       const filtered = issues.filter((iss) => {
-        // Strict approval filter: user and officer ONLY see approved issues
-        const isApproved = iss.approval_status === 'approved' || iss.approval_status === undefined;
-        if ((userRoleRef.current === 'user' || userRoleRef.current === 'officer') && !isApproved) {
-          return false;
+        const isResident = userRoleRef.current === 'user';
+        const isOfficer = userRoleRef.current === 'officer';
+
+        // Requirement 4A: Resident map ONLY renders pins that have reached 'under_inspection' or 'resolved'
+        if (isResident) {
+          const st = (iss.status || '').toLowerCase();
+          if (st !== 'under_inspection' && st !== 'resolved') {
+            return false;
+          }
         }
+
+        // Requirement 4C: Officer worklist/map hides Step 1 (pending_initial_approval)
+        if (isOfficer) {
+          const st = (iss.status || '').toLowerCase();
+          if (st === 'pending_initial_approval') {
+            return false;
+          }
+        }
+
         if (iss.approval_status === 'rejected') {
           return false;
         }
@@ -894,16 +1063,32 @@ export const VillageMap = () => {
 
       filtered.forEach((iss) => {
         const sev = (iss.severity || 'medium').toLowerCase();
-        let statusColor = '#F59E0B'; // Warm Sand Gold for medium
+        const st = (iss.status || 'pending_initial_approval').toLowerCase();
+
+        // Requirement 5: Ensure marker pins dynamically update their color:
+        // under_inspection -> Amber / Orange (#F59E0B)
+        // resolved -> Green (#10B981)
+        // intermediate stages: assigned/inspecting -> Sky Blue (#38BDF8), pending_resolution -> Purple (#A855F7), pending_initial -> Terracotta (#E05A47)
+        let pinColor = '#F59E0B';
+        if (st === 'resolved') {
+          pinColor = '#10B981';
+        } else if (st === 'under_inspection') {
+          pinColor = '#F59E0B';
+        } else if (st === 'pending_resolution_approval') {
+          pinColor = '#A855F7';
+        } else if (st === 'assigned_for_inspection' || st === 'pending_inspection_verification') {
+          pinColor = '#38BDF8';
+        } else if (st === 'pending_initial_approval') {
+          pinColor = '#E05A47';
+        }
+
         let severityLabel = 'Medium Priority';
         let severityBadge = 'bg-[#F59E0B]/20 text-[#FDE68A] border border-[#F59E0B]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
 
         if (sev === 'high' || sev === 'critical' || sev === 'urgent') {
-          statusColor = '#E05A47'; // Controlled Terracotta
           severityLabel = 'High Priority';
           severityBadge = 'bg-[#E05A47]/20 text-[#FCA5A5] border border-[#E05A47]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
         } else if (sev === 'low') {
-          statusColor = '#10B981'; // Fresh Emerald
           severityLabel = 'Low Priority';
           severityBadge = 'bg-[#10B981]/20 text-[#6EE7B7] border border-[#10B981]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
         }
@@ -927,13 +1112,13 @@ export const VillageMap = () => {
           html: `
             <div class="relative flex items-center justify-center group cursor-pointer">
               ${
-                sev === 'high' || sev === 'critical' || sev === 'urgent'
-                  ? `<span class="absolute w-8 h-8 rounded-full animate-ping opacity-60" style="background-color: ${statusColor};"></span>`
+                st === 'under_inspection' || sev === 'critical'
+                  ? `<span class="absolute w-8 h-8 rounded-full animate-ping opacity-60" style="background-color: ${pinColor};"></span>`
                   : ''
               }
-              <div class="relative w-8 h-8 rounded-full bg-[#132228] border-2 shadow-2xl flex items-center justify-center text-xs font-bold transition-transform group-hover:scale-125" style="border-color: ${statusColor}; box-shadow: 0 0 16px ${statusColor}90;">
+              <div class="relative w-8 h-8 rounded-full bg-[#132228] border-2 shadow-2xl flex items-center justify-center text-xs font-bold transition-transform group-hover:scale-125" style="border-color: ${pinColor}; box-shadow: 0 0 16px ${pinColor}90;">
                 <span>${glyph}</span>
-                <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-[#132228]" style="background-color: ${statusColor}"></span>
+                <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-[#132228]" style="background-color: ${pinColor}"></span>
               </div>
             </div>
           `,
@@ -943,7 +1128,6 @@ export const VillageMap = () => {
 
         const marker = L.marker([iss.latitude, iss.longitude], { icon: customIcon });
 
-        // Clean lightweight Leaflet tooltip that immediately disappears on mouseout
         marker.bindTooltip(
           `<div class="font-sans font-semibold text-xs text-[#F8FAFC]">${iss.title}</div>`,
           {
@@ -964,9 +1148,9 @@ export const VillageMap = () => {
         if (isUserRole) {
           statusControlHtml = `
             <div class="mt-2.5 pt-2 border-t border-[#334B56]/50 flex items-center justify-between text-[11px]">
-              <span class="text-[#94A3B8]">Current Status:</span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[#1B2F38] border border-[#334B56] text-[#F8FAFC]">
-                ● ${(iss.status || 'reported').replace(/_/g, ' ')}
+              <span class="text-[#94A3B8]">Verification Status:</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[#1B2F38] border border-[#334B56]" style="color: ${pinColor}">
+                ● ${(iss.status || 'pending_initial_approval').replace(/_/g, ' ')}
               </span>
             </div>
           `;
@@ -974,16 +1158,17 @@ export const VillageMap = () => {
           statusControlHtml = `
             <div class="mt-2.5 pt-2 border-t border-[#334B56]/50">
               <div class="text-[9px] uppercase font-bold text-[#FCA5A5] mb-1 flex items-center justify-between">
-                <span>Field Inspection Status:</span>
-                <span class="text-[#38BDF8] font-mono text-[9px]">Officer Update</span>
+                <span>Field Officer Verification:</span>
+                <span class="text-[#38BDF8] font-mono text-[9px]">Officer Desk</span>
               </div>
               <select
                 class="issue-status-select w-full bg-[#0C171C] border border-[#334B56] rounded-lg text-xs text-[#F8FAFC] p-1.5 focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
                 data-issue-id="${iss.issue_id}"
               >
-                <option value="reported" ${iss.status === 'reported' ? 'selected' : ''}>⚠️ Reported</option>
+                <option value="assigned_for_inspection" ${iss.status === 'assigned_for_inspection' ? 'selected' : ''}>📋 Assigned For Inspection</option>
+                <option value="pending_inspection_verification" ${iss.status === 'pending_inspection_verification' ? 'selected' : ''}>⏳ Inspection Req Sign-off</option>
                 <option value="under_inspection" ${iss.status === 'under_inspection' ? 'selected' : ''}>🔍 Under Inspection</option>
-                <option value="resolved" ${iss.status === 'resolved' ? 'selected' : ''}>✅ Resolved</option>
+                <option value="pending_resolution_approval" ${iss.status === 'pending_resolution_approval' ? 'selected' : ''}>🛠️ Repair Proof Uploaded</option>
               </select>
             </div>
           `;
@@ -991,17 +1176,19 @@ export const VillageMap = () => {
           statusControlHtml = `
             <div class="mt-2.5 pt-2 border-t border-[#334B56]/50">
               <div class="text-[9px] uppercase font-bold text-[#FCA5A5] mb-1 flex items-center justify-between">
-                <span>Administrative Status Override:</span>
-                <span class="text-[#38BDF8] font-mono text-[9px]">Admin Override</span>
+                <span>Panchayat Admin Verification Override:</span>
+                <span class="text-[#38BDF8] font-mono text-[9px]">Sarpanch Control</span>
               </div>
               <select
                 class="issue-status-select w-full bg-[#0C171C] border border-[#334B56] rounded-lg text-xs text-[#F8FAFC] p-1.5 focus:outline-none focus:border-[#E05A47] transition cursor-pointer"
                 data-issue-id="${iss.issue_id}"
               >
-                <option value="reported" ${iss.status === 'reported' ? 'selected' : ''}>⚠️ Reported</option>
-                <option value="under_inspection" ${iss.status === 'under_inspection' ? 'selected' : ''}>🔍 Under Inspection</option>
-                <option value="in_progress" ${iss.status === 'in_progress' ? 'selected' : ''}>🛠️ In Progress</option>
-                <option value="resolved" ${iss.status === 'resolved' ? 'selected' : ''}>✅ Resolved</option>
+                <option value="pending_initial_approval" ${iss.status === 'pending_initial_approval' ? 'selected' : ''}>⚠️ Step 1: Resident Submission</option>
+                <option value="assigned_for_inspection" ${iss.status === 'assigned_for_inspection' ? 'selected' : ''}>📋 Step 2: Assigned To Officer</option>
+                <option value="pending_inspection_verification" ${iss.status === 'pending_inspection_verification' ? 'selected' : ''}>⏳ Step 3: Officer Requested Auth</option>
+                <option value="under_inspection" ${iss.status === 'under_inspection' ? 'selected' : ''}>🔍 Step 4: Under Inspection (AMBER)</option>
+                <option value="pending_resolution_approval" ${iss.status === 'pending_resolution_approval' ? 'selected' : ''}>🛠️ Step 5: Repair Proof Awaiting Audit</option>
+                <option value="resolved" ${iss.status === 'resolved' ? 'selected' : ''}>✅ Step 6: Officially Resolved (GREEN)</option>
               </select>
             </div>
           `;
@@ -1037,14 +1224,14 @@ export const VillageMap = () => {
                 </span>
               </div>
               <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-[#132228]/90 text-[#94A3B8] border border-[#334B56]">
-                📷 KoboCollect Field Photo
+                📷 Field Evidence
               </span>
             </div>
           `
           : `
             <div class="mb-2 p-2 rounded-xl bg-[#1B2F38] border border-[#334B56] text-center flex items-center justify-center gap-1.5 text-[#94A3B8] text-xs">
               <span class="text-[#38BDF8] text-[11px]">📷</span>
-              <span class="text-[10px] font-semibold text-[#94A3B8]">No Field Photo Recorded</span>
+              <span class="text-[10px] font-semibold text-[#94A3B8]">No Initial Photo Attached</span>
             </div>
           `;
 
@@ -1062,12 +1249,28 @@ export const VillageMap = () => {
 
         const statusPill =
           iss.status === 'resolved'
-            ? `<span class="px-2 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] font-bold text-[10px]">● Solved</span>`
-            : iss.status === 'in_progress'
-            ? `<span class="px-2 py-0.5 rounded-full bg-[#F59E0B]/20 border border-[#F59E0B]/60 text-[#FDE68A] font-bold text-[10px]">● In Progress</span>`
+            ? `<span class="px-2 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] font-bold text-[10px]">● Resolved</span>`
             : iss.status === 'under_inspection'
-            ? `<span class="px-2 py-0.5 rounded-full bg-[#38BDF8]/20 border border-[#38BDF8]/60 text-[#38BDF8] font-bold text-[10px]">● Under Inspection</span>`
-            : `<span class="px-2 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] font-bold text-[10px]">● New / Reported</span>`;
+            ? `<span class="px-2 py-0.5 rounded-full bg-[#F59E0B]/20 border border-[#F59E0B]/60 text-[#FDE68A] font-bold text-[10px]">● Under Inspection</span>`
+            : iss.status === 'pending_resolution_approval'
+            ? `<span class="px-2 py-0.5 rounded-full bg-[#A855F7]/20 border border-[#A855F7]/60 text-[#D8B4FE] font-bold text-[10px]">● Awaiting Audit</span>`
+            : iss.status === 'assigned_for_inspection' || iss.status === 'pending_inspection_verification'
+            ? `<span class="px-2 py-0.5 rounded-full bg-[#38BDF8]/20 border border-[#38BDF8]/60 text-[#38BDF8] font-bold text-[10px]">● Officer Assigned</span>`
+            : `<span class="px-2 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] font-bold text-[10px]">● Pending Approval</span>`;
+
+        // Resolution proof markup
+        const resolutionProofMarkup = iss.resolution_photo_url
+          ? `
+            <div class="mb-2 p-2 rounded-xl bg-[#0C171C] border border-[#10B981]/50 shadow-inner">
+              <div class="text-[9px] uppercase font-bold text-[#10B981] mb-1 flex items-center justify-between">
+                <span>Officer Repair Proof:</span>
+                <span class="text-[8px] font-mono text-[#94A3B8]">Audit Verified</span>
+              </div>
+              <img src="${iss.resolution_photo_url}" alt="Repair Proof" class="w-full h-24 object-cover rounded-lg border border-[#334B56]" />
+              ${iss.officer_notes ? `<p class="text-[10px] text-[#94A3B8] italic mt-1 bg-[#132228] p-1.5 rounded border border-[#334B56]">${iss.officer_notes}</p>` : ''}
+            </div>
+          `
+          : '';
 
         const popupHtml = `
           <div class="font-sans text-[#F8FAFC] p-2 min-w-[260px] max-w-[310px]">
@@ -1090,7 +1293,13 @@ export const VillageMap = () => {
               <span>${iss.category.replace(/_/g, ' ')}</span>
             </div>
 
-            <!-- 3. Status Pill & 4. Priority Badge -->
+            <!-- 5-Stage Verification Step Tracker -->
+            ${buildStepTrackerHtml(iss.status)}
+
+            <!-- Resolution Proof if uploaded -->
+            ${resolutionProofMarkup}
+
+            <!-- Status Pill & Priority Badge -->
             <div class="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-[#1B2F38] border border-[#334B56] text-[10px] mb-2 shadow-sm">
               <div>
                 <span class="text-[#94A3B8] block text-[9px] uppercase tracking-wider mb-0.5">Status</span>
@@ -1323,6 +1532,10 @@ export const VillageMap = () => {
         );
         setIssuesList([...allIssuesRef.current]);
         renderIssueMarkers(allIssuesRef.current, facilityFilter);
+        if (refreshGrievanceMarkersRef.current) {
+          refreshGrievanceMarkersRef.current();
+        }
+        await upsertIssue({ issue_id: issueId, status: newStatus as any });
         showToast(`Issue ${issueId} status updated to "${newStatus.replace(/_/g, ' ')}"!`);
       } catch (err) {
         console.error('Failed to update issue status in DB:', err);
@@ -1643,10 +1856,25 @@ export const VillageMap = () => {
     try {
       const allGrievances = await db.offline_grievances.toArray();
       const visibleGrievances = allGrievances.filter((g) => {
-        const isApproved = g.approval_status === 'approved' || g.approval_status === undefined;
-        if ((userRoleRef.current === 'user' || userRoleRef.current === 'officer') && !isApproved) {
-          return false;
+        const isResident = userRoleRef.current === 'user';
+        const isOfficer = userRoleRef.current === 'officer';
+
+        // Requirement 4A: Resident map ONLY renders pins that have reached 'under_inspection' or 'resolved'
+        if (isResident) {
+          const st = (g.status || '').toLowerCase();
+          if (st !== 'under_inspection' && st !== 'resolved') {
+            return false;
+          }
         }
+
+        // Requirement 4C: Officer worklist/map hides Step 1 (pending_initial_approval)
+        if (isOfficer) {
+          const st = (g.status || '').toLowerCase();
+          if (st === 'pending_initial_approval') {
+            return false;
+          }
+        }
+
         if (g.approval_status === 'rejected') {
           return false;
         }
@@ -1654,21 +1882,32 @@ export const VillageMap = () => {
       });
 
       visibleGrievances.forEach((g) => {
-        const severityColor =
-          g.severity === 'critical'
-            ? '#E05A47'
-            : g.severity === 'high'
-            ? '#E05A47'
-            : g.severity === 'medium'
-            ? '#F59E0B'
-            : '#10B981';
+        const st = (g.status || 'pending_initial_approval').toLowerCase();
+
+        // Dynamic pin color based on verification lifecycle
+        let pinColor = '#F59E0B';
+        if (st === 'resolved') {
+          pinColor = '#10B981'; // Green
+        } else if (st === 'under_inspection') {
+          pinColor = '#F59E0B'; // Amber
+        } else if (st === 'pending_resolution_approval') {
+          pinColor = '#A855F7'; // Purple (waiting audit)
+        } else if (st === 'assigned_for_inspection' || st === 'pending_inspection_verification') {
+          pinColor = '#38BDF8'; // Sky Blue
+        } else if (st === 'pending_initial_approval') {
+          pinColor = '#E05A47'; // Terracotta
+        }
 
         const customIcon = L.divIcon({
           className: 'grievance-marker',
           html: `
             <div class="relative flex items-center justify-center group cursor-pointer">
-              <span class="absolute w-7 h-7 rounded-full animate-ping opacity-75" style="background-color: ${severityColor}40"></span>
-              <div class="relative w-6 h-6 rounded-full border-2 border-[#132228] shadow-xl flex items-center justify-center text-xs font-bold text-[#F8FAFC]" style="background-color: ${severityColor}">
+              ${
+                st === 'under_inspection' || g.severity === 'critical'
+                  ? `<span class="absolute w-7 h-7 rounded-full animate-ping opacity-75" style="background-color: ${pinColor}50"></span>`
+                  : ''
+              }
+              <div class="relative w-6 h-6 rounded-full border-2 border-[#132228] shadow-xl flex items-center justify-center text-xs font-bold text-[#F8FAFC]" style="background-color: ${pinColor}">
                 <span class="text-[10px] font-bold font-mono text-white">!</span>
               </div>
             </div>
@@ -1688,11 +1927,29 @@ export const VillageMap = () => {
           : `<span class="px-2 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] font-bold text-[10px] flex items-center gap-1">Year-round Accessible</span>`;
 
         const statusPill =
-          g.severity === 'critical' || g.severity === 'high'
-            ? `<span class="px-2 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] font-bold text-[10px]">● ${g.severity}</span>`
-            : g.severity === 'medium'
-            ? `<span class="px-2 py-0.5 rounded-full bg-[#F59E0B]/20 border border-[#F59E0B]/60 text-[#FDE68A] font-bold text-[10px]">● ${g.severity}</span>`
-            : `<span class="px-2 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] font-bold text-[10px]">● ${g.severity}</span>`;
+          st === 'resolved'
+            ? `<span class="px-2 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] font-bold text-[10px]">● Resolved</span>`
+            : st === 'under_inspection'
+            ? `<span class="px-2 py-0.5 rounded-full bg-[#F59E0B]/20 border border-[#F59E0B]/60 text-[#FDE68A] font-bold text-[10px]">● Under Inspection</span>`
+            : st === 'pending_resolution_approval'
+            ? `<span class="px-2 py-0.5 rounded-full bg-[#A855F7]/20 border border-[#A855F7]/60 text-[#D8B4FE] font-bold text-[10px]">● Awaiting Audit</span>`
+            : st === 'assigned_for_inspection' || st === 'pending_inspection_verification'
+            ? `<span class="px-2 py-0.5 rounded-full bg-[#38BDF8]/20 border border-[#38BDF8]/60 text-[#38BDF8] font-bold text-[10px]">● Officer Assigned</span>`
+            : `<span class="px-2 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] font-bold text-[10px]">● Pending Approval</span>`;
+
+        // Resolution proof section
+        const resolutionProofHtml = g.resolution_photo_url
+          ? `
+            <div class="mb-2 p-2 rounded-xl bg-[#0C171C] border border-[#10B981]/50 shadow-inner">
+              <div class="text-[9px] uppercase font-bold text-[#10B981] mb-1 flex items-center justify-between">
+                <span>Officer Resolution Proof:</span>
+                <span class="text-[8px] font-mono text-[#94A3B8]">Audit Verified</span>
+              </div>
+              <img src="${g.resolution_photo_url}" alt="Repair Proof" class="w-full h-24 object-cover rounded-lg border border-[#334B56]" />
+              ${g.officer_notes ? `<p class="text-[10px] text-[#94A3B8] italic mt-1 bg-[#132228] p-1.5 rounded border border-[#334B56]">${g.officer_notes}</p>` : ''}
+            </div>
+          `
+          : '';
 
         const marker = L.marker([g.latitude, g.longitude], { icon: customIcon });
         marker.bindPopup(
@@ -1718,14 +1975,20 @@ export const VillageMap = () => {
 
             <!-- 2. Category Badge -->
             <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#1B2F38] border border-[#334B56] text-[#38BDF8] font-semibold text-[10px] capitalize mb-2">
-              <span class="w-1.5 h-1.5 rounded-full bg-[#E05A47]"></span>
+              <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${pinColor}"></span>
               <span>${g.category}</span>
             </div>
+
+            <!-- 5-Stage Verification Step Tracker -->
+            ${buildStepTrackerHtml(g.status || 'pending_initial_approval')}
+
+            <!-- Officer Resolution Proof if present -->
+            ${resolutionProofHtml}
 
             <!-- 3. Status Pill & 4. Monsoon Access Condition -->
             <div class="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-[#1B2F38] border border-[#334B56] text-[10px] mb-2">
               <div>
-                <span class="text-[#94A3B8] block text-[9px] uppercase tracking-wider mb-0.5">Severity</span>
+                <span class="text-[#94A3B8] block text-[9px] uppercase tracking-wider mb-0.5">Verification Status</span>
                 ${statusPill}
               </div>
               <div>
@@ -1763,6 +2026,7 @@ export const VillageMap = () => {
       console.error('Failed to render grievance markers from IndexedDB:', e);
     }
   }, []);
+  refreshGrievanceMarkersRef.current = refreshGrievanceMarkers;
 
   // Initialize Map
   useEffect(() => {
@@ -1942,45 +2206,95 @@ export const VillageMap = () => {
       landmarksGroup.addLayer(marker);
     });
 
-    // Seed and Plot Facilities from CSV using PapaParse & Auto Fit Bounds
-    seedFacilitiesFromCsv(false).then((facilities) => {
-      allFacilitiesRef.current = facilities;
-      setFacilitiesList(facilities);
-      setFacilityCount(facilities.length);
-      renderFacilityMarkers(facilities, 'all');
+    // Fetch and sync data via Supabase Cloud Data Service with local offline fallback
+    Promise.all([fetchFacilities(), fetchIssues()])
+      .then(([facilities, issues]) => {
+        allFacilitiesRef.current = facilities as any;
+        setFacilitiesList(facilities as any);
+        setFacilityCount(facilities.length);
+        renderFacilityMarkers(facilities as any, facilityFilter);
 
-      // Auto-focus and fit bounds
-      if (window.innerWidth < 768) {
-        const khopripadaSettlementBounds = L.latLngBounds([
-          [19.3512, 72.8805],
-          [19.3588, 72.8885],
-        ]);
-        map.fitBounds(khopripadaSettlementBounds, { padding: [24, 24], maxZoom: 16, animate: false });
-      } else {
-        // On desktop, fit all facilities across the study corridor
-        const validCoords = facilities
-          .filter((f) => !isNaN(f.latitude) && !isNaN(f.longitude) && f.latitude !== 0 && f.longitude !== 0)
-          .map((f) => [f.latitude, f.longitude] as [number, number]);
+        allIssuesRef.current = issues as any;
+        setIssuesList(issues as any);
+        renderIssueMarkers(issues as any, facilityFilter);
+        refreshGrievanceMarkers();
 
-        if (validCoords.length > 0) {
-          const bounds = L.latLngBounds(validCoords);
-          if (bounds.isValid()) {
-            try {
-              map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-            } catch {
-              // ignore transient container size errors
+        // Auto-focus and fit bounds
+        if (window.innerWidth < 768) {
+          const khopripadaSettlementBounds = L.latLngBounds([
+            [19.3512, 72.8805],
+            [19.3588, 72.8885],
+          ]);
+          map.fitBounds(khopripadaSettlementBounds, { padding: [24, 24], maxZoom: 16, animate: false });
+        } else {
+          // On desktop, fit all facilities across the study corridor
+          const validCoords = facilities
+            .filter((f) => !isNaN(f.latitude) && !isNaN(f.longitude) && f.latitude !== 0 && f.longitude !== 0)
+            .map((f) => [f.latitude, f.longitude] as [number, number]);
+
+          if (validCoords.length > 0) {
+            const bounds = L.latLngBounds(validCoords);
+            if (bounds.isValid()) {
+              try {
+                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+              } catch {
+                // ignore transient container size errors
+              }
             }
           }
         }
-      }
-    });
+      })
+      .catch((err) => {
+        console.error('Failed to load initial cloud facilities/issues:', err);
+      });
 
-    // Seed and Plot Issues from CSV using PapaParse
-    seedIssuesFromCsv(false).then((issues) => {
-      allIssuesRef.current = issues;
-      setIssuesList(issues);
-      renderIssueMarkers(issues, 'all');
-    });
+    // Attach real-time PostgreSQL Supabase & cross-device listener
+    const unsubscribeSync = subscribeToPanchayatSync(
+      (eventType, changedIssue) => {
+        setIssuesList((prev) => {
+          let updated: any[];
+          const targetId = changedIssue.issue_id || (changedIssue as any).id;
+          if (eventType === 'INSERT') {
+            updated = [changedIssue, ...prev.filter((i) => (i.issue_id || (i as any).id) !== targetId)];
+          } else if (eventType === 'UPDATE') {
+            const exists = prev.some((i) => (i.issue_id || (i as any).id) === targetId);
+            updated = exists
+              ? prev.map((i) => ((i.issue_id || (i as any).id) === targetId ? { ...i, ...changedIssue } : i))
+              : [changedIssue, ...prev];
+          } else if (eventType === 'DELETE') {
+            updated = prev.filter((i) => (i.issue_id || (i as any).id) !== targetId);
+          } else {
+            updated = prev;
+          }
+          allIssuesRef.current = updated;
+          renderIssueMarkers(updated, facilityFilter);
+          refreshGrievanceMarkers();
+          return updated;
+        });
+      },
+      (eventType, changedFacility) => {
+        setFacilitiesList((prev) => {
+          let updated: any[];
+          const targetId = changedFacility.facility_id || (changedFacility as any).id;
+          if (eventType === 'INSERT') {
+            updated = [changedFacility, ...prev.filter((f) => (f.facility_id || (f as any).id) !== targetId)];
+          } else if (eventType === 'UPDATE') {
+            const exists = prev.some((f) => (f.facility_id || (f as any).id) === targetId);
+            updated = exists
+              ? prev.map((f) => ((f.facility_id || (f as any).id) === targetId ? { ...f, ...changedFacility } : f))
+              : [changedFacility, ...prev];
+          } else if (eventType === 'DELETE') {
+            updated = prev.filter((f) => (f.facility_id || (f as any).id) !== targetId);
+          } else {
+            updated = prev;
+          }
+          allFacilitiesRef.current = updated;
+          setFacilityCount(updated.length);
+          renderFacilityMarkers(updated, facilityFilter);
+          return updated;
+        });
+      }
+    );
 
     // Initial render of existing offline grievances
     refreshGrievanceMarkers();
@@ -2112,6 +2426,7 @@ export const VillageMap = () => {
     }, 150);
 
     return () => {
+      unsubscribeSync();
       map.off('moveend', updateMeta);
       map.off('zoomend', updateMeta);
       map.off('mousemove', handleMouseMove);
@@ -3690,96 +4005,295 @@ export const VillageMap = () => {
                 </div>
               )}
 
-              {/* VIEW 2: WORKLIST / APPROVALS / MY REPORTS */}
+              {/* VIEW 2: MULTI-TIER ADMINISTRATIVE GOVERNANCE WORKLIST */}
               {mobileSheet === 'worklist' && (
                 <div className="space-y-3">
-                  {/* ADMIN VIEW: PENDING APPROVALS QUEUE */}
+                  {/* ADMIN VIEW: STRUCTURED 3-TIER PANCHAYAT VERIFICATION QUEUE */}
                   {userRole === 'admin' && (
                     <>
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-[#F8FAFC] uppercase tracking-wider">
-                          Citizen Submissions Awaiting Approval
+                          Panchayat Verification Queue
                         </span>
                         <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#E05A47]/20 text-[#FCA5A5] border border-[#E05A47]/60">
-                          {pendingSubmissionsList.length} Pending
+                          {pendingSubmissionsList.length +
+                            mobileGrievanceList.filter((g) => g.status === 'pending_inspection_verification').length +
+                            mobileGrievanceList.filter((g) => g.status === 'pending_resolution_approval').length}{' '}
+                          Pending
                         </span>
                       </div>
 
-                      {pendingSubmissionsList.length === 0 ? (
-                        <div className="p-8 text-center rounded-2xl bg-[#1B2F38] border border-[#334B56] text-[#94A3B8] flex flex-col items-center gap-2">
-                          <CheckCircle2 className="w-8 h-8 text-[#10B981]" />
-                          <h4 className="text-sm font-bold text-[#F8FAFC]">All Submissions Verified</h4>
-                          <p className="text-xs text-[#94A3B8]">
-                            There are currently zero pending facility proposals or citizen grievances.
-                          </p>
-                        </div>
-                      ) : (
-                        pendingSubmissionsList.map((item) => (
-                          <div
-                            key={`${item.type}-${item.id}`}
-                            className="p-3.5 rounded-2xl bg-[#1B2F38] border border-[#334B56] flex flex-col gap-2.5 shadow-sm"
-                          >
-                            <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                              <span
-                                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                                  item.type === 'facility'
-                                    ? 'bg-[#10B981]/20 text-[#6EE7B7] border-[#10B981]/60'
-                                    : 'bg-[#E05A47]/20 text-[#FCA5A5] border-[#E05A47]/60'
-                                }`}
-                              >
-                                {item.type === 'facility' ? '🏢 Proposed Facility' : '⚠️ Civic Grievance'}
-                              </span>
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#0C171C] border border-[#334B56] text-[#94A3B8]">
-                                By: <strong className="text-[#F8FAFC]">{item.submitted_by}</strong>
-                              </span>
-                            </div>
+                      {/* 3-Step Verification Tab Navigator */}
+                      <div className="grid grid-cols-3 gap-1 p-1 bg-[#0C171C] rounded-xl border border-[#334B56]">
+                        <button
+                          type="button"
+                          onClick={() => setMobileAdminQueueStep(1)}
+                          className={`py-1.5 px-2 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                            mobileAdminQueueStep === 1
+                              ? 'bg-[#1B2F38] text-[#F8FAFC] border border-[#334B56] shadow-sm'
+                              : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                          }`}
+                        >
+                          <span>Step 1: Submissions</span>
+                          {pendingSubmissionsList.length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-[#E05A47] text-white">
+                              {pendingSubmissionsList.length}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMobileAdminQueueStep(2)}
+                          className={`py-1.5 px-2 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                            mobileAdminQueueStep === 2
+                              ? 'bg-[#1B2F38] text-[#F8FAFC] border border-[#334B56] shadow-sm'
+                              : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                          }`}
+                        >
+                          <span>Step 2: Inspect Req</span>
+                          {mobileGrievanceList.filter((g) => g.status === 'pending_inspection_verification').length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-[#F59E0B] text-[#0C171C] font-extrabold">
+                              {mobileGrievanceList.filter((g) => g.status === 'pending_inspection_verification').length}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMobileAdminQueueStep(3)}
+                          className={`py-1.5 px-2 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                            mobileAdminQueueStep === 3
+                              ? 'bg-[#1B2F38] text-[#F8FAFC] border border-[#334B56] shadow-sm'
+                              : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                          }`}
+                        >
+                          <span>Step 3: Audits</span>
+                          {mobileGrievanceList.filter((g) => g.status === 'pending_resolution_approval').length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-[#10B981] text-white">
+                              {mobileGrievanceList.filter((g) => g.status === 'pending_resolution_approval').length}
+                            </span>
+                          )}
+                        </button>
+                      </div>
 
-                            <h4 className="text-xs font-bold text-[#F8FAFC]">{item.title}</h4>
-
-                            {item.description && (
-                              <p className="text-[11px] text-[#94A3B8] bg-[#0C171C] p-2 rounded-lg border border-[#334B56] line-clamp-2">
-                                {item.description}
+                      {/* STEP 1: NEW RESIDENT SUBMISSIONS */}
+                      {mobileAdminQueueStep === 1 && (
+                        <div className="space-y-2.5">
+                          {pendingSubmissionsList.length === 0 ? (
+                            <div className="p-8 text-center rounded-2xl bg-[#1B2F38] border border-[#334B56] text-[#94A3B8] flex flex-col items-center gap-2">
+                              <CheckCircle2 className="w-8 h-8 text-[#10B981]" />
+                              <h4 className="text-sm font-bold text-[#F8FAFC]">No New Resident Submissions</h4>
+                              <p className="text-xs text-[#94A3B8]">
+                                All resident submissions have been reviewed and assigned.
                               </p>
-                            )}
-
-                            <div className="flex items-center gap-2 pt-1 border-t border-[#334B56]">
-                              <button
-                                onClick={() => handleMobileApprove(item)}
-                                className="flex-1 py-2 px-3 min-h-[44px] rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-semibold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
-                              >
-                                <CheckCircle2 className="w-4 h-4" />
-                                <span>Approve</span>
-                              </button>
-                              <button
-                                onClick={() => handleMobileReject(item)}
-                                className="py-2 px-3.5 min-h-[44px] rounded-xl bg-[#E05A47]/20 hover:bg-[#E05A47]/30 text-[#FCA5A5] border border-[#E05A47]/60 font-semibold text-xs flex items-center justify-center gap-1 transition active:scale-95 cursor-pointer"
-                              >
-                                <X className="w-4 h-4" />
-                                <span>Reject</span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  flyToCoords(item.coords);
-                                  setMobileSheet(null);
-                                }}
-                                className="p-2 min-h-[44px] min-w-[44px] rounded-xl bg-[#0C171C] border border-[#334B56] text-[#38BDF8] flex items-center justify-center transition active:scale-95 cursor-pointer"
-                                title="Fly to location"
-                              >
-                                <Locate className="w-4 h-4" />
-                              </button>
                             </div>
-                          </div>
-                        ))
+                          ) : (
+                            pendingSubmissionsList.map((item) => (
+                              <div
+                                key={`${item.type}-${item.id}`}
+                                className="p-3.5 rounded-2xl bg-[#1B2F38] border border-[#334B56] flex flex-col gap-2.5 shadow-sm"
+                              >
+                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                  <span
+                                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                                      item.type === 'facility'
+                                        ? 'bg-[#10B981]/20 text-[#6EE7B7] border-[#10B981]/60'
+                                        : 'bg-[#E05A47]/20 text-[#FCA5A5] border-[#E05A47]/60'
+                                    }`}
+                                  >
+                                    {item.type === 'facility' ? '🏢 Proposed Facility' : '⚠️ Step 1: Resident Grievance'}
+                                  </span>
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#0C171C] border border-[#334B56] text-[#94A3B8]">
+                                    By: <strong className="text-[#F8FAFC]">{item.submitted_by}</strong>
+                                  </span>
+                                </div>
+
+                                <h4 className="text-xs font-bold text-[#F8FAFC]">{item.title}</h4>
+
+                                {item.description && (
+                                  <p className="text-[11px] text-[#94A3B8] bg-[#0C171C] p-2 rounded-lg border border-[#334B56] line-clamp-2">
+                                    {item.description}
+                                  </p>
+                                )}
+
+                                <div className="flex items-center gap-2 pt-1 border-t border-[#334B56]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMobileAssignToOfficer(item)}
+                                    className="flex-1 py-2 px-3 min-h-[44px] rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-semibold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span>Approve & Assign to Officer</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMobileReject(item)}
+                                    className="py-2 px-3 min-h-[44px] rounded-xl bg-[#E05A47]/20 hover:bg-[#E05A47]/30 text-[#FCA5A5] border border-[#E05A47]/60 font-semibold text-xs flex items-center justify-center gap-1 transition active:scale-95 cursor-pointer"
+                                  >
+                                    <X className="w-4 h-4" />
+                                    <span>Reject</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      flyToCoords(item.coords);
+                                      setMobileSheet(null);
+                                    }}
+                                    className="p-2 min-h-[44px] min-w-[44px] rounded-xl bg-[#0C171C] border border-[#334B56] text-[#38BDF8] flex items-center justify-center transition active:scale-95 cursor-pointer"
+                                    title="Fly to location"
+                                  >
+                                    <Locate className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+
+                      {/* STEP 2: FIELD INSPECTION REQUESTS */}
+                      {mobileAdminQueueStep === 2 && (
+                        <div className="space-y-2.5">
+                          {mobileGrievanceList.filter((g) => g.status === 'pending_inspection_verification').length === 0 ? (
+                            <div className="p-8 text-center rounded-2xl bg-[#1B2F38] border border-[#334B56] text-[#94A3B8] flex flex-col items-center gap-2">
+                              <CheckCircle2 className="w-8 h-8 text-[#10B981]" />
+                              <h4 className="text-sm font-bold text-[#F8FAFC]">No Pending Inspection Requests</h4>
+                              <p className="text-xs text-[#94A3B8]">
+                                Officers have not flagged any new site inspections requiring Sarpanch authorization.
+                              </p>
+                            </div>
+                          ) : (
+                            mobileGrievanceList
+                              .filter((g) => g.status === 'pending_inspection_verification')
+                              .map((g) => (
+                                <div
+                                  key={g.id}
+                                  className="p-3.5 rounded-2xl bg-[#1B2F38] border border-[#F59E0B]/50 flex flex-col gap-2.5 shadow-sm"
+                                >
+                                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#F59E0B]/20 text-[#FDE68A] border border-[#F59E0B]/60 flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-ping" />
+                                      Step 2: Officer Inspection Request
+                                    </span>
+                                    <span className="text-[10px] font-mono text-[#38BDF8]">#{g.id}</span>
+                                  </div>
+
+                                  <h4 className="text-xs font-bold text-[#F8FAFC]">{g.title}</h4>
+
+                                  {g.description && (
+                                    <p className="text-[11px] text-[#94A3B8] bg-[#0C171C] p-2 rounded-lg border border-[#334B56] line-clamp-2">
+                                      {g.description}
+                                    </p>
+                                  )}
+
+                                  <div className="flex items-center gap-2 pt-1 border-t border-[#334B56]">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMobileAuthorizeInspection({ id: g.id!, title: g.title })}
+                                      className="flex-1 py-2 px-3 min-h-[44px] rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-[#0C171C] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                                    >
+                                      <CheckCircle2 className="w-4 h-4" />
+                                      <span>Authorize Inspection Phase (Pin Amber)</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        flyToCoords([g.latitude, g.longitude]);
+                                        setMobileSheet(null);
+                                      }}
+                                      className="p-2 min-h-[44px] min-w-[44px] rounded-xl bg-[#0C171C] border border-[#334B56] text-[#38BDF8] flex items-center justify-center transition active:scale-95 cursor-pointer"
+                                    >
+                                      <Locate className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))
+                          )}
+                        </div>
+                      )}
+
+                      {/* STEP 3: RESOLUTION & PHOTO AUDIT VERIFICATIONS */}
+                      {mobileAdminQueueStep === 3 && (
+                        <div className="space-y-2.5">
+                          {mobileGrievanceList.filter((g) => g.status === 'pending_resolution_approval').length === 0 ? (
+                            <div className="p-8 text-center rounded-2xl bg-[#1B2F38] border border-[#334B56] text-[#94A3B8] flex flex-col items-center gap-2">
+                              <CheckCircle2 className="w-8 h-8 text-[#10B981]" />
+                              <h4 className="text-sm font-bold text-[#F8FAFC]">No Repair Proofs Awaiting Audit</h4>
+                              <p className="text-xs text-[#94A3B8]">
+                                There are currently zero repairs awaiting Sarpanch sign-off.
+                              </p>
+                            </div>
+                          ) : (
+                            mobileGrievanceList
+                              .filter((g) => g.status === 'pending_resolution_approval')
+                              .map((g) => (
+                                <div
+                                  key={g.id}
+                                  className="p-3.5 rounded-2xl bg-[#1B2F38] border border-[#10B981]/50 flex flex-col gap-2.5 shadow-sm"
+                                >
+                                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#10B981]/20 text-[#6EE7B7] border border-[#10B981]/60">
+                                      Step 3: Repair Proof Awaiting Audit
+                                    </span>
+                                    <span className="text-[10px] font-mono text-[#38BDF8]">#{g.id}</span>
+                                  </div>
+
+                                  <h4 className="text-xs font-bold text-[#F8FAFC]">{g.title}</h4>
+
+                                  {/* Officer's Uploaded Repair Photo Proof */}
+                                  {(g.resolution_photo_url || g.photoBase64) && (
+                                    <div className="rounded-xl overflow-hidden border border-[#334B56] bg-[#0C171C]">
+                                      <div className="text-[9px] uppercase font-bold text-[#10B981] p-1.5 bg-[#132228] border-b border-[#334B56] flex items-center justify-between">
+                                        <span>Officer Ground-Truth Proof:</span>
+                                        <span className="font-mono text-[#38BDF8]">Evidence Attached</span>
+                                      </div>
+                                      <img
+                                        src={g.resolution_photo_url || g.photoBase64}
+                                        alt="Repair proof"
+                                        className="w-full h-32 object-cover"
+                                      />
+                                    </div>
+                                  )}
+
+                                  {g.officer_notes && (
+                                    <p className="text-[11px] text-[#94A3B8] bg-[#0C171C] p-2 rounded-lg border border-[#334B56]">
+                                      <strong className="text-[#38BDF8]">Officer Notes:</strong> {g.officer_notes}
+                                    </p>
+                                  )}
+
+                                  <div className="flex items-center gap-2 pt-1 border-t border-[#334B56]">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMobileVerifyResolution({ id: g.id!, title: g.title })}
+                                      className="flex-1 py-2 px-3 min-h-[44px] rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-semibold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                                    >
+                                      <CheckCircle2 className="w-4 h-4" />
+                                      <span>Verify & Mark Officially Resolved (Pin Green)</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        flyToCoords([g.latitude, g.longitude]);
+                                        setMobileSheet(null);
+                                      }}
+                                      className="p-2 min-h-[44px] min-w-[44px] rounded-xl bg-[#0C171C] border border-[#334B56] text-[#38BDF8] flex items-center justify-center transition active:scale-95 cursor-pointer"
+                                    >
+                                      <Locate className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))
+                          )}
+                        </div>
                       )}
                     </>
                   )}
 
-                  {/* OFFICER VIEW: FIELD WORKLIST */}
+                  {/* FIELD OFFICER VIEW: FIELD WORKLIST */}
                   {userRole === 'officer' && (
                     <>
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-[#F8FAFC] uppercase tracking-wider">
-                          Assigned Verified Field Tasks
+                          Field Operations Worklist
                         </span>
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#10B981]/20 text-[#6EE7B7] border border-[#10B981]/40 font-bold">
                           {mobileGrievanceList.length} Tasks
@@ -3791,77 +4305,146 @@ export const VillageMap = () => {
                           <CheckCircle2 className="w-8 h-8 text-[#10B981]" />
                           <h4 className="text-sm font-bold text-[#F8FAFC]">Worklist Clear</h4>
                           <p className="text-xs text-[#94A3B8]">
-                            No pending verified tasks assigned for field inspection.
+                            No pending assigned tasks in your field worklist.
                           </p>
                         </div>
                       ) : (
                         mobileGrievanceList.map((g) => {
-                          const currentStatus = g.status || 'reported';
+                          const currentStatus = g.status || 'assigned_for_inspection';
+                          const isAssigned = currentStatus === 'assigned_for_inspection';
+                          const isPendingAuth = currentStatus === 'pending_inspection_verification';
+                          const isUnderInspection = currentStatus === 'under_inspection';
+                          const isPendingResolution = currentStatus === 'pending_resolution_approval';
+
                           return (
                             <div
                               key={g.id}
                               className="p-3.5 rounded-2xl bg-[#1B2F38] border border-[#334B56] flex flex-col gap-2.5 shadow-sm"
                             >
                               <div className="flex items-center justify-between gap-1 flex-wrap">
-                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#E05A47]/20 border border-[#E05A47]/50 text-[#FCA5A5]">
-                                  ● {g.severity.toUpperCase()}
+                                <span
+                                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                                    isAssigned
+                                      ? 'bg-[#38BDF8]/20 text-[#38BDF8] border-[#38BDF8]/40'
+                                      : isPendingAuth
+                                      ? 'bg-[#F59E0B]/20 text-[#FDE68A] border-[#F59E0B]/50'
+                                      : isUnderInspection
+                                      ? 'bg-[#F59E0B]/20 text-[#F59E0B] border-[#F59E0B]/60'
+                                      : 'bg-[#A855F7]/20 text-[#D8B4FE] border-[#A855F7]/40'
+                                  }`}
+                                >
+                                  {isAssigned
+                                    ? '📋 Step 2: Assigned For Inspection'
+                                    : isPendingAuth
+                                    ? '⏳ Step 3: Awaiting Admin Sign-off'
+                                    : isUnderInspection
+                                    ? '🔍 Step 4: Authorized Under Inspection'
+                                    : '🛠️ Step 5: Submitted for Audit'}
                                 </span>
-                                <span className="text-[10px] uppercase font-semibold text-[#94A3B8] px-1.5 py-0.5 rounded bg-[#0C171C] border border-[#334B56]">
-                                  {g.category}
-                                </span>
-                                <span className="text-[10px] font-mono text-[#38BDF8]">
-                                  {g.latitude.toFixed(4)}°N, {g.longitude.toFixed(4)}°E
-                                </span>
+                                <span className="text-[10px] font-mono text-[#94A3B8]">#{g.id}</span>
                               </div>
 
                               <h4 className="text-xs font-bold text-[#F8FAFC]">{g.title}</h4>
 
                               {g.description && (
-                                <p className="text-[11px] text-[#94A3B8] bg-[#0C171C] p-2 rounded-lg border border-[#334B56] line-clamp-2">
+                                <p className="text-[11px] text-[#94A3B8] bg-[#0C171C] p-2 rounded-lg border border-[#334B56]">
                                   {g.description}
                                 </p>
                               )}
 
-                              {/* Officer Status Buttons */}
-                              <div className="grid grid-cols-3 gap-1.5 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleMobileUpdateGrievanceStatus(g.id!, 'under_inspection')}
-                                  className={`py-2 px-1 min-h-[44px] rounded-xl text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
-                                    currentStatus === 'under_inspection'
-                                      ? 'bg-[#38BDF8] text-[#0C171C] shadow-sm'
-                                      : 'bg-[#0C171C] border border-[#334B56] text-[#94A3B8]'
-                                  }`}
-                                >
-                                  Inspecting
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleMobileUpdateGrievanceStatus(g.id!, 'in_progress')}
-                                  className={`py-2 px-1 min-h-[44px] rounded-xl text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
-                                    currentStatus === 'in_progress'
-                                      ? 'bg-[#E05A47] text-[#F8FAFC] shadow-sm'
-                                      : 'bg-[#0C171C] border border-[#334B56] text-[#94A3B8]'
-                                  }`}
-                                >
-                                  In Progress
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleMobileUpdateGrievanceStatus(g.id!, 'resolved')}
-                                  className="py-2 px-1 min-h-[44px] rounded-xl text-[10px] font-bold bg-gradient-to-r from-[#0D9488] to-[#10B981] text-[#F8FAFC] transition cursor-pointer flex items-center justify-center gap-1 active:scale-95 shadow-sm"
-                                >
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  Resolved
-                                </button>
-                              </div>
+                              {/* Officer Worklist Action Workflow */}
+                              {isAssigned && (
+                                <div className="pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOfficerStartInspection({ id: g.id!, title: g.title })}
+                                    className="w-full py-2.5 px-3 min-h-[44px] rounded-xl bg-gradient-to-r from-[#0284C7] to-[#38BDF8] text-[#0C171C] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                                  >
+                                    <ClipboardCheck className="w-4 h-4" />
+                                    <span>Start Field Inspection</span>
+                                  </button>
+                                </div>
+                              )}
+
+                              {isPendingAuth && (
+                                <div className="p-2 rounded-xl bg-[#0C171C] border border-[#F59E0B]/40 text-center text-xs text-[#FDE68A]">
+                                  ⏳ Inspection request sent to Admin for sign-off.
+                                </div>
+                              )}
+
+                              {isUnderInspection && (
+                                <div className="space-y-2 p-2.5 rounded-xl bg-[#0C171C] border border-[#334B56]">
+                                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#38BDF8] block">
+                                    Capture / Upload Repair Proof
+                                  </label>
+
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      capture="environment"
+                                      id={`photo-input-${g.id}`}
+                                      className="hidden"
+                                      onChange={(e) => handleOfficerPhotoSelect(g.id!, e)}
+                                    />
+                                    <label
+                                      htmlFor={`photo-input-${g.id}`}
+                                      className="flex-1 py-2 px-3 rounded-lg bg-[#1B2F38] border border-[#334B56] hover:bg-[#233B46] text-xs font-semibold text-[#F8FAFC] flex items-center justify-center gap-1.5 cursor-pointer min-h-[40px]"
+                                    >
+                                      <ImageIcon className="w-3.5 h-3.5 text-[#38BDF8]" />
+                                      <span>
+                                        {officerPhotoMap[g.id!] ? 'Change Photo Proof' : 'Attach Repair Photo'}
+                                      </span>
+                                    </label>
+                                  </div>
+
+                                  {officerPhotoMap[g.id!] && (
+                                    <div className="relative w-full h-24 rounded-lg overflow-hidden border border-[#10B981]/50">
+                                      <img
+                                        src={officerPhotoMap[g.id!]}
+                                        alt="Proof preview"
+                                        className="w-full h-full object-cover"
+                                      />
+                                      <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-[#10B981] text-white">
+                                        Ready
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  <input
+                                    type="text"
+                                    placeholder="Enter repair completion notes..."
+                                    value={officerNotesMap[g.id!] || ''}
+                                    onChange={(e) =>
+                                      setOfficerNotesMap((prev) => ({ ...prev, [g.id!]: e.target.value }))
+                                    }
+                                    className="w-full p-2 text-xs rounded-lg bg-[#132228] border border-[#334B56] text-[#F8FAFC] focus:outline-none focus:border-[#10B981]"
+                                  />
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOfficerSubmitResolution({ id: g.id!, title: g.title })}
+                                    className="w-full py-2.5 px-3 min-h-[44px] rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] text-[#F8FAFC] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span>Submit Resolution & Photo</span>
+                                  </button>
+                                </div>
+                              )}
+
+                              {isPendingResolution && (
+                                <div className="p-2 rounded-xl bg-[#0C171C] border border-[#10B981]/40 text-center text-xs text-[#6EE7B7]">
+                                  🛠️ Repair proof submitted — Awaiting Sarpanch official verification.
+                                </div>
+                              )}
 
                               <button
+                                type="button"
                                 onClick={() => {
                                   flyToCoords([g.latitude, g.longitude]);
                                   setMobileSheet(null);
                                 }}
-                                className="w-full py-2 min-h-[44px] rounded-xl bg-[#0C171C] hover:bg-[#1B2F38] border border-[#334B56] text-[#38BDF8] text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                                className="w-full py-2 min-h-[40px] rounded-xl bg-[#0C171C] hover:bg-[#1B2F38] border border-[#334B56] text-[#38BDF8] text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
                               >
                                 <Locate className="w-4 h-4" />
                                 <span>Fly to Location on Map</span>
@@ -3872,6 +4455,7 @@ export const VillageMap = () => {
                       )}
 
                       <button
+                        type="button"
                         onClick={() => {
                           handleOfficerExportWorklist();
                           setMobileSheet(null);
@@ -3905,43 +4489,62 @@ export const VillageMap = () => {
                           </p>
                         </div>
                       ) : (
-                        mobileGrievanceList.map((g) => (
-                          <div
-                            key={g.id}
-                            className="p-3.5 rounded-2xl bg-[#1B2F38] border border-[#334B56] flex flex-col gap-2 shadow-sm"
-                          >
-                            <div className="flex items-center justify-between gap-1 flex-wrap">
-                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#E05A47]/20 border border-[#E05A47]/50 text-[#FCA5A5]">
-                                {g.category}
-                              </span>
-                              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[#10B981]/20 text-[#6EE7B7] border border-[#10B981]/40">
-                                {g.status || 'Reported'}
-                              </span>
-                            </div>
-
-                            <h4 className="text-xs font-bold text-[#F8FAFC]">{g.title}</h4>
-
-                            {g.description && (
-                              <p className="text-[11px] text-[#94A3B8] bg-[#0C171C] p-2 rounded-lg border border-[#334B56]">
-                                {g.description}
-                              </p>
-                            )}
-
-                            <button
-                              onClick={() => {
-                                flyToCoords([g.latitude, g.longitude]);
-                                setMobileSheet(null);
-                              }}
-                              className="w-full py-2 min-h-[44px] rounded-xl bg-[#0C171C] hover:bg-[#1B2F38] border border-[#334B56] text-[#38BDF8] text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                        mobileGrievanceList.map((g) => {
+                          const st = (g.status || 'pending_initial_approval').toLowerCase();
+                          return (
+                            <div
+                              key={g.id}
+                              className="p-3.5 rounded-2xl bg-[#1B2F38] border border-[#334B56] flex flex-col gap-2 shadow-sm"
                             >
-                              <Locate className="w-4 h-4" />
-                              <span>View on Map</span>
-                            </button>
-                          </div>
-                        ))
+                              <div className="flex items-center justify-between gap-1 flex-wrap">
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#E05A47]/20 border border-[#E05A47]/50 text-[#FCA5A5]">
+                                  {g.category}
+                                </span>
+                                <span
+                                  className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded border ${
+                                    st === 'resolved'
+                                      ? 'bg-[#10B981]/20 text-[#6EE7B7] border-[#10B981]/40'
+                                      : st === 'under_inspection'
+                                      ? 'bg-[#F59E0B]/20 text-[#FDE68A] border-[#F59E0B]/40'
+                                      : 'bg-[#0C171C] text-[#94A3B8] border-[#334B56]'
+                                  }`}
+                                >
+                                  {st === 'resolved'
+                                    ? '● Officially Resolved'
+                                    : st === 'under_inspection'
+                                    ? '● Under Inspection'
+                                    : st === 'pending_initial_approval'
+                                    ? '● Awaiting Sarpanch Verification'
+                                    : '● Assigned to Field Desk'}
+                                </span>
+                              </div>
+
+                              <h4 className="text-xs font-bold text-[#F8FAFC]">{g.title}</h4>
+
+                              {g.description && (
+                                <p className="text-[11px] text-[#94A3B8] bg-[#0C171C] p-2 rounded-lg border border-[#334B56]">
+                                  {g.description}
+                                </p>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  flyToCoords([g.latitude, g.longitude]);
+                                  setMobileSheet(null);
+                                }}
+                                className="w-full py-2 min-h-[44px] rounded-xl bg-[#0C171C] hover:bg-[#1B2F38] border border-[#334B56] text-[#38BDF8] text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                              >
+                                <Locate className="w-4 h-4" />
+                                <span>View on Map</span>
+                              </button>
+                            </div>
+                          );
+                        })
                       )}
 
                       <button
+                        type="button"
                         onClick={() => {
                           setIsGrievanceModalOpen(true);
                           setMobileSheet(null);

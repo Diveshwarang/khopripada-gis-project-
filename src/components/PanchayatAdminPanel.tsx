@@ -24,12 +24,17 @@ import {
   db,
   approveFacility,
   rejectFacility,
-  approveGrievance,
   rejectGrievance,
   type CachedIssue,
   type CachedFacility,
   type OfflineGrievance,
 } from '../services/offlineDb';
+import {
+  transitionToAssignedForInspection,
+  transitionToUnderInspection,
+  transitionToResolved,
+  upsertFacility,
+} from '../services/dataService';
 
 export interface PendingSubmissionItem {
   id: string | number;
@@ -40,6 +45,9 @@ export interface PendingSubmissionItem {
   coords: [number, number];
   photoUrl?: string;
   description?: string;
+  status?: string;
+  officer_notes?: string;
+  resolution_photo_url?: string;
   rawFacility?: CachedFacility;
   rawGrievance?: OfflineGrievance;
 }
@@ -74,23 +82,25 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
   const [isPendingQueueOpen, setIsPendingQueueOpen] = useState(true);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
-  const [pendingGrievances, setPendingGrievances] = useState<OfflineGrievance[]>([]);
+  const [allGrievances, setAllGrievances] = useState<OfflineGrievance[]>([]);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+  const [verificationQueueStep, setVerificationQueueStep] = useState<1 | 2 | 3>(1);
 
-  const loadPendingGrievances = useCallback(async () => {
+  const loadAllGrievances = useCallback(async () => {
     try {
       const records = await db.offline_grievances.toArray();
-      setPendingGrievances(records.filter((g) => g.approval_status === 'pending_approval'));
+      setAllGrievances(records);
     } catch (err) {
-      console.error('Failed to query pending grievances:', err);
+      console.error('Failed to query grievances from DB:', err);
     }
   }, []);
 
   useEffect(() => {
-    loadPendingGrievances();
-  }, [loadPendingGrievances]);
+    loadAllGrievances();
+  }, [loadAllGrievances]);
 
-  const pendingItems: PendingSubmissionItem[] = useMemo(() => {
+  // Step 1: New Resident Submissions (pending_initial_approval or pending_approval)
+  const step1Items: PendingSubmissionItem[] = useMemo(() => {
     const facilityItems: PendingSubmissionItem[] = facilities
       .filter((f) => f.approval_status === 'pending_approval')
       .map((f) => ({
@@ -102,39 +112,111 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
         coords: [f.latitude, f.longitude],
         photoUrl: f.photoBase64 || f.photo_url,
         description: f.notes,
+        status: 'pending_initial_approval',
         rawFacility: f,
       }));
 
-    const grievanceItems: PendingSubmissionItem[] = pendingGrievances.map((g) => ({
-      id: g.id!,
-      type: 'grievance',
-      title: g.title,
-      category: g.category,
-      submitted_by: g.submitted_by || 'Resident',
-      coords: [g.latitude, g.longitude],
-      photoUrl: g.photoBase64,
-      description: g.description,
-      rawGrievance: g,
-    }));
+    const grievanceItems: PendingSubmissionItem[] = allGrievances
+      .filter((g) => g.status === 'pending_initial_approval' || (g.approval_status === 'pending_approval' && !g.status))
+      .map((g) => ({
+        id: g.id!,
+        type: 'grievance',
+        title: g.title,
+        category: g.category,
+        submitted_by: g.submitted_by || 'Resident',
+        coords: [g.latitude, g.longitude],
+        photoUrl: g.photoBase64,
+        description: g.description,
+        status: g.status || 'pending_initial_approval',
+        rawGrievance: g,
+      }));
 
     return [...facilityItems, ...grievanceItems];
-  }, [facilities, pendingGrievances]);
+  }, [facilities, allGrievances]);
 
-  const handleApprove = async (item: PendingSubmissionItem) => {
+  // Step 2: Inspection Requests (pending_inspection_verification)
+  const step2Items: PendingSubmissionItem[] = useMemo(() => {
+    return allGrievances
+      .filter((g) => g.status === 'pending_inspection_verification')
+      .map((g) => ({
+        id: g.id!,
+        type: 'grievance',
+        title: g.title,
+        category: g.category,
+        submitted_by: g.reporterName || g.submitted_by || 'Field Officer',
+        coords: [g.latitude, g.longitude],
+        photoUrl: g.photoBase64,
+        description: g.description,
+        status: g.status,
+        officer_notes: g.officer_notes || 'Officer requested field inspection authorization.',
+        rawGrievance: g,
+      }));
+  }, [allGrievances]);
+
+  // Step 3: Resolution Verifications (pending_resolution_approval)
+  const step3Items: PendingSubmissionItem[] = useMemo(() => {
+    return allGrievances
+      .filter((g) => g.status === 'pending_resolution_approval')
+      .map((g) => ({
+        id: g.id!,
+        type: 'grievance',
+        title: g.title,
+        category: g.category,
+        submitted_by: g.assigned_to || 'Field Officer',
+        coords: [g.latitude, g.longitude],
+        photoUrl: g.resolution_photo_url || g.photoBase64,
+        resolution_photo_url: g.resolution_photo_url,
+        description: g.description,
+        status: g.status,
+        officer_notes: g.officer_notes,
+        rawGrievance: g,
+      }));
+  }, [allGrievances]);
+
+  const totalPendingCount = step1Items.length + step2Items.length + step3Items.length;
+
+  // Step 1 Action: [Approve & Assign to Officer]
+  const handleAssignToOfficer = async (item: PendingSubmissionItem) => {
     try {
       if (item.type === 'facility') {
         await approveFacility(item.id as string);
+        await upsertFacility({ facility_id: item.id as string, approval_status: 'approved' });
+        setActionSuccessMsg(`Approved facility "${item.title}" — Published to live map!`);
       } else {
-        await approveGrievance(item.id as number);
+        await transitionToAssignedForInspection(item.id, 'Field Officer Rahul');
+        setActionSuccessMsg(`Assigned "${item.title}" to Field Officer for ground inspection.`);
       }
-      setActionSuccessMsg(`Approved "${item.title}" — Published to live map!`);
-      setTimeout(() => setActionSuccessMsg(null), 3000);
-      await loadPendingGrievances();
-      if (onApproveSubmission) {
-        onApproveSubmission(item);
-      }
+      setTimeout(() => setActionSuccessMsg(null), 3500);
+      await loadAllGrievances();
+      if (onApproveSubmission) onApproveSubmission(item);
     } catch (err) {
-      console.error('Failed to approve submission:', err);
+      console.error('Failed to assign to officer:', err);
+    }
+  };
+
+  // Step 2 Action: [Authorize Inspection Phase]
+  const handleAuthorizeInspection = async (item: PendingSubmissionItem) => {
+    try {
+      await transitionToUnderInspection(item.id);
+      setActionSuccessMsg(`Inspection phase authorized for "${item.title}" — Pin rendered in AMBER!`);
+      setTimeout(() => setActionSuccessMsg(null), 3500);
+      await loadAllGrievances();
+      if (onApproveSubmission) onApproveSubmission(item);
+    } catch (err) {
+      console.error('Failed to authorize inspection:', err);
+    }
+  };
+
+  // Step 3 Action: [Verify & Mark Officially Resolved]
+  const handleVerifyResolved = async (item: PendingSubmissionItem) => {
+    try {
+      await transitionToResolved(item.id);
+      setActionSuccessMsg(`Officially verified & resolved "${item.title}" — Pin rendered in GREEN!`);
+      setTimeout(() => setActionSuccessMsg(null), 3500);
+      await loadAllGrievances();
+      if (onApproveSubmission) onApproveSubmission(item);
+    } catch (err) {
+      console.error('Failed to verify resolution:', err);
     }
   };
 
@@ -147,7 +229,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
       }
       setActionSuccessMsg(`Rejected submission "${item.title}".`);
       setTimeout(() => setActionSuccessMsg(null), 3000);
-      await loadPendingGrievances();
+      await loadAllGrievances();
       if (onRejectSubmission) {
         onRejectSubmission(item);
       }
@@ -310,7 +392,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
       </div>
 
       <div className="overflow-y-auto flex-1 p-3 space-y-3.5 scrollbar-thin">
-        {/* PROMINENT SECTION: 📋 Pending Submissions Queue */}
+        {/* PROMINENT SECTION: 3-Tier Structured Panchayat Verification Queue */}
         <div className="rounded-xl border border-[#334B56] bg-[#1B2F38] overflow-hidden shadow-md">
           <button
             type="button"
@@ -320,16 +402,16 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
             <div className="flex items-center gap-2">
               <ClipboardCheck className="w-4 h-4 text-[#38BDF8]" />
               <span className="text-xs font-bold text-[#F8FAFC] tracking-tight">
-                Pending Submissions Queue
+                Panchayat Verification Queue
               </span>
               <span
                 className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
-                  pendingItems.length > 0
+                  totalPendingCount > 0
                     ? 'bg-[#E05A47]/20 text-[#FCA5A5] border-[#E05A47]/60 animate-pulse'
                     : 'bg-[#0C171C] text-[#94A3B8] border-[#334B56]'
                 }`}
               >
-                {pendingItems.length} Pending
+                {totalPendingCount} Action Items
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-[#94A3B8]">
@@ -346,6 +428,48 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
 
           {isPendingQueueOpen && (
             <div className="p-2.5 space-y-2.5">
+              {/* 3-Step Tab Switcher */}
+              <div className="grid grid-cols-3 gap-1 bg-[#0C171C] p-1 rounded-xl border border-[#334B56]">
+                <button
+                  type="button"
+                  onClick={() => setVerificationQueueStep(1)}
+                  className={`py-1.5 px-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex flex-col items-center justify-center ${
+                    verificationQueueStep === 1
+                      ? 'bg-[#1B2F38] text-[#38BDF8] border border-[#38BDF8]/40 shadow-sm'
+                      : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                  }`}
+                >
+                  <span>Step 1: Submissions</span>
+                  <span className="text-[9px] font-mono font-semibold opacity-80">({step1Items.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVerificationQueueStep(2)}
+                  className={`py-1.5 px-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex flex-col items-center justify-center ${
+                    verificationQueueStep === 2
+                      ? 'bg-[#1B2F38] text-[#F59E0B] border border-[#F59E0B]/40 shadow-sm'
+                      : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                  }`}
+                >
+                  <span>Step 2: Inspect Req</span>
+                  <span className="text-[9px] font-mono font-semibold opacity-80">({step2Items.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVerificationQueueStep(3)}
+                  className={`py-1.5 px-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex flex-col items-center justify-center ${
+                    verificationQueueStep === 3
+                      ? 'bg-[#1B2F38] text-[#10B981] border border-[#10B981]/40 shadow-sm'
+                      : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                  }`}
+                >
+                  <span>Step 3: Resolve Audit</span>
+                  <span className="text-[9px] font-mono font-semibold opacity-80">({step3Items.length})</span>
+                </button>
+              </div>
+
               {actionSuccessMsg && (
                 <div className="p-2 rounded-lg bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] text-[11px] font-semibold flex items-center gap-1.5 animate-in fade-in">
                   <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -353,119 +477,262 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                 </div>
               )}
 
-              {pendingItems.length === 0 ? (
-                <div className="p-3 text-center rounded-lg bg-[#0C171C]/80 border border-[#334B56] text-[#94A3B8] text-xs flex flex-col items-center gap-1">
-                  <ShieldCheck className="w-5 h-5 text-[#10B981]" />
-                  <span className="font-semibold text-[#F8FAFC]">All submissions verified</span>
-                  <span className="text-[10px] text-[#94A3B8]">
-                    No pending facility proposals or civic grievances awaiting review.
-                  </span>
-                </div>
-              ) : (
-                pendingItems.map((item) => (
-                  <div
-                    key={`${item.type}-${item.id}`}
-                    className="p-3 rounded-xl bg-[#0C171C]/90 border border-[#334B56] hover:border-[#38BDF8]/50 transition flex flex-col gap-2 shadow-sm"
-                  >
-                    {/* Item Type & Submitter Role */}
-                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                      <span
-                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                          item.type === 'facility'
-                            ? 'bg-[#10B981]/20 text-[#6EE7B7] border-[#10B981]/60'
-                            : 'bg-[#E05A47]/20 text-[#FCA5A5] border-[#E05A47]/60'
-                        }`}
-                      >
-                        {item.type === 'facility' ? '🏢 Facility Proposal' : '⚠️ Civic Grievance'}
-                      </span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1B2F38] border border-[#334B56] text-[#94A3B8]">
-                        By: <strong className="text-[#F8FAFC]">{item.submitted_by}</strong>
+              {/* STEP 1: New Resident Submissions */}
+              {verificationQueueStep === 1 && (
+                <div className="space-y-2">
+                  <div className="text-[10px] text-[#94A3B8] flex items-center justify-between px-0.5">
+                    <span className="font-semibold text-[#F8FAFC]">Resident Submissions Awaiting Assignment</span>
+                    <span className="font-mono">{step1Items.length} records</span>
+                  </div>
+
+                  {step1Items.length === 0 ? (
+                    <div className="p-3 text-center rounded-lg bg-[#0C171C]/80 border border-[#334B56] text-[#94A3B8] text-xs flex flex-col items-center gap-1">
+                      <ShieldCheck className="w-5 h-5 text-[#10B981]" />
+                      <span className="font-semibold text-[#F8FAFC]">No new resident submissions</span>
+                      <span className="text-[10px] text-[#94A3B8]">
+                        All resident proposals have been verified or assigned to field teams.
                       </span>
                     </div>
-
-                    {/* Attached Photo Preview */}
-                    {item.photoUrl && (
+                  ) : (
+                    step1Items.map((item) => (
                       <div
-                        onClick={() => {
-                          if (onOpenPhotoLightbox) {
-                            onOpenPhotoLightbox({
-                              photoUrl: item.photoUrl!,
-                              title: item.title,
-                              category: item.category,
-                              coords: item.coords,
-                            });
-                          }
-                        }}
-                        className="relative w-full h-28 rounded-lg overflow-hidden border border-[#334B56] bg-[#0C171C] group cursor-pointer"
-                        title="Click to inspect high-resolution photo"
+                        key={`${item.type}-${item.id}`}
+                        className="p-3 rounded-xl bg-[#0C171C]/90 border border-[#334B56] hover:border-[#38BDF8]/50 transition flex flex-col gap-2 shadow-sm"
                       >
-                        <img
-                          src={item.photoUrl}
-                          alt={item.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#132228]/95 via-transparent to-transparent flex items-end justify-between p-2">
-                          <span className="text-[9px] text-[#38BDF8] font-mono bg-[#132228]/90 px-1.5 py-0.5 rounded border border-[#38BDF8]/40 flex items-center gap-1">
-                            <ImageIcon className="w-3 h-3" /> Photo Attached
+                        <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                          <span
+                            className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                              item.type === 'facility'
+                                ? 'bg-[#10B981]/20 text-[#6EE7B7] border-[#10B981]/60'
+                                : 'bg-[#E05A47]/20 text-[#FCA5A5] border-[#E05A47]/60'
+                            }`}
+                          >
+                            {item.type === 'facility' ? 'Facility Proposal' : 'Resident Grievance'}
                           </span>
-                          <span className="text-[9px] text-[#38BDF8] underline font-semibold flex items-center gap-0.5">
-                            <ExternalLink className="w-2.5 h-2.5" /> Inspect
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1B2F38] border border-[#334B56] text-[#94A3B8]">
+                            By: <strong className="text-[#F8FAFC]">{item.submitted_by}</strong>
                           </span>
                         </div>
+
+                        {item.photoUrl && (
+                          <div
+                            onClick={() => {
+                              if (onOpenPhotoLightbox) {
+                                onOpenPhotoLightbox({
+                                  photoUrl: item.photoUrl!,
+                                  title: item.title,
+                                  category: item.category,
+                                  coords: item.coords,
+                                });
+                              }
+                            }}
+                            className="relative w-full h-24 rounded-lg overflow-hidden border border-[#334B56] bg-[#0C171C] group cursor-pointer"
+                          >
+                            <img
+                              src={item.photoUrl}
+                              alt={item.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#132228]/95 via-transparent to-transparent flex items-end justify-between p-2">
+                              <span className="text-[9px] text-[#38BDF8] font-mono bg-[#132228]/90 px-1.5 py-0.5 rounded border border-[#38BDF8]/40 flex items-center gap-1">
+                                <ImageIcon className="w-3 h-3" /> Photo Evidence
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
+                          <h4 className="text-xs font-semibold text-[#F8FAFC] tracking-tight leading-snug">
+                            {item.title}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#94A3B8]">
+                            <span className="capitalize font-mono">Category: {item.category.replace(/_/g, ' ')}</span>
+                            <span>•</span>
+                            <button
+                              type="button"
+                              onClick={() => onFlyToCoords && onFlyToCoords(item.coords)}
+                              className="text-[#38BDF8] hover:text-[#F8FAFC] flex items-center gap-0.5 cursor-pointer font-mono font-medium"
+                            >
+                              <MapPin className="w-2.5 h-2.5" />
+                              {item.coords[0].toFixed(5)}, {item.coords[1].toFixed(5)}
+                            </button>
+                          </div>
+                        </div>
+
+                        {item.description && (
+                          <p className="text-[10px] text-[#94A3B8] bg-[#1B2F38] p-2 rounded-lg border border-[#334B56] line-clamp-2 italic">
+                            "{item.description}"
+                          </p>
+                        )}
+
+                        <div className="flex items-center gap-2 pt-1 border-t border-[#334B56]">
+                          <button
+                            type="button"
+                            onClick={() => handleAssignToOfficer(item)}
+                            className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-semibold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer active:scale-95"
+                            title="Approve and assign to field officer"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Approve & Assign to Officer</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleReject(item)}
+                            className="py-1.5 px-3 rounded-lg bg-[#E05A47]/20 hover:bg-[#E05A47]/30 text-[#FCA5A5] border border-[#E05A47]/60 font-semibold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer active:scale-95"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Reject</span>
+                          </button>
+                        </div>
                       </div>
-                    )}
+                    ))
+                  )}
+                </div>
+              )}
 
-                    {/* Title & Category */}
-                    <div>
-                      <h4 className="text-xs font-semibold text-[#F8FAFC] tracking-tight leading-snug">
-                        {item.title}
-                      </h4>
-                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#94A3B8]">
-                        <span className="capitalize text-[#94A3B8] font-mono">
-                          Category: {item.category.replace(/_/g, ' ')}
-                        </span>
-                        <span>•</span>
-                        <button
-                          type="button"
-                          onClick={() => onFlyToCoords && onFlyToCoords(item.coords)}
-                          className="text-[#38BDF8] hover:text-[#F8FAFC] flex items-center gap-0.5 cursor-pointer font-mono font-medium"
-                          title="Fly to GPS Coordinates on Map"
-                        >
-                          <MapPin className="w-2.5 h-2.5" />
-                          {item.coords[0].toFixed(5)}, {item.coords[1].toFixed(5)}
-                        </button>
-                      </div>
-                    </div>
-
-                    {item.description && (
-                      <p className="text-[10px] text-[#94A3B8] bg-[#1B2F38] p-2 rounded-lg border border-[#334B56] line-clamp-2 italic">
-                        "{item.description}"
-                      </p>
-                    )}
-
-                    {/* Action Buttons: [✅ Approve & Publish] and [❌ Reject] */}
-                    <div className="flex items-center gap-2 pt-1 border-t border-[#334B56]">
-                      <button
-                        type="button"
-                        onClick={() => handleApprove(item)}
-                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-semibold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer active:scale-95"
-                        title="Approve item and publish immediately to the live GIS map"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Approve & Publish</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReject(item)}
-                        className="py-1.5 px-3 rounded-lg bg-[#E05A47]/20 hover:bg-[#E05A47]/30 text-[#FCA5A5] border border-[#E05A47]/60 font-semibold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer active:scale-95"
-                        title="Reject submission"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        <span>Reject</span>
-                      </button>
-                    </div>
+              {/* STEP 2: Inspection Requests */}
+              {verificationQueueStep === 2 && (
+                <div className="space-y-2">
+                  <div className="text-[10px] text-[#94A3B8] flex items-center justify-between px-0.5">
+                    <span className="font-semibold text-[#F59E0B]">Field Officer Inspection Requests</span>
+                    <span className="font-mono">{step2Items.length} awaiting authorization</span>
                   </div>
-                ))
+
+                  {step2Items.length === 0 ? (
+                    <div className="p-3 text-center rounded-lg bg-[#0C171C]/80 border border-[#334B56] text-[#94A3B8] text-xs flex flex-col items-center gap-1">
+                      <ShieldCheck className="w-5 h-5 text-[#10B981]" />
+                      <span className="font-semibold text-[#F8FAFC]">No pending inspection authorizations</span>
+                      <span className="text-[10px] text-[#94A3B8]">
+                        Field officers have not requested any new inspection authorizations.
+                      </span>
+                    </div>
+                  ) : (
+                    step2Items.map((item) => (
+                      <div
+                        key={`step2-${item.id}`}
+                        className="p-3 rounded-xl bg-[#0C171C]/90 border border-[#F59E0B]/50 flex flex-col gap-2 shadow-sm"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-[#F59E0B]/20 text-[#FDE68A] border-[#F59E0B]/60">
+                            Inspection Sign-off Requested
+                          </span>
+                          <span className="text-[10px] font-mono text-[#38BDF8]">
+                            Officer: {item.submitted_by}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-xs font-semibold text-[#F8FAFC] tracking-tight leading-snug">
+                            {item.title}
+                          </h4>
+                          <div className="text-[10px] text-[#94A3B8] mt-0.5">
+                            {item.officer_notes || 'Officer has surveyed site and requested official inspection phase authorization.'}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1 border-t border-[#334B56]">
+                          <button
+                            type="button"
+                            onClick={() => handleAuthorizeInspection(item)}
+                            className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-[#D97706] to-[#F59E0B] hover:brightness-110 text-[#0C171C] font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer active:scale-95"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Authorize Inspection Phase</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* STEP 3: Resolution Verifications */}
+              {verificationQueueStep === 3 && (
+                <div className="space-y-2">
+                  <div className="text-[10px] text-[#94A3B8] flex items-center justify-between px-0.5">
+                    <span className="font-semibold text-[#10B981]">Officer Repaired & Proof Submitted</span>
+                    <span className="font-mono">{step3Items.length} awaiting final audit</span>
+                  </div>
+
+                  {step3Items.length === 0 ? (
+                    <div className="p-3 text-center rounded-lg bg-[#0C171C]/80 border border-[#334B56] text-[#94A3B8] text-xs flex flex-col items-center gap-1">
+                      <ShieldCheck className="w-5 h-5 text-[#10B981]" />
+                      <span className="font-semibold text-[#F8FAFC]">No resolution audits pending</span>
+                      <span className="text-[10px] text-[#94A3B8]">
+                        All completed repair works have been verified and signed off.
+                      </span>
+                    </div>
+                  ) : (
+                    step3Items.map((item) => (
+                      <div
+                        key={`step3-${item.id}`}
+                        className="p-3 rounded-xl bg-[#0C171C]/90 border border-[#10B981]/50 flex flex-col gap-2 shadow-sm"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-[#10B981]/20 text-[#6EE7B7] border-[#10B981]/60">
+                            Repair Proof Attached
+                          </span>
+                          <span className="text-[10px] font-mono text-[#94A3B8]">
+                            By: {item.submitted_by}
+                          </span>
+                        </div>
+
+                        {item.photoUrl && (
+                          <div
+                            onClick={() => {
+                              if (onOpenPhotoLightbox) {
+                                onOpenPhotoLightbox({
+                                  photoUrl: item.photoUrl!,
+                                  title: `Repair Proof: ${item.title}`,
+                                  category: item.category,
+                                  coords: item.coords,
+                                });
+                              }
+                            }}
+                            className="relative w-full h-28 rounded-lg overflow-hidden border border-[#334B56] bg-[#0C171C] group cursor-pointer"
+                            title="Click to inspect repair proof photo"
+                          >
+                            <img
+                              src={item.photoUrl}
+                              alt="Repair Proof"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#132228]/95 via-transparent to-transparent flex items-end justify-between p-2">
+                              <span className="text-[9px] text-[#10B981] font-mono bg-[#132228]/90 px-1.5 py-0.5 rounded border border-[#10B981]/40 flex items-center gap-1">
+                                <ImageIcon className="w-3 h-3" /> Resolution Proof Photo
+                              </span>
+                              <span className="text-[9px] text-[#38BDF8] underline font-semibold flex items-center gap-0.5">
+                                <ExternalLink className="w-2.5 h-2.5" /> Inspect
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
+                          <h4 className="text-xs font-semibold text-[#F8FAFC] tracking-tight leading-snug">
+                            {item.title}
+                          </h4>
+                          {item.officer_notes && (
+                            <p className="text-[10px] text-[#94A3B8] bg-[#1B2F38] p-2 rounded-lg border border-[#334B56] mt-1 italic">
+                              "{item.officer_notes}"
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1 border-t border-[#334B56]">
+                          <button
+                            type="button"
+                            onClick={() => handleVerifyResolved(item)}
+                            className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer active:scale-95"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Verify & Mark Officially Resolved</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               )}
             </div>
           )}

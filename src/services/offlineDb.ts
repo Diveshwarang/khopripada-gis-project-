@@ -17,6 +17,10 @@ export interface OfflineGrievance {
   approval_status?: ApprovalStatus;
   submitted_by?: string;
   status?: 'reported' | 'under_inspection' | 'in_progress' | 'resolved' | string;
+  resolution_photo_url?: string;
+  officer_notes?: string;
+  assigned_to?: string;
+  verified_by?: string;
 }
 
 export interface CachedFacility {
@@ -80,6 +84,10 @@ export interface CachedIssue {
   photo_url?: string;
   approval_status?: ApprovalStatus;
   submitted_by?: string;
+  resolution_photo_url?: string;
+  officer_notes?: string;
+  assigned_to?: string;
+  verified_by?: string;
 }
 
 export class SmartVillageOfflineDB extends Dexie {

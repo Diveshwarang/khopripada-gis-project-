@@ -19,6 +19,10 @@ import {
   exportGrievancesToGeoJson,
   exportGrievancesToCsv,
 } from '../services/offlineDb';
+import {
+  transitionToInspectionVerification,
+  transitionToResolutionApproval,
+} from '../services/dataService';
 import { compressImageToBase64 } from '../utils/imageUtils';
 import type { UserRole } from '../types';
 
@@ -40,6 +44,9 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
   const [grievances, setGrievances] = useState<OfflineGrievance[]>([]);
   const [loading, setLoading] = useState(true);
   const [activePhotoUploadId, setActivePhotoUploadId] = useState<number | null>(null);
+  const [officerNotesMap, setOfficerNotesMap] = useState<Record<number, string>>({});
+  const [proofPhotoMap, setProofPhotoMap] = useState<Record<number, string>>({});
+  const [drawerToast, setDrawerToast] = useState<string | null>(null);
   const officerFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadGrievances = async () => {
@@ -47,12 +54,18 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     try {
       const records = await db.offline_grievances.reverse().toArray();
       if (userRole === 'officer') {
-        // Officers ONLY receive and view grievances that have been officially APPROVED by Admin and not resolved
-        const officerWorklist = records.filter(
-          (g) =>
-            (g.approval_status === 'approved' || g.approval_status === undefined) &&
-            (g.status || '').toLowerCase() !== 'resolved'
-        );
+        // Field Officer sees issues assigned to them or in-flight
+        const officerWorklist = records.filter((g) => {
+          const st = g.status || 'reported';
+          return (
+            st === 'assigned_for_inspection' ||
+            st === 'pending_inspection_verification' ||
+            st === 'under_inspection' ||
+            st === 'pending_resolution_approval' ||
+            st === 'reported' ||
+            st === 'in_progress'
+          );
+        });
         setGrievances(officerWorklist);
       } else {
         setGrievances(records);
@@ -70,19 +83,32 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     }
   }, [isOpen, userRole]);
 
-  const handleUpdateStatus = async (id: number, newStatus: string) => {
+
+  // Step 3 (Officer): Start Field Inspection -> updates status to pending_inspection_verification
+  const handleStartFieldInspection = async (id: number) => {
     try {
-      await db.offline_grievances.update(id, { status: newStatus });
-      setGrievances((prev) =>
-        prev
-          .map((item) => (item.id === id ? { ...item, status: newStatus } : item))
-          .filter((item) => (userRole === 'officer' ? item.status !== 'resolved' : true))
-      );
-      if (onGrievanceStatusUpdated) {
-        onGrievanceStatusUpdated();
-      }
+      await transitionToInspectionVerification(id, 'Officer requested inspection authorization.');
+      setDrawerToast('Inspection request sent to Admin for sign-off');
+      setTimeout(() => setDrawerToast(null), 3500);
+      await loadGrievances();
+      if (onGrievanceStatusUpdated) onGrievanceStatusUpdated();
     } catch (err) {
-      console.error('Failed to update status in IndexedDB:', err);
+      console.error('Failed to start inspection:', err);
+    }
+  };
+
+  // Step 5 (Officer): Submit Resolution & Photo -> updates status to pending_resolution_approval
+  const handleSubmitResolutionAndPhoto = async (id: number) => {
+    const photo = proofPhotoMap[id];
+    const notes = officerNotesMap[id] || 'Field repair completed as per specifications.';
+    try {
+      await transitionToResolutionApproval(id, photo || '', notes);
+      setDrawerToast('Resolution proof submitted! Awaiting Admin audit.');
+      setTimeout(() => setDrawerToast(null), 3500);
+      await loadGrievances();
+      if (onGrievanceStatusUpdated) onGrievanceStatusUpdated();
+    } catch (err) {
+      console.error('Failed to submit resolution:', err);
     }
   };
 
@@ -91,13 +117,8 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     if (!file || activePhotoUploadId === null) return;
     try {
       const compressed = await compressImageToBase64(file, 800, 800, 0.75);
-      await db.offline_grievances.update(activePhotoUploadId, { photoBase64: compressed });
-      setGrievances((prev) =>
-        prev.map((g) => (g.id === activePhotoUploadId ? { ...g, photoBase64: compressed } : g))
-      );
-      if (onGrievanceStatusUpdated) {
-        onGrievanceStatusUpdated();
-      }
+      setProofPhotoMap((prev) => ({ ...prev, [activePhotoUploadId]: compressed }));
+      await db.offline_grievances.update(activePhotoUploadId, { resolution_photo_url: compressed });
     } catch (err) {
       console.error('Failed to attach proof photo:', err);
     } finally {
@@ -242,6 +263,13 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
         )}
       </div>
 
+      {/* Toast Notice */}
+      {drawerToast && (
+        <div className="mx-4 mt-2 px-3 py-2 rounded-xl bg-[#10B981]/20 border border-[#10B981]/50 text-[#6EE7B7] text-xs font-semibold animate-in fade-in">
+          {drawerToast}
+        </div>
+      )}
+
       {/* List Content */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
         {loading ? (
@@ -353,61 +381,99 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                   </p>
                 )}
 
-                {/* Officer Action Bar: Status Transitions & Photo Attachment */}
+                {/* Officer Action Bar: Multi-Tier Verification Lifecycle */}
                 {userRole === 'officer' && (
-                  <div className="p-2 rounded-lg bg-[#0C171C] border border-[#334B56] space-y-2 mt-1">
+                  <div className="p-2.5 rounded-xl bg-[#0C171C] border border-[#334B56] space-y-2 mt-1">
                     <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-[#94A3B8] font-medium">Worklist Status:</span>
-                      <span className="font-mono text-[#F8FAFC] capitalize">
+                      <span className="text-[#94A3B8] font-medium">Lifecycle Stage:</span>
+                      <span className="font-mono text-[#38BDF8] font-bold uppercase">
                         {currentStatus.replace(/_/g, ' ')}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    {/* Stage A: assigned_for_inspection -> [Start Field Inspection] */}
+                    {(currentStatus === 'assigned_for_inspection' || currentStatus === 'reported') && (
                       <button
                         type="button"
-                        onClick={() => handleUpdateStatus(g.id!, 'under_inspection')}
-                        className={`px-2 py-1 rounded text-[10px] font-semibold transition cursor-pointer ${
-                          currentStatus === 'under_inspection'
-                            ? 'bg-[#38BDF8] text-[#0C171C] font-bold shadow-sm'
-                            : 'bg-[#1B2F38] text-[#94A3B8] hover:bg-[#233B46] hover:text-[#F8FAFC]'
-                        }`}
+                        onClick={() => handleStartFieldInspection(g.id!)}
+                        className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#D97706] to-[#F59E0B] hover:brightness-110 text-[#0C171C] font-bold text-xs shadow-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        Inspecting
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Start Field Inspection</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleUpdateStatus(g.id!, 'in_progress')}
-                        className={`px-2 py-1 rounded text-[10px] font-semibold transition cursor-pointer ${
-                          currentStatus === 'in_progress'
-                            ? 'bg-[#E05A47] text-[#F8FAFC] font-bold shadow-sm'
-                            : 'bg-[#1B2F38] text-[#94A3B8] hover:bg-[#233B46] hover:text-[#F8FAFC]'
-                        }`}
-                      >
-                        In Progress
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleUpdateStatus(g.id!, 'resolved')}
-                        className="px-2.5 py-1 rounded text-[10px] font-bold bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] transition cursor-pointer flex items-center gap-1 active:scale-95 shadow-sm"
-                        title="Mark issue completely resolved"
-                      >
-                        <CheckCircle2 className="w-3 h-3" />
-                        Resolved
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActivePhotoUploadId(g.id!);
-                          officerFileInputRef.current?.click();
-                        }}
-                        className="ml-auto px-2 py-1 rounded text-[10px] font-semibold bg-[#1B2F38] hover:bg-[#233B46] text-[#94A3B8] hover:text-[#F8FAFC] border border-[#334B56] flex items-center gap-1 cursor-pointer transition"
-                        title="Attach field proof photo"
-                      >
-                        <Camera className="w-3 h-3" />
-                        {hasPhoto ? 'Update Photo' : 'Attach Proof'}
-                      </button>
-                    </div>
+                    )}
+
+                    {/* Stage B: pending_inspection_verification -> Awaiting Admin Authorization */}
+                    {currentStatus === 'pending_inspection_verification' && (
+                      <div className="p-2 rounded-lg bg-[#F59E0B]/15 border border-[#F59E0B]/50 text-[#FDE68A] text-[10px] font-semibold text-center animate-pulse">
+                        Inspection request sent to Admin for sign-off
+                      </div>
+                    )}
+
+                    {/* Stage C: under_inspection / in_progress -> Camera Upload + Notes + [Submit Resolution & Photo] */}
+                    {(currentStatus === 'under_inspection' || currentStatus === 'in_progress') && (
+                      <div className="space-y-2 pt-1 border-t border-[#334B56]/60">
+                        <div className="text-[10px] text-[#10B981] font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Inspection Authorized — Proceed with Repair</span>
+                        </div>
+
+                        {/* Camera upload or preview */}
+                        {proofPhotoMap[g.id!] || g.resolution_photo_url ? (
+                          <div className="relative w-full h-20 rounded-lg overflow-hidden border border-[#10B981]/50 bg-[#132228]">
+                            <img
+                              src={proofPhotoMap[g.id!] || g.resolution_photo_url}
+                              alt="Repair proof"
+                              className="w-full h-full object-cover"
+                            />
+                            <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-[#132228]/95 text-[#10B981] border border-[#10B981]/40">
+                              Proof Photo Ready
+                            </span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActivePhotoUploadId(g.id!);
+                              officerFileInputRef.current?.click();
+                            }}
+                            className="w-full py-2 px-3 rounded-lg border border-dashed border-[#38BDF8]/60 bg-[#1B2F38] hover:bg-[#233B46] text-[#38BDF8] text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Capture Repair Photo Proof</span>
+                          </button>
+                        )}
+
+                        {/* Officer Repair Notes */}
+                        <input
+                          type="text"
+                          value={officerNotesMap[g.id!] || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setOfficerNotesMap((prev) => ({ ...prev, [g.id!]: val }));
+                          }}
+                          placeholder="e.g. Unblocked stormwater drain channel & reinforced culvert"
+                          className="w-full bg-[#132228] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-[11px] focus:outline-none focus:border-[#10B981]"
+                        />
+
+                        {/* Submit Resolution & Photo Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleSubmitResolutionAndPhoto(g.id!)}
+                          className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold text-xs shadow-md transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Submit Resolution & Photo</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Stage D: pending_resolution_approval */}
+                    {currentStatus === 'pending_resolution_approval' && (
+                      <div className="p-2 rounded-lg bg-[#10B981]/15 border border-[#10B981]/50 text-[#6EE7B7] text-[10px] font-semibold text-center">
+                        Resolution & photo submitted • Awaiting Sarpanch/Admin audit
+                      </div>
+                    )}
                   </div>
                 )}
 
