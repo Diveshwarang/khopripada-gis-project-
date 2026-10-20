@@ -117,8 +117,24 @@
 }
 
 @media (max-width: 768px) {
-  .leaflet-bottom.leaflet-right .leaflet-control-zoom {
-    margin-bottom: 76px !important;
+  /* Mobile: Move zoom control to top-20 right-3 (80px, 12px) to prevent collision with bottom dock */
+  .leaflet-control-zoom {
+    position: fixed !important;
+    top: 80px !important;
+    right: 12px !important;
+    bottom: auto !important;
+    left: auto !important;
+    margin: 0 !important;
+    z-index: 1050 !important;
+  }
+
+  /* Mobile: Set scale bar to bottom-20 left-3 (80px, 12px) */
+  .leaflet-bottom.leaflet-left .leaflet-control-scale {
+    position: fixed !important;
+    bottom: 80px !important;
+    left: 12px !important;
+    margin: 0 !important;
+    z-index: 1050 !important;
   }
 }
 
@@ -139,12 +155,6 @@
 .leaflet-bottom.leaflet-left .leaflet-control-scale {
   margin-bottom: 16px;
   margin-left: 16px;
-}
-
-@media (max-width: 768px) {
-  .leaflet-bottom.leaflet-left .leaflet-control-scale {
-    margin-bottom: 76px !important;
-  }
 }
 
 .leaflet-control-scale-line {

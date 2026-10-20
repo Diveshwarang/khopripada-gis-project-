@@ -16,7 +16,6 @@ import {
   Minimize2,
   FileText,
   ClipboardList,
-  Compass,
   BarChart3,
   Activity,
   CheckCircle2,
@@ -178,12 +177,6 @@ export const VillageMap = () => {
     return 'Resident Portal • Khopripada Ward 1';
   };
 
-  const getPanchayatIdShort = (role: Role) => {
-    if (role === 'admin') return 'GP-KHOP-001';
-    if (role === 'officer') return 'GS-MH-4012';
-    return 'Ward 1';
-  };
-
   // Portal Switcher state & click-outside ref
   const [isPortalSwitcherOpen, setIsPortalSwitcherOpen] = useState<boolean>(false);
   const portalSwitcherRef = useRef<HTMLDivElement>(null);
@@ -335,7 +328,7 @@ export const VillageMap = () => {
 
   // Mobile Touch Interface States (< 768px viewports)
   const [mobileSheet, setMobileSheet] = useState<'action' | 'analytics' | 'worklist' | 'layers' | 'role' | null>(null);
-  const [activeMobileTab, setActiveMobileTab] = useState<'map' | 'heatmap' | 'analytics' | 'worklist' | null>('map');
+  const [activeMobileTab, setActiveMobileTab] = useState<'map' | 'filters' | 'heatmap' | 'analytics' | 'worklist' | null>('map');
   const [mobileGrievanceList, setMobileGrievanceList] = useState<OfflineGrievance[]>([]);
   const [pendingSubmissionsList, setPendingSubmissionsList] = useState<{
     id: string | number;
@@ -881,7 +874,7 @@ export const VillageMap = () => {
         marker.bindPopup(popupHtml, {
           className: 'gis-dark-popup',
           closeButton: true,
-          autoPanPadding: [12, 75],
+          autoPanPadding: [15, 80],
         });
 
         group.addLayer(marker);
@@ -1164,7 +1157,7 @@ export const VillageMap = () => {
         marker.bindPopup(popupHtml, {
           className: 'gis-dark-popup',
           closeButton: true,
-          autoPanPadding: [12, 75],
+          autoPanPadding: [15, 80],
         });
 
         group.addLayer(marker);
@@ -1792,7 +1785,7 @@ export const VillageMap = () => {
             </div>
           </div>
         `,
-          { className: 'gis-dark-popup', autoPanPadding: [12, 75] }
+          { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
         );
 
         grievancesLayerRef.current?.addLayer(marker);
@@ -1887,6 +1880,16 @@ export const VillageMap = () => {
     );
     boundaryLayerRef.current = boundary;
 
+    // 4.1 Automatic Auto-Focus & Fit Bounds on mobile mount (settlement buildings & facilities)
+    const khopripadaSettlementBounds = L.latLngBounds([
+      [19.3512, 72.8805],
+      [19.3588, 72.8885],
+    ]);
+
+    if (window.innerWidth < 768) {
+      map.fitBounds(khopripadaSettlementBounds, { padding: [24, 24], maxZoom: 16, animate: false });
+    }
+
     // 5. Layer Groups
     const landmarksGroup = L.layerGroup().addTo(map);
     landmarksLayerRef.current = landmarksGroup;
@@ -1964,7 +1967,7 @@ export const VillageMap = () => {
       marker.bindPopup(popupContent, {
         className: 'gis-dark-popup',
         closeButton: true,
-        autoPanPadding: [12, 75],
+        autoPanPadding: [15, 80],
       });
 
       landmarksGroup.addLayer(marker);
@@ -1977,18 +1980,27 @@ export const VillageMap = () => {
       setFacilityCount(facilities.length);
       renderFacilityMarkers(facilities, 'all');
 
-      // Verify that the map bounds fit automatically around all mapped facilities without crashing
-      const validCoords = facilities
-        .filter((f) => !isNaN(f.latitude) && !isNaN(f.longitude) && f.latitude !== 0 && f.longitude !== 0)
-        .map((f) => [f.latitude, f.longitude] as [number, number]);
+      // Auto-focus and fit bounds
+      if (window.innerWidth < 768) {
+        const khopripadaSettlementBounds = L.latLngBounds([
+          [19.3512, 72.8805],
+          [19.3588, 72.8885],
+        ]);
+        map.fitBounds(khopripadaSettlementBounds, { padding: [24, 24], maxZoom: 16, animate: false });
+      } else {
+        // On desktop, fit all facilities across the study corridor
+        const validCoords = facilities
+          .filter((f) => !isNaN(f.latitude) && !isNaN(f.longitude) && f.latitude !== 0 && f.longitude !== 0)
+          .map((f) => [f.latitude, f.longitude] as [number, number]);
 
-      if (validCoords.length > 0) {
-        const bounds = L.latLngBounds(validCoords);
-        if (bounds.isValid()) {
-          try {
-            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-          } catch {
-            // ignore transient container size errors
+        if (validCoords.length > 0) {
+          const bounds = L.latLngBounds(validCoords);
+          if (bounds.isValid()) {
+            try {
+              map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+            } catch {
+              // ignore transient container size errors
+            }
           }
         }
       }
@@ -2121,6 +2133,13 @@ export const VillageMap = () => {
 
     setTimeout(() => {
       map.invalidateSize();
+      if (window.innerWidth < 768) {
+        const khopripadaSettlementBounds = L.latLngBounds([
+          [19.3512, 72.8805],
+          [19.3588, 72.8885],
+        ]);
+        map.fitBounds(khopripadaSettlementBounds, { padding: [24, 24], maxZoom: 16, animate: false });
+      }
     }, 150);
 
     return () => {
@@ -2225,7 +2244,7 @@ export const VillageMap = () => {
         <div class="text-[10px] text-[#10B981] mt-1 font-semibold">Accuracy: ±${accuracy.toFixed(1)}m (Corridor Verified)</div>
       </div>
     `,
-      { className: 'gis-dark-popup', autoPanPadding: [12, 75] }
+      { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
     );
 
     gpsLocationLayerRef.current?.addLayer(accuracyCircle);
@@ -2259,12 +2278,20 @@ export const VillageMap = () => {
     }
   };
 
-  // Recenter explicitly on Khopripada Core (19.35509, 72.88463)
+  // Recenter explicitly on Khopripada Core settlement
   const recenterToKhopripadaCore = useCallback(() => {
     if (!mapInstanceRef.current) return;
-    mapInstanceRef.current.flyTo(KHOPRIPADA_CORE, DEFAULT_ZOOM, {
-      duration: 1.4,
-    });
+    if (window.innerWidth < 768) {
+      const settlementBounds = L.latLngBounds([
+        [19.3512, 72.8805],
+        [19.3588, 72.8885],
+      ]);
+      mapInstanceRef.current.fitBounds(settlementBounds, { padding: [24, 24], maxZoom: 16 });
+    } else {
+      mapInstanceRef.current.flyTo(KHOPRIPADA_CORE, DEFAULT_ZOOM, {
+        duration: 1.4,
+      });
+    }
   }, []);
 
   // Recenter explicitly on Juchandra Station (19.36001, 72.87285)
@@ -2406,49 +2433,36 @@ export const VillageMap = () => {
         </div>
       )}
 
-      {/* 1.0 SLIM MOBILE TOP BAR (HEIGHT: 48PX, SCREENS < 768PX) */}
-      <header className="flex md:hidden h-12 w-full bg-[#132228]/95 backdrop-blur-md border-b border-[#334B56] px-2.5 items-center justify-between z-[1100] flex-shrink-0 select-none">
-        {/* Left: Compact Brand Icon + "Khopripada GIS" + Live Sync Dot */}
-        <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-[#1B2F38] border border-[#334B56] flex items-center justify-center text-[#38BDF8] shadow-sm flex-shrink-0">
+      {/* 1.0 SLIM MOBILE TOP BAR (HEIGHT: 52PX / H-13, SCREENS < 768PX) */}
+      <header className="flex md:hidden h-13 w-full bg-[#132228]/95 backdrop-blur-md border-b border-[#334B56] px-3 items-center justify-between gap-1.5 z-[1100] flex-shrink-0 select-none">
+        {/* Left: Compact icon + "Khopripada" */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-[#1B2F38] border border-[#334B56] flex items-center justify-center text-[#38BDF8] shadow-sm shrink-0">
             <Building2 className="w-4 h-4" />
           </div>
-          <div className="flex items-center gap-1 min-w-0">
-            <span className="text-xs sm:text-sm font-bold text-[#F8FAFC] tracking-tight truncate">
-              Khopripada GIS
-            </span>
-            <span
-              className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse shadow-[0_0_6px_#10B981] flex-shrink-0"
-              title="Live Sync Active"
-            />
-          </div>
+          <span className="text-xs font-bold text-white tracking-wide shrink-0">
+            Khopripada
+          </span>
         </div>
 
-        {/* Center: Active Role Badge + Panchayat Identifier (Tapping opens Role Switcher Sheet) */}
+        {/* Center: Clean Compact Role Pill */}
         <button
           onClick={() => setMobileSheet('role')}
-          className="px-2 py-1 rounded-full bg-[#1B2F38] border border-[#38BDF8]/40 text-[11px] font-semibold text-[#F8FAFC] flex items-center gap-1 active:scale-95 transition shadow-sm min-h-[34px] cursor-pointer max-w-[145px]"
+          className="flex items-center gap-1 bg-[#1B2F38] border border-[#334B56] text-[#38BDF8] text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer active:scale-95 transition shadow-sm shrink-0"
           title={`${getPanchayatId(userRole)} • Tap to switch portal`}
         >
-          <span className="truncate">
-            {userRole === 'admin'
-              ? '🏛️ Admin'
-              : userRole === 'officer'
-              ? '📋 Officer'
-              : '👤 Citizen'}
-          </span>
-          <span className="text-[9px] font-mono text-[#38BDF8] bg-[#0C171C] px-1 py-0.5 rounded border border-[#334B56] flex-shrink-0">
-            {getPanchayatIdShort(userRole)}
-          </span>
-          <ChevronDown className="w-3 h-3 text-[#38BDF8] flex-shrink-0" />
+          <span>👤</span>
+          <span>{userRole === 'admin' ? 'Sarpanch' : userRole === 'officer' ? 'Officer' : 'Ward 1'}</span>
+          <span className="text-[10px]">▾</span>
         </button>
 
-        {/* Right: GPS Locate Me + Quick Layers + Log Out */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        {/* Right: Action icons in a unified group with 40x40px touch targets */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* GPS Locate Me [ 📍 ] */}
           <button
             onClick={handleLocateMe}
             disabled={isLocating}
-            className={`p-1.5 rounded-xl border transition active:scale-95 min-w-[34px] min-h-[34px] flex items-center justify-center cursor-pointer ${
+            className={`w-10 h-10 min-w-[40px] min-h-[40px] rounded-xl border transition active:scale-95 flex items-center justify-center cursor-pointer text-base ${
               isLocating
                 ? 'bg-[#38BDF8]/20 border-[#38BDF8] text-[#38BDF8]'
                 : 'bg-[#1B2F38] border-[#334B56] text-[#38BDF8] hover:text-[#F8FAFC]'
@@ -2456,11 +2470,13 @@ export const VillageMap = () => {
             title="Locate Me (GPS)"
             aria-label="Locate me on map"
           >
-            <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+            {isLocating ? <Locate className="w-4 h-4 animate-spin text-[#38BDF8]" /> : '📍'}
           </button>
+
+          {/* Basemap Switcher [ 🗺️ ] */}
           <button
             onClick={() => setMobileSheet(mobileSheet === 'layers' ? null : 'layers')}
-            className={`p-1.5 rounded-xl border transition active:scale-95 min-w-[34px] min-h-[34px] flex items-center justify-center cursor-pointer ${
+            className={`w-10 h-10 min-w-[40px] min-h-[40px] rounded-xl border transition active:scale-95 flex items-center justify-center cursor-pointer text-base ${
               mobileSheet === 'layers'
                 ? 'bg-[#38BDF8]/20 border-[#38BDF8] text-[#38BDF8]'
                 : 'bg-[#1B2F38] border-[#334B56] text-[#38BDF8] hover:text-[#F8FAFC]'
@@ -2468,15 +2484,17 @@ export const VillageMap = () => {
             title="Layers & Basemaps"
             aria-label="Toggle layers bottom sheet"
           >
-            <Layers className="w-3.5 h-3.5" />
+            🗺️
           </button>
+
+          {/* Log Out [ 🚪 ] */}
           <button
             onClick={handleMobileLogout}
-            className="p-1.5 rounded-xl bg-[#E05A47]/15 hover:bg-[#E05A47]/30 border border-[#E05A47]/40 text-[#FCA5A5] hover:text-[#F8FAFC] min-w-[34px] min-h-[34px] flex items-center justify-center cursor-pointer active:scale-95 transition"
+            className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-xl bg-[#E05A47]/15 hover:bg-[#E05A47]/30 border border-[#E05A47]/40 text-[#FCA5A5] hover:text-[#F8FAFC] flex items-center justify-center cursor-pointer active:scale-95 transition text-base"
             title="Sign Out / Log Out"
             aria-label="Log Out from Portal"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            🚪
           </button>
         </div>
       </header>
@@ -3178,100 +3196,78 @@ export const VillageMap = () => {
         style={{ touchAction: 'pan-x pan-y' }}
       />
 
-      {/* 5.1 TOUCH-FIRST MOBILE BOTTOM NAVIGATION BAR (< 768px) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[2000] h-16 bg-[#132228]/95 backdrop-blur-xl border-t border-[#334B56] px-2 flex items-center justify-around pb-safe select-none shadow-[0_-10px_30px_rgba(12,23,28,0.7)]">
+      {/* 5.1 SYMMETRICAL 5-ITEM TOUCH-FIRST MOBILE BOTTOM DOCK (< 768px) */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-[2000] h-16 bg-[#132228]/95 backdrop-blur-xl border-t border-[#334B56] grid grid-cols-5 items-center px-1 pb-safe select-none shadow-[0_-10px_30px_rgba(12,23,28,0.7)]">
         {/* Tab 1: Map */}
         <button
           onClick={() => {
             setMobileSheet(null);
             setActiveMobileTab('map');
           }}
-          className={`flex flex-col items-center justify-center min-w-[54px] min-h-[44px] rounded-xl transition active:scale-95 cursor-pointer ${
-            activeMobileTab === 'map' && !mobileSheet
-              ? 'text-[#38BDF8]'
-              : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+          className={`flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer ${
+            activeMobileTab === 'map' && !mobileSheet ? 'text-[#38BDF8]' : 'text-slate-300 hover:text-white'
           }`}
-          title="Full Map View"
+          title="Map View"
         >
-          <Compass className="w-5 h-5 mb-0.5" />
-          <span className="text-[10px] font-semibold">Map</span>
+          <span className="text-lg">🗺️</span>
+          <span className="text-[10px] mt-0.5 font-semibold">Map</span>
         </button>
 
-        {/* Tab 2: Heatmap */}
+        {/* Tab 2: Filter/Categories */}
+        <button
+          onClick={() => {
+            setMobileSheet(mobileSheet === 'layers' ? null : 'layers');
+            setActiveMobileTab('filters');
+          }}
+          className={`flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer ${
+            mobileSheet === 'layers' ? 'text-[#38BDF8]' : 'text-slate-300 hover:text-white'
+          }`}
+          title="Filters & Layers"
+        >
+          <span className="text-lg">🏷️</span>
+          <span className="text-[10px] mt-0.5 font-semibold">Filters</span>
+        </button>
+
+        {/* Tab 3: Center Action FAB */}
+        <div className="flex justify-center -mt-5">
+          <button
+            onClick={() => setMobileSheet(mobileSheet === 'action' ? null : 'action')}
+            className="w-13 h-13 rounded-full bg-gradient-to-r from-[#0D9488] to-[#10B981] text-white shadow-xl flex items-center justify-center text-2xl border-4 border-[#132228] active:scale-95 transition-transform cursor-pointer"
+            aria-label="Quick Actions"
+            title="Propose Community Facility or Report Civic Grievance"
+          >
+            +
+          </button>
+        </div>
+
+        {/* Tab 4: Heatmap */}
         <button
           onClick={() => {
             toggleHeatmap(!showHeatmap);
             setActiveMobileTab('heatmap');
           }}
-          className={`flex flex-col items-center justify-center min-w-[54px] min-h-[44px] rounded-xl transition active:scale-95 cursor-pointer ${
-            showHeatmap
-              ? 'text-[#FCA5A5] drop-shadow-[0_0_8px_rgba(224,90,71,0.6)]'
-              : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+          className={`flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer ${
+            showHeatmap ? 'text-[#E05A47]' : 'text-slate-300 hover:text-white'
           }`}
-          title="Toggle Failure Heatmap"
+          title="Failure Heatmap"
         >
-          <Flame className={`w-5 h-5 mb-0.5 ${showHeatmap ? 'animate-pulse text-[#E05A47]' : ''}`} />
-          <span className="text-[10px] font-semibold">Heatmap</span>
+          <span className="text-lg">🔥</span>
+          <span className="text-[10px] mt-0.5 font-semibold">Heatmap</span>
         </button>
 
-        {/* Tab 3: Action Floating Center Button */}
-        <div className="relative flex items-center justify-center">
-          <button
-            onClick={() => setMobileSheet(mobileSheet === 'action' ? null : 'action')}
-            className="w-12 h-12 -mt-6 rounded-full bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 shadow-[0_4px_16px_rgba(16,185,129,0.4)] border-2 border-[#132228] flex items-center justify-center text-[#F8FAFC] active:scale-90 transition-transform cursor-pointer"
-            title="Propose Facility or Report Issue"
-            aria-label="Quick Actions"
-          >
-            <Plus className={`w-6 h-6 transition-transform duration-200 ${mobileSheet === 'action' ? 'rotate-45' : ''}`} />
-          </button>
-        </div>
-
-        {/* Tab 4: Analytics & ML (STRICTLY HIDDEN for Resident / userRole === 'user') */}
-        {(userRole === 'admin' || userRole === 'officer') && (
-          <button
-            onClick={() => {
-              setMobileSheet(mobileSheet === 'analytics' ? null : 'analytics');
-              setActiveMobileTab('analytics');
-            }}
-            className={`flex flex-col items-center justify-center min-w-[54px] min-h-[44px] rounded-xl transition active:scale-95 cursor-pointer ${
-              mobileSheet === 'analytics'
-                ? 'text-[#38BDF8]'
-                : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-            }`}
-            title="Decision Support & ML Priorities"
-          >
-            <BarChart3 className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] font-semibold">Analytics</span>
-          </button>
-        )}
-
-        {/* Tab 5 (or Tab 4 for Resident): Worklist / Approvals / Submissions */}
+        {/* Tab 5: My Submissions */}
         <button
           onClick={() => {
             setMobileSheet(mobileSheet === 'worklist' ? null : 'worklist');
             setActiveMobileTab('worklist');
           }}
-          className={`flex flex-col items-center justify-center min-w-[54px] min-h-[44px] rounded-xl transition active:scale-95 cursor-pointer ${
-            mobileSheet === 'worklist'
-              ? 'text-[#38BDF8]'
-              : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+          className={`flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer ${
+            mobileSheet === 'worklist' ? 'text-[#38BDF8]' : 'text-slate-300 hover:text-white'
           }`}
-          title={
-            userRole === 'officer'
-              ? 'Field Worklist'
-              : userRole === 'admin'
-              ? 'Pending Approvals Queue'
-              : 'My Field Reports & Submissions'
-          }
+          title="My Reports & Submissions"
         >
-          <ClipboardList className="w-5 h-5 mb-0.5" />
-          <span className="text-[10px] font-semibold">
-            {userRole === 'officer'
-              ? 'Worklist'
-              : userRole === 'admin'
-              ? 'Approvals'
-              : 'Submissions'}
-          </span>
+          <span className="text-lg">📋</span>
+          <span className="text-[10px] mt-0.5 font-semibold">Reports</span>
         </button>
       </nav>
 
@@ -4051,6 +4047,7 @@ export const VillageMap = () => {
               {/* VIEW 4: QUICK FIELD OPERATIONS */}
               {mobileSheet === 'action' && (
                 <div className="space-y-3">
+                  {/* Option 1: Propose Community Facility */}
                   <button
                     onClick={() => {
                       if (isAddFacilityMode) {
@@ -4062,19 +4059,20 @@ export const VillageMap = () => {
                     }}
                     className="w-full p-4 min-h-[64px] rounded-2xl bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] flex items-center gap-3.5 transition active:scale-98 cursor-pointer shadow-md text-left"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] flex items-center justify-center text-white flex-shrink-0 shadow-sm">
-                      <Plus className="w-6 h-6" />
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] flex items-center justify-center text-white flex-shrink-0 shadow-sm text-2xl">
+                      🏛️
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-[#F8FAFC]">
-                        {isAddFacilityMode ? 'Cancel Placing Asset' : '+ Propose / Add Facility'}
+                        {isAddFacilityMode ? 'Cancel Placing Asset' : '🏛️ Propose Community Facility'}
                       </h4>
-                      <p className="text-xs text-[#94A3B8] mt-0.5">
-                        Tap map to drop GPS point for drinking water, shop, clinic, or school
+                      <p className="text-xs text-[#94A3B8] mt-0.5 leading-snug">
+                        For local borewells, community taps, or kirana stores.
                       </p>
                     </div>
                   </button>
 
+                  {/* Option 2: Report Civic Grievance */}
                   <button
                     onClick={() => {
                       setIsGrievanceModalOpen(true);
@@ -4082,15 +4080,15 @@ export const VillageMap = () => {
                     }}
                     className="w-full p-4 min-h-[64px] rounded-2xl bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] flex items-center gap-3.5 transition active:scale-98 cursor-pointer shadow-md text-left"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-[#D9534F] to-[#E05A47] flex items-center justify-center text-white flex-shrink-0 shadow-sm">
-                      <AlertTriangle className="w-6 h-6" />
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-[#D9534F] to-[#E05A47] flex items-center justify-center text-white flex-shrink-0 shadow-sm text-2xl">
+                      ⚠️
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-[#F8FAFC]">
-                        ⚠️ Report Citizen Grievance
+                        ⚠️ Report Civic Grievance
                       </h4>
-                      <p className="text-xs text-[#94A3B8] mt-0.5">
-                        Capture photo with GPS coordinates for broken pipes, potholes, or flood risks
+                      <p className="text-xs text-[#94A3B8] mt-0.5 leading-snug">
+                        For road potholes, overflowing drains, or broken streetlights with camera capture.
                       </p>
                     </div>
                   </button>
