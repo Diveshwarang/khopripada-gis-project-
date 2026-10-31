@@ -318,7 +318,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                   <div className="relative w-full h-28 rounded-lg overflow-hidden border border-[#334B56] bg-[#0C171C]">
                     <img
                       src={g.photoBase64}
-                      alt={g.title}
+                      alt={g?.title || 'Grievance'}
                       className="w-full h-full object-cover"
                     />
                     <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-[#132228]/95 text-[#38BDF8] border border-[#38BDF8]/40">
@@ -336,10 +336,10 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                           severityColors[g.severity] || severityColors.medium
                         }`}
                       >
-                        ● {g.severity.toUpperCase()}
+                        ● {(g?.severity || 'medium').toUpperCase()}
                       </span>
                       <span className="text-[10px] uppercase font-semibold text-[#94A3B8] px-1.5 py-0.5 rounded bg-[#0C171C] border border-[#334B56]">
-                        {g.category}
+                        {g?.category || 'General'}
                       </span>
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
                         isFloods ? 'text-[#FCA5A5] bg-[#E05A47]/20 border-[#E05A47]/50' : 'text-[#6EE7B7] bg-[#10B981]/20 border-[#10B981]/50'
@@ -359,7 +359,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                     </div>
 
                     {/* Incident Title */}
-                    <h4 className="text-xs font-bold text-[#F8FAFC]">{g.title}</h4>
+                    <h4 className="text-xs font-bold text-[#F8FAFC]">{g?.title || 'Civic Issue'}</h4>
                   </div>
 
                   <div className="flex items-center gap-1">

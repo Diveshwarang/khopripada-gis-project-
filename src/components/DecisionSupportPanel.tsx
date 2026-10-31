@@ -23,19 +23,21 @@ export const DecisionSupportPanel: React.FC<DecisionSupportPanelProps> = ({
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
 
   // Filter issues that have AI scores or sort by priority score descending
+  const safeIssues = React.useMemo(() => (Array.isArray(issues) ? issues.filter(Boolean) : []), [issues]);
+
   const topIssues = React.useMemo(() => {
-    return [...issues]
-      .filter((iss) => iss.ai_priority_score !== undefined || iss.severity === 'high' || iss.severity === 'critical')
+    return [...safeIssues]
+      .filter((iss) => iss?.ai_priority_score !== undefined || iss?.severity === 'high' || iss?.severity === 'critical')
       .sort((a, b) => {
-        const scoreA = a.ai_priority_score ?? (a.severity === 'critical' ? 95 : a.severity === 'high' ? 85 : 50);
-        const scoreB = b.ai_priority_score ?? (b.severity === 'critical' ? 95 : b.severity === 'high' ? 85 : 50);
+        const scoreA = a?.ai_priority_score ?? (a?.severity === 'critical' ? 95 : a?.severity === 'high' ? 85 : 50);
+        const scoreB = b?.ai_priority_score ?? (b?.severity === 'critical' ? 95 : b?.severity === 'high' ? 85 : 50);
         return scoreB - scoreA;
       })
       .slice(0, 5);
-  }, [issues]);
+  }, [safeIssues]);
 
   const totalTopBudget = React.useMemo(() => {
-    return topIssues.reduce((sum, item) => sum + (item.estimated_budget_inr || 45000), 0);
+    return topIssues.reduce((sum, item) => sum + (item?.estimated_budget_inr || 45000), 0);
   }, [topIssues]);
 
   if (topIssues.length === 0) return null;
@@ -132,19 +134,19 @@ export const DecisionSupportPanel: React.FC<DecisionSupportPanelProps> = ({
 
                 {/* Title */}
                 <h4 className="text-xs font-semibold text-[#F8FAFC] leading-snug line-clamp-1 mb-1">
-                  {issue.title}
+                  {issue?.title || 'Civic Issue'}
                 </h4>
 
                 {/* Category & Budget */}
                 <div className="flex items-center justify-between text-[10px] text-[#94A3B8] mb-1.5">
-                  <span className="capitalize">{issue.category.replace(/_/g, ' ')}</span>
+                  <span className="capitalize">{(issue?.category || 'general').replace(/_/g, ' ')}</span>
                   <span className="font-mono text-[#38BDF8] font-semibold">
                     Est: ₹{budget.toLocaleString('en-IN')}
                   </span>
                 </div>
 
                 {/* AI Recommendation Snippet */}
-                {issue.ai_recommendation && (
+                {issue?.ai_recommendation && (
                   <p className="text-[10px] text-[#94A3B8] italic bg-[#0C171C] p-1.5 rounded-lg border border-[#334B56] line-clamp-2 mb-2">
                     "{issue.ai_recommendation}"
                   </p>
@@ -153,7 +155,7 @@ export const DecisionSupportPanel: React.FC<DecisionSupportPanelProps> = ({
                 {/* Action button */}
                 <div className="flex items-center justify-between pt-1.5 border-t border-[#334B56] text-[10px]">
                   <span className="font-mono text-[#38BDF8] font-medium text-[10px]">
-                    {issue.latitude.toFixed(4)}°N, {issue.longitude.toFixed(4)}°E
+                    {Number(issue?.latitude || 0).toFixed(4)}°N, {Number(issue?.longitude || 0).toFixed(4)}°E
                   </span>
                   <button
                     type="button"

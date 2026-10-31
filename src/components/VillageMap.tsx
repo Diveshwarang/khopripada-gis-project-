@@ -84,7 +84,7 @@ import {
   JUCHANDRA_STN,
   DEFAULT_ZOOM,
 } from '../constants/gis';
-import { translations } from '../constants/translations';
+import { ErrorBoundary } from './ErrorBoundary';
 
 // Key Landmarks & POIs in Khopripada, Bapane, and Naigaon East
 interface LandmarkPOI {
@@ -155,10 +155,6 @@ type BasemapType = 'osm' | 'satellite';
 export type FacilityCategoryFilter = 'all' | 'water' | 'education' | 'commerce' | 'health' | 'civic' | 'issues';
 
 export const VillageMap = () => {
-  const t = useCallback((key: string, fallback?: string): string => {
-    return (translations.en as Record<string, string>)[key] || fallback || key;
-  }, []);
-
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const boundaryLayerRef = useRef<L.Polygon | null>(null);
@@ -168,16 +164,17 @@ export const VillageMap = () => {
   const grievancesLayerRef = useRef<L.LayerGroup | null>(null);
   const gpsLocationLayerRef = useRef<L.LayerGroup | null>(null);
   const inspectMarkerRef = useRef<L.Marker | null>(null);
-  const tileLayersRef = useRef<Record<BasemapType, L.TileLayer> | null>(null);
+  const osmLayerRef = useRef<L.TileLayer | null>(null);
+  const satelliteLayerRef = useRef<L.TileLayer | null>(null);
+  const heatmapLayerRef = useRef<L.LayerGroup>(L.layerGroup());
   const allFacilitiesRef = useRef<CachedFacility[]>([]);
   const allIssuesRef = useRef<CachedIssue[]>([]);
-  const heatLayerRef = useRef<any>(null);
 
   // Available roles for dedicated Portal Switcher
   const AVAILABLE_ROLES: { id: Role; label: string; desc: string }[] = [
-    { id: 'user', label: t('role_resident'), desc: t('role_resident_desc') },
-    { id: 'officer', label: t('role_officer'), desc: t('role_officer_desc') },
-    { id: 'admin', label: t('role_admin'), desc: t('role_admin_desc') },
+    { id: 'user', label: 'Resident Portal', desc: 'Public Asset Registry & Grievance Reporting' },
+    { id: 'officer', label: 'Field Operations', desc: 'Task Execution & Ground Inspection Verification' },
+    { id: 'admin', label: 'Panchayat Executive', desc: 'Administrative Approvals & ML Decision Console' },
   ];
 
   // Auth Context & Role
@@ -235,7 +232,6 @@ export const VillageMap = () => {
 
   // Spatial ML: DBSCAN Clusters & Heatmap layers
   const dbscanLayerRef = useRef<L.LayerGroup | null>(null);
-  const heatmapGroup = useRef<L.LayerGroup | null>(null);
   const [showDbscanClusters, setShowDbscanClusters] = useState<boolean>(true);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(false);
   const handleUpdateIssueStatusRef = useRef<((id: string, st: string) => Promise<void>) | null>(null);
@@ -245,7 +241,7 @@ export const VillageMap = () => {
   const [currentZoom, setCurrentZoom] = useState<number>(DEFAULT_ZOOM);
   const [centerCoords, setCenterCoords] = useState<[number, number]>(KHOPRIPADA_CORE);
   const [cursorCoords, setCursorCoords] = useState<[number, number] | null>(null);
-  const [activeBasemap, setActiveBasemap] = useState<BasemapType>('osm');
+  const [activeBasemap, setActiveBasemap] = useState<BasemapType>('satellite');
   const [showBoundary, setShowBoundary] = useState<boolean>(true);
   const [showLandmarks, setShowLandmarks] = useState<boolean>(true);
   const [showFacilities, setShowFacilities] = useState<boolean>(true);
@@ -255,6 +251,10 @@ export const VillageMap = () => {
   const [facilitiesList, setFacilitiesList] = useState<CachedFacility[]>([]);
   const [issuesList, setIssuesList] = useState<CachedIssue[]>([]);
   const [activeDataset, setActiveDataset] = useState<'survey' | 'unified'>('survey');
+
+  // Defensive safe arrays
+  const safeIssues = useMemo(() => (Array.isArray(issuesList) ? issuesList.filter(Boolean) : []), [issuesList]);
+  const safeFacilities = useMemo(() => (Array.isArray(facilitiesList) ? facilitiesList.filter(Boolean) : []), [facilitiesList]);
 
   // Inspection and Point Selection
   const [inspectedPoint, setInspectedPoint] = useState<{
@@ -322,39 +322,39 @@ export const VillageMap = () => {
   const isAddFacilityModeRef = useRef<boolean>(false);
   isAddFacilityModeRef.current = isAddFacilityMode;
 
-  // Operational status breakdown counts for village facilities
+  // Operational status breakdown counts for village facilities (defensive reads)
   const operationalCounts = useMemo(() => {
     return {
-      functional: facilitiesList.filter(
+      functional: safeFacilities.filter(
         (f) =>
-          f.operational_status.toLowerCase().includes('functional') &&
-          !f.operational_status.toLowerCase().includes('partial') &&
-          !f.operational_status.toLowerCase().includes('non')
+          (f?.operational_status || 'functional').toLowerCase().includes('functional') &&
+          !(f?.operational_status || '').toLowerCase().includes('partial') &&
+          !(f?.operational_status || '').toLowerCase().includes('non')
       ).length,
-      partial: facilitiesList.filter((f) =>
-        f.operational_status.toLowerCase().includes('partial')
+      partial: safeFacilities.filter((f) =>
+        (f?.operational_status || '').toLowerCase().includes('partial')
       ).length,
-      nonFunctional: facilitiesList.filter(
+      nonFunctional: safeFacilities.filter(
         (f) =>
-          f.operational_status.toLowerCase().includes('non') ||
-          f.operational_status.toLowerCase().includes('repair') ||
-          f.operational_status.toLowerCase().includes('broken') ||
-          f.operational_status.toLowerCase().includes('degraded')
+          (f?.operational_status || '').toLowerCase().includes('non') ||
+          (f?.operational_status || '').toLowerCase().includes('repair') ||
+          (f?.operational_status || '').toLowerCase().includes('broken') ||
+          (f?.operational_status || '').toLowerCase().includes('degraded')
       ).length,
     };
-  }, [facilitiesList]);
+  }, [safeFacilities]);
 
-  // Priority breakdown counts for village issues from CSV
+  // Priority breakdown counts for village issues (defensive reads)
   const issueCounts = useMemo(() => {
     return {
-      total: issuesList.length,
-      high: issuesList.filter(
-        (i) => i.severity === 'high' || i.severity === 'critical' || i.severity === 'urgent'
+      total: safeIssues.length,
+      high: safeIssues.filter(
+        (i) => i?.severity === 'high' || i?.severity === 'critical' || i?.severity === 'urgent'
       ).length,
-      medium: issuesList.filter((i) => i.severity === 'medium').length,
-      low: issuesList.filter((i) => i.severity === 'low').length,
+      medium: safeIssues.filter((i) => i?.severity === 'medium').length,
+      low: safeIssues.filter((i) => i?.severity === 'low').length,
     };
-  }, [issuesList]);
+  }, [safeIssues]);
 
   // Mobile Touch Interface States (< 768px viewports)
   const [mobileSheet, setMobileSheet] = useState<'action' | 'analytics' | 'worklist' | 'layers' | 'role' | null>(null);
@@ -718,7 +718,10 @@ export const VillageMap = () => {
         return; // Clear facility markers when focusing specifically on village issues
       }
 
-      const filtered = facilities.filter((fac) => {
+      const safeList = Array.isArray(facilities) ? facilities.filter(Boolean) : [];
+
+      const filtered = safeList.filter((fac) => {
+        if (!fac) return false;
         // Strict approval filter: user and officer ONLY see approved facilities
         const isApproved = fac.approval_status === 'approved' || fac.approval_status === undefined;
         if ((userRoleRef.current === 'user' || userRoleRef.current === 'officer') && !isApproved) {
@@ -729,7 +732,8 @@ export const VillageMap = () => {
         }
 
         if (filter === 'all') return true;
-        const cat = fac.category.toLowerCase();
+        const cat = (fac.category || 'general').toLowerCase();
+        const facNameLower = (fac.name || '').toLowerCase();
         if (filter === 'water') {
           return (
             cat.includes('water') ||
@@ -738,7 +742,7 @@ export const VillageMap = () => {
             cat.includes('pump') ||
             cat.includes('well') ||
             cat.includes('tank') ||
-            fac.name.toLowerCase().includes('lake')
+            facNameLower.includes('lake')
           );
         }
         if (filter === 'education') {
@@ -792,11 +796,12 @@ export const VillageMap = () => {
       });
 
       filtered.forEach((fac) => {
+        if (!fac || typeof fac.latitude !== 'number' || typeof fac.longitude !== 'number') return;
         // Status Coding:
         // functional: Teal/Cyan (#38BDF8)
         // partially_functional: Warm Gold (#F59E0B)
         // non_functional: Coral Terracotta (#E05A47)
-        const status = fac.operational_status.toLowerCase();
+        const status = (fac.operational_status || 'functional').toLowerCase();
         let statusColor = '#38BDF8'; // Functional Facilities: Teal/Cyan
         let statusLabel = 'Functional';
         let statusBadge = 'bg-[#38BDF8]/20 text-[#7DD3FC] border border-[#38BDF8]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
@@ -816,22 +821,25 @@ export const VillageMap = () => {
           statusBadge = 'bg-[#E05A47]/20 text-[#FCA5A5] border border-[#E05A47]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
         }
 
+        const cat = (fac.category || 'general').toLowerCase();
+        const facName = fac.name || 'Public Asset';
+        const facNameLower = facName.toLowerCase();
         const isWater =
-          fac.category.includes('water') ||
-          fac.category.includes('borewell') ||
-          fac.category.includes('standpost') ||
-          fac.category.includes('tank') ||
-          fac.category.includes('pump') ||
-          fac.category.includes('well') ||
-          fac.name.toLowerCase().includes('lake');
+          cat.includes('water') ||
+          cat.includes('borewell') ||
+          cat.includes('standpost') ||
+          cat.includes('tank') ||
+          cat.includes('pump') ||
+          cat.includes('well') ||
+          facNameLower.includes('lake');
 
         const glyph = isWater
           ? `<svg class="w-3.5 h-3.5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg>`
-          : fac.category.includes('edu') || fac.category.includes('school') || fac.category.includes('coaching') || fac.category.includes('academy')
+          : cat.includes('edu') || cat.includes('school') || cat.includes('coaching') || cat.includes('academy')
           ? `<svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l9-5-9-5-9 5 9 5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>`
-          : fac.category.includes('health') || fac.category.includes('clinic') || fac.category.includes('hospital')
+          : cat.includes('health') || cat.includes('clinic') || cat.includes('hospital')
           ? `<svg class="w-3.5 h-3.5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>`
-          : fac.category.includes('shop') || fac.category.includes('store') || fac.category.includes('commerce') || fac.category.includes('kirana')
+          : cat.includes('shop') || cat.includes('store') || cat.includes('commerce') || cat.includes('kirana')
           ? `<svg class="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>`
           : `<svg class="w-3.5 h-3.5 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>`;
 
@@ -861,7 +869,7 @@ export const VillageMap = () => {
 
         // Clean lightweight Leaflet tooltip that immediately disappears on mouseout
         marker.bindTooltip(
-          `<div class="font-sans font-semibold text-xs text-[#F8FAFC]">${fac.name}</div>`,
+          `<div class="font-sans font-semibold text-xs text-[#F8FAFC]">${facName}</div>`,
           {
             direction: 'top',
             offset: [0, -18],
@@ -871,7 +879,7 @@ export const VillageMap = () => {
         );
 
         // Polished Inspection Popup with Photo Thumbnail & Slate-Marine Palette
-        const monsoonLower = fac.monsoon_accessible.toLowerCase();
+        const monsoonLower = (fac.monsoon_accessible || '').toLowerCase();
         const isFloods =
           monsoonLower.includes('cut') ||
           monsoonLower.includes('inaccessible') ||
@@ -899,14 +907,17 @@ export const VillageMap = () => {
           }
         }
 
+        const safeFacName = facName.replace(/'/g, "\\'");
+        const safeFacCategory = (fac.category || 'General').replace(/'/g, "\\'");
+
         const photoMarkup = resolvedPhoto
           ? `
             <div
-              onclick="window.openPhotoLightbox && window.openPhotoLightbox('${resolvedPhoto}', '${fac.name.replace(/'/g, "\\'")}', '${fac.category}', [${fac.latitude}, ${fac.longitude}])"
+              onclick="window.openPhotoLightbox && window.openPhotoLightbox('${resolvedPhoto}', '${safeFacName}', '${safeFacCategory}', [${fac.latitude}, ${fac.longitude}])"
               class="relative w-full h-32 mb-2 rounded-xl overflow-hidden border border-[#334B56] bg-[#0C171C] shadow-inner group cursor-pointer"
               title="Click to inspect high-resolution field survey evidence"
             >
-              <img src="${resolvedPhoto}" alt="${fac.name}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <img src="${resolvedPhoto}" alt="${safeFacName}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
               <div class="absolute inset-0 bg-[#132228]/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
                 <span class="opacity-0 group-hover:opacity-100 transition-opacity px-2.5 py-1 rounded-lg bg-[#132228]/95 text-[10px] font-bold text-[#38BDF8] border border-[#38BDF8]/60 shadow-md">
                   Inspect Ground-Truth
@@ -923,7 +934,7 @@ export const VillageMap = () => {
             </div>
           `;
 
-        const catTheme = getCategoryTheme(fac.category, fac.name);
+        const catTheme = getCategoryTheme(fac.category || '', facName);
         const contextAttributesHtml = buildFacilityContextAttributesHtml(fac);
 
         const popupHtml = `
@@ -934,17 +945,17 @@ export const VillageMap = () => {
             <!-- 1. Asset Title & ID -->
             <div class="flex items-start justify-between gap-2 mb-1.5">
               <h3 class="text-sm font-semibold text-[#F8FAFC] tracking-tight leading-snug">
-                ${fac.name}
+                ${facName}
               </h3>
               <span class="text-[9px] font-mono text-[#38BDF8] font-bold bg-[#1B2F38] px-2 py-0.5 rounded border border-[#334B56] flex-shrink-0">
-                ${fac.facility_id}
+                ${fac.facility_id || 'ID-GEN'}
               </span>
             </div>
 
             <!-- 2. Category Badge (Colored by Category) -->
             <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border text-[10px] font-bold capitalize mb-2 ${catTheme.badgeClass}">
               <span>${catTheme.glyph}</span>
-              <span>${fac.category.replace(/_/g, ' ')}</span>
+              <span>${(fac.category || 'General').replace(/_/g, ' ')}</span>
             </div>
 
             <!-- 3. Status Pill & Monsoon Access Condition -->
@@ -967,10 +978,10 @@ export const VillageMap = () => {
             <!-- 5. Coordinate Telemetry & Copy Coords -->
             <div class="pt-1.5 border-t border-[#334B56]/50 flex items-center justify-between gap-2 text-[10px] font-mono">
               <span class="text-[#F8FAFC] truncate font-medium">
-                ${fac.latitude.toFixed(5)}°N, ${fac.longitude.toFixed(5)}°E
+                ${Number(fac.latitude || 0).toFixed(5)}°N, ${Number(fac.longitude || 0).toFixed(5)}°E
               </span>
               <button
-                onclick="navigator.clipboard.writeText('${fac.latitude.toFixed(5)}, ${fac.longitude.toFixed(5)}'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Coords', 1500);"
+                onclick="navigator.clipboard.writeText('${Number(fac.latitude || 0).toFixed(5)}, ${Number(fac.longitude || 0).toFixed(5)}'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Coords', 1500);"
                 class="px-2 py-0.5 rounded bg-[#1B2F38] hover:bg-[#233B46] text-[#38BDF8] border border-[#334B56] font-sans font-semibold transition active:scale-95 cursor-pointer text-[10px]"
               >
                 Copy Coords
@@ -1029,7 +1040,7 @@ export const VillageMap = () => {
         return `
           <div class="flex flex-col items-center flex-1 relative z-10">
             <div class="w-5 h-5 rounded-full border text-[9px] flex items-center justify-center font-mono ${circleClass}">
-              ${isCompleted ? '✓' : s.num}
+              ${isCompleted ? 'OK' : s.num}
             </div>
             <span class="text-[8px] text-center mt-1 leading-tight tracking-tight ${textClass}">${s.label}</span>
           </div>
@@ -1058,7 +1069,10 @@ export const VillageMap = () => {
       const group = issuesLayerRef.current;
       group.clearLayers();
 
-      const filtered = issues.filter((iss) => {
+      const safeList = Array.isArray(issues) ? issues.filter(Boolean) : [];
+
+      const filtered = safeList.filter((iss) => {
+        if (!iss) return false;
         const isResident = userRoleRef.current === 'user';
         const isOfficer = userRoleRef.current === 'officer';
 
@@ -1083,8 +1097,8 @@ export const VillageMap = () => {
         }
 
         if (filter === 'all' || filter === 'issues') return true;
-        const cat = (iss.category || '').toLowerCase();
-        const title = (iss.title || '').toLowerCase();
+        const cat = (iss.category || 'general').toLowerCase();
+        const title = (iss.title || 'Civic Issue').toLowerCase();
         if (filter === 'water') {
           return (
             cat.includes('water') ||
@@ -1106,6 +1120,7 @@ export const VillageMap = () => {
       });
 
       filtered.forEach((iss) => {
+        if (!iss || typeof iss.latitude !== 'number' || typeof iss.longitude !== 'number') return;
         const sev = (iss.severity || 'medium').toLowerCase();
         const st = (iss.status || 'pending_initial_approval').toLowerCase();
 
@@ -1314,17 +1329,17 @@ export const VillageMap = () => {
             <!-- 1. Incident Title & ID -->
             <div class="flex items-start justify-between gap-2 mb-1.5">
               <h3 class="text-sm font-bold text-[#F8FAFC] tracking-tight leading-snug">
-                ${iss.title}
+                ${iss?.title || 'Civic Issue'}
               </h3>
               <span class="text-[9px] font-mono text-[#38BDF8] font-bold bg-[#1B2F38] px-2 py-0.5 rounded border border-[#334B56] flex-shrink-0">
-                ${iss.issue_id}
+                ${iss.issue_id || 'ISS-GEN'}
               </span>
             </div>
 
             <!-- 2. Category Badge -->
-            <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#1B2F38] border border-[#334B56] text-[#94A3B8] font-semibold text-[10px] capitalize mb-2">
-              <span>${glyph}</span>
-              <span>${iss.category.replace(/_/g, ' ')}</span>
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#1B2F38] border border-[#334B56] text-[#94A3B8] font-semibold text-[10px] capitalize mb-2">
+              <span class="w-2 h-2 rounded-full bg-red-400"></span>
+              <span>${(iss?.category || 'Incident').replace(/_/g, ' ')}</span>
             </div>
 
             <!-- 5-Stage Verification Step Tracker -->
@@ -1402,9 +1417,12 @@ export const VillageMap = () => {
       return;
     }
 
-    const filtered = allFacilitiesRef.current.filter((fac) => {
+    const safeFacs = Array.isArray(allFacilitiesRef.current) ? allFacilitiesRef.current.filter(Boolean) : [];
+    const filtered = safeFacs.filter((fac) => {
+      if (!fac) return false;
       if (filter === 'all') return true;
-      const cat = fac.category.toLowerCase();
+      const cat = (fac.category || 'general').toLowerCase();
+      const facNameLower = (fac.name || '').toLowerCase();
       if (filter === 'water') {
         return (
           cat.includes('water') ||
@@ -1413,7 +1431,7 @@ export const VillageMap = () => {
           cat.includes('pump') ||
           cat.includes('well') ||
           cat.includes('tank') ||
-          fac.name.toLowerCase().includes('lake')
+          facNameLower.includes('lake')
         );
       }
       if (filter === 'education') {
@@ -1711,49 +1729,47 @@ export const VillageMap = () => {
     }
   };
 
-  // 5. Stable Native Leaflet Canvas Heatmap Engine (Requirement 5)
+  // 4. Non-Crashing Native Heatmap Engine
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    if (!heatmapGroup.current) {
-      heatmapGroup.current = L.layerGroup();
-    }
-    heatmapGroup.current.clearLayers();
+    const map = mapInstanceRef.current;
+    if (!map) return;
 
-    if (showHeatmap) {
-      const targetIssues = issuesList.length > 0 ? issuesList : allIssuesRef.current;
-      const openIssues = targetIssues.filter(
-        (issue) => (issue.status || '').toLowerCase() !== 'resolved' && issue.latitude && issue.longitude
-      );
+    try {
+      heatmapLayerRef.current.clearLayers();
 
-      openIssues.forEach((issue) => {
-        const sev = (issue.severity || 'medium').toLowerCase();
-        const isHigh = sev === 'high' || sev === 'critical' || sev === 'urgent';
-        const isMed = sev === 'medium';
+      if (showHeatmap && safeIssues.length > 0) {
+        safeIssues.forEach((issue) => {
+          if (!issue?.latitude || !issue?.longitude) return;
 
-        // High: Radius 35px, fill #EF4444, opacity 0.55
-        // Medium: Radius 25px, fill #F59E0B, opacity 0.35
-        // Low: Radius 15px, fill #38BDF8, opacity 0.20
-        const radius = isHigh ? 35 : isMed ? 25 : 15;
-        const fillColor = isHigh ? '#EF4444' : isMed ? '#F59E0B' : '#38BDF8';
-        const fillOpacity = isHigh ? 0.55 : isMed ? 0.35 : 0.20;
+          // Core high-intensity circle
+          L.circleMarker([issue.latitude, issue.longitude], {
+            radius: issue.severity === 'high' ? 30 : 20,
+            fillColor: issue.severity === 'high' ? '#E56A54' : '#F6AA6E',
+            color: 'transparent',
+            fillOpacity: 0.55,
+          }).addTo(heatmapLayerRef.current);
 
-        L.circleMarker([issue.latitude, issue.longitude], {
-          radius,
-          fillColor,
-          color: 'transparent',
-          fillOpacity,
-        }).addTo(heatmapGroup.current!);
-      });
+          // Ambient density aura
+          L.circleMarker([issue.latitude, issue.longitude], {
+            radius: issue.severity === 'high' ? 60 : 40,
+            fillColor: issue.severity === 'high' ? '#E56A54' : '#F6AA6E',
+            color: 'transparent',
+            fillOpacity: 0.18,
+          }).addTo(heatmapLayerRef.current);
+        });
 
-      if (!mapInstanceRef.current.hasLayer(heatmapGroup.current)) {
-        heatmapGroup.current.addTo(mapInstanceRef.current);
+        if (!map.hasLayer(heatmapLayerRef.current)) {
+          heatmapLayerRef.current.addTo(map);
+        }
+      } else {
+        if (map.hasLayer(heatmapLayerRef.current)) {
+          map.removeLayer(heatmapLayerRef.current);
+        }
       }
-    } else {
-      if (mapInstanceRef.current.hasLayer(heatmapGroup.current)) {
-        mapInstanceRef.current.removeLayer(heatmapGroup.current);
-      }
+    } catch (err) {
+      console.warn('Heatmap layer rendered safely with fallback:', err);
     }
-  }, [showHeatmap, issuesList]);
+  }, [showHeatmap, safeIssues]);
 
   const toggleHeatmap = (enable: boolean) => {
     setShowHeatmap(enable);
@@ -1974,44 +1990,29 @@ export const VillageMap = () => {
       mapInstanceRef.current = null;
     }
 
-    // 1. Standard Clean Tile Layers: OSM Street vs Satellite
-    const osmStreet = L.tileLayer(
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      {
-        maxZoom: 19,
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>',
-      }
-    );
+    // 1. Standard Clean Tile Layers: OSM Street vs Satellite (Requirement 3)
+    osmLayerRef.current = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    });
 
-    const esriWorldImagery = L.tileLayer(
+    satelliteLayerRef.current = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      {
-        maxZoom: 19,
-        attribution:
-          '&copy; <a href="https://www.esri.com/" target="_blank">Esri</a>, Maxar, Earthstar Geographics',
-      }
+      { maxZoom: 19, attribution: 'Tiles &copy; Esri' }
     );
 
-    tileLayersRef.current = {
-      osm: osmStreet,
-      satellite: esriWorldImagery,
-    };
-
-    // 2. Initialize Map Instance centered at Khopripada Core with OSM Street default
-    const initialBasemapLayer = osmStreet;
-
+    // 2. Initialize Map Instance centered at Khopripada Core with Satellite default
     const map = L.map(mapContainerRef.current, {
       center: KHOPRIPADA_CORE,
       zoom: DEFAULT_ZOOM,
       zoomControl: false,
-      layers: [initialBasemapLayer],
+      layers: [satelliteLayerRef.current],
     });
 
     mapInstanceRef.current = map;
 
-    // 2.1 Add Zoom Control positioned cleanly at bottom left (bottom-6 left-6 on desktop)
-    L.control.zoom({ position: 'bottomleft' }).addTo(map);
+    // 2.1 Add Zoom Control positioned cleanly
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     // 3. Add Scale Control positioned at bottom right
     L.control
@@ -2071,10 +2072,8 @@ export const VillageMap = () => {
       dbscanGroup.addTo(map);
     }
 
-    const heatmapLayer = L.layerGroup();
-    heatmapGroup.current = heatmapLayer;
-    if (showHeatmap) {
-      heatmapLayer.addTo(map);
+    if (showHeatmap && !map.hasLayer(heatmapLayerRef.current)) {
+      heatmapLayerRef.current.addTo(map);
     }
 
 
@@ -2503,28 +2502,36 @@ export const VillageMap = () => {
   }, []);
 
   // Switch Basemap
-  const changeBasemap = useCallback(
-    (type: BasemapType) => {
-      if (!mapInstanceRef.current || !tileLayersRef.current) return;
-      const map = mapInstanceRef.current;
+  const changeBasemap = useCallback((type: BasemapType) => {
+    setActiveBasemap(type);
+  }, []);
 
-      Object.values(tileLayersRef.current).forEach((layer) => {
-        if (map.hasLayer(layer)) {
-          map.removeLayer(layer);
+  // Safe basemap switching effect (Requirement 3)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    try {
+      if (activeBasemap === 'osm') {
+        if (satelliteLayerRef.current && map.hasLayer(satelliteLayerRef.current)) {
+          map.removeLayer(satelliteLayerRef.current);
         }
-      });
-
-      const selected = tileLayersRef.current[type];
-      if (selected) {
-        map.addLayer(selected);
+        if (osmLayerRef.current && !map.hasLayer(osmLayerRef.current)) {
+          osmLayerRef.current.addTo(map);
+        }
+      } else {
+        if (osmLayerRef.current && map.hasLayer(osmLayerRef.current)) {
+          map.removeLayer(osmLayerRef.current);
+        }
+        if (satelliteLayerRef.current && !map.hasLayer(satelliteLayerRef.current)) {
+          satelliteLayerRef.current.addTo(map);
+        }
       }
-      setActiveBasemap(type);
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 50);
-    },
-    []
-  );
+      setTimeout(() => map.invalidateSize(), 100);
+    } catch (err) {
+      console.warn('Basemap transition protected:', err);
+    }
+  }, [activeBasemap]);
 
   // Leaflet Dynamic Size Invalidation on Resize/Mount
   useEffect(() => {
@@ -2670,7 +2677,7 @@ export const VillageMap = () => {
             onClick={() => setToastWarning(null)}
             className="text-slate-400 hover:text-slate-700 transition p-1 text-xs cursor-pointer ml-1"
           >
-            ✕
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
@@ -2728,7 +2735,8 @@ export const VillageMap = () => {
                 className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer text-xs font-semibold"
                 title="Close"
               >
-                <span>✕ Close</span>
+                <X className="w-3.5 h-3.5" />
+                <span>Close</span>
               </button>
             </div>
 
@@ -2951,51 +2959,53 @@ export const VillageMap = () => {
                   </div>
 
                   {/* Embedded Action Queue and ML Console */}
-                  <PanchayatAdminPanel
-                    issues={issuesList}
-                    facilities={facilitiesList}
-                    onFlyToIssue={handleFlyToIssue}
-                    isOpen={true}
-                    hideHeader={true}
-                    onClose={() => {}}
-                    onExportAudit={() => setIsExportAuditModalOpen(true)}
-                    onApproveSubmission={(item) => {
-                      if (item.type === 'facility') {
-                        const updated = allFacilitiesRef.current.map((f) =>
-                          f.facility_id === item.id ? { ...f, approval_status: 'approved' as const } : f
-                        );
-                        allFacilitiesRef.current = updated;
-                        setFacilitiesList(updated);
-                        renderFacilityMarkers(updated, facilityFilter);
-                      } else {
-                        refreshGrievanceMarkers();
-                      }
-                      showToast(`"${item.title}" approved and published to live map!`);
-                    }}
-                    onRejectSubmission={(item) => {
-                      if (item.type === 'facility') {
-                        const updated = allFacilitiesRef.current.map((f) =>
-                          f.facility_id === item.id ? { ...f, approval_status: 'rejected' as const } : f
-                        );
-                        allFacilitiesRef.current = updated;
-                        setFacilitiesList(updated);
-                        renderFacilityMarkers(updated, facilityFilter);
-                      } else {
-                        refreshGrievanceMarkers();
-                      }
-                      showToast(`Submission "${item.title}" rejected.`);
-                    }}
-                    onOpenPhotoLightbox={(data) => {
-                      setLightboxData({
-                        isOpen: true,
-                        photoUrl: data.photoUrl,
-                        title: data.title,
-                        category: data.category,
-                        coords: data.coords,
-                      });
-                    }}
-                    onFlyToCoords={flyToCoords}
-                  />
+                  <ErrorBoundary>
+                    <PanchayatAdminPanel
+                      issues={safeIssues}
+                      facilities={safeFacilities}
+                      onFlyToIssue={handleFlyToIssue}
+                      isOpen={true}
+                      hideHeader={true}
+                      onClose={() => {}}
+                      onExportAudit={() => setIsExportAuditModalOpen(true)}
+                      onApproveSubmission={(item) => {
+                        if (item.type === 'facility') {
+                          const updated = allFacilitiesRef.current.map((f) =>
+                            f.facility_id === item.id ? { ...f, approval_status: 'approved' as const } : f
+                          );
+                          allFacilitiesRef.current = updated;
+                          setFacilitiesList(updated);
+                          renderFacilityMarkers(updated, facilityFilter);
+                        } else {
+                          refreshGrievanceMarkers();
+                        }
+                        showToast(`"${item.title}" approved and published to live map!`);
+                      }}
+                      onRejectSubmission={(item) => {
+                        if (item.type === 'facility') {
+                          const updated = allFacilitiesRef.current.map((f) =>
+                            f.facility_id === item.id ? { ...f, approval_status: 'rejected' as const } : f
+                          );
+                          allFacilitiesRef.current = updated;
+                          setFacilitiesList(updated);
+                          renderFacilityMarkers(updated, facilityFilter);
+                        } else {
+                          refreshGrievanceMarkers();
+                        }
+                        showToast(`Submission "${item.title}" rejected.`);
+                      }}
+                      onOpenPhotoLightbox={(data) => {
+                        setLightboxData({
+                          isOpen: true,
+                          photoUrl: data.photoUrl,
+                          title: data.title,
+                          category: data.category,
+                          coords: data.coords,
+                        });
+                      }}
+                      onFlyToCoords={flyToCoords}
+                    />
+                  </ErrorBoundary>
                 </div>
               </div>
             </div>
@@ -3066,7 +3076,7 @@ export const VillageMap = () => {
               onClick={() => setInspectedPoint(null)}
               className="text-xs p-1 rounded hover:bg-[#1B2F38] text-[#94A3B8] hover:text-[#F8FAFC] transition cursor-pointer"
             >
-              ✕
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -3119,7 +3129,7 @@ export const VillageMap = () => {
           title="Map View"
         >
           <Map className="w-4 h-4" />
-          <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">{t('tab_map')}</span>
+          <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">Map</span>
         </button>
 
         {/* Tab 2: Filter sliders icon / LAYERS */}
@@ -3134,7 +3144,7 @@ export const VillageMap = () => {
           title="Filters & Layers"
         >
           <SlidersHorizontal className="w-4 h-4" />
-          <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">{t('tab_layers')}</span>
+          <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">Layers</span>
         </button>
 
         {/* Center Button: Elevated circular button with crisp vector plus sign (+) and gradient ring */}
@@ -3164,7 +3174,7 @@ export const VillageMap = () => {
             title="Executive Decision Support & ML Analytics"
           >
             <BarChart3 className="w-4 h-4" />
-            <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">{t('tab_analytics')}</span>
+            <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">Analytics</span>
           </button>
         )}
 
@@ -3181,7 +3191,7 @@ export const VillageMap = () => {
         >
           <ClipboardCheck className="w-4 h-4" />
           <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">
-            {userRole === 'officer' ? t('tab_worklist') : userRole === 'admin' ? t('tab_worklist') : t('surveyed_issues')}
+            {userRole === 'officer' ? 'Worklist' : userRole === 'admin' ? 'Worklist' : 'Issues'}
           </span>
         </button>
       </nav>
@@ -3211,16 +3221,16 @@ export const VillageMap = () => {
 
                 <div>
                   <h3 className="text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC] tracking-wide uppercase">
-                    {mobileSheet === 'analytics' && (t('analytics') || 'Executive Decision Support')}
+                    {mobileSheet === 'analytics' && 'Executive Decision Support'}
                     {mobileSheet === 'worklist' &&
                       (userRole === 'officer'
-                        ? t('tab_worklist')
+                        ? 'Field Worklist'
                         : userRole === 'admin'
-                        ? t('tab_worklist')
-                        : t('surveyed_issues'))}
-                    {mobileSheet === 'layers' && t('layers_and_drawer')}
-                    {mobileSheet === 'action' && t('propose_facility')}
-                    {mobileSheet === 'role' && t('select_access_portal')}
+                        ? 'Pending Approvals'
+                        : 'Surveyed Issues')}
+                    {mobileSheet === 'layers' && 'Layers & Drawer'}
+                    {mobileSheet === 'action' && 'Propose Asset'}
+                    {mobileSheet === 'role' && 'Select Portal'}
                   </h3>
                   <p className="text-[10px] text-slate-500 dark:text-[#94A3B8]">
                     {mobileSheet === 'analytics' && 'ML Priority Hotspots & Facility Health'}
@@ -3245,7 +3255,7 @@ export const VillageMap = () => {
                 aria-label="Close bottom sheet"
               >
                 <X className="w-3.5 h-3.5" />
-                <span>{t('close')}</span>
+                <span>Close</span>
               </button>
             </div>
 
@@ -3267,7 +3277,7 @@ export const VillageMap = () => {
                         {/* TOTAL ASSETS */}
                         <div className="bg-[#F4F6F5] dark:bg-[#1B2F38] border border-[#D3DFD8] dark:border-[#334B56] p-2.5 rounded-xl shadow-sm text-center">
                           <div className="text-[9px] tracking-wider uppercase font-semibold text-[#566E67] dark:text-[#94A3B8]">
-                            {t('total_assets')}
+                            Total Assets
                           </div>
                           <div className="text-xl font-bold font-mono text-[#1C2927] dark:text-[#F8FAFC] mt-0.5">
                             {facilitiesList.length}
@@ -3280,7 +3290,7 @@ export const VillageMap = () => {
                         {/* ACTIVE PROBLEMS */}
                         <div className="bg-[#F4F6F5] dark:bg-[#1B2F38] border border-[#D3DFD8] dark:border-[#334B56] p-2.5 rounded-xl shadow-sm text-center">
                           <div className="text-[9px] tracking-wider uppercase font-semibold text-[#566E67] dark:text-[#94A3B8]">
-                            {t('active_problems')}
+                            Active Problems
                           </div>
                           <div className="text-xl font-bold font-mono text-[#CC6346] dark:text-[#E05A47] mt-0.5">
                             {issueCounts.total}
@@ -3293,7 +3303,7 @@ export const VillageMap = () => {
                         {/* SOLVED PROBLEMS */}
                         <div className="bg-[#F4F6F5] dark:bg-[#1B2F38] border border-[#D3DFD8] dark:border-[#334B56] p-2.5 rounded-xl shadow-sm text-center">
                           <div className="text-[9px] tracking-wider uppercase font-semibold text-[#566E67] dark:text-[#94A3B8]">
-                            {t('solved_problems')}
+                            Solved Problems
                           </div>
                           <div className="text-xl font-bold font-mono text-[#55949F] dark:text-[#38BDF8] mt-0.5">
                             {operationalCounts.functional}
@@ -3312,7 +3322,7 @@ export const VillageMap = () => {
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-bold text-[#1C2927] dark:text-[#F8FAFC] uppercase tracking-wider flex items-center gap-1.5">
                           <Activity className="w-3.5 h-3.5 text-[#55949F] dark:text-[#38BDF8]" />
-                          {t('ml_priority_header')}
+                          ML Priority Hotspots
                         </h4>
                         <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-[#0C171C] border border-[#334B56] text-[#38BDF8]">
                           RF MODEL
@@ -4159,7 +4169,7 @@ export const VillageMap = () => {
                   {/* Basemap Switcher */}
                   <div className="p-3.5 rounded-2xl bg-[#F1F5F9] dark:bg-[#172A33] border border-[#E2E8F0] dark:border-[#2C4654] space-y-2">
                     <span className="text-xs font-bold text-[#0F172A] dark:text-[#F1F5F9] block uppercase tracking-wider">
-                      {t('select_basemap')}
+                      Select Basemap
                     </span>
                     <div className="grid grid-cols-2 gap-1.5">
                       {[
@@ -4185,13 +4195,13 @@ export const VillageMap = () => {
                   {/* Active Layer Toggles */}
                   <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-[#1B2F38] border border-[#CBD5E1] dark:border-[#334B56] space-y-2.5">
                     <span className="text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC] block uppercase tracking-wider">
-                      {t('active_layers')}
+                      Active Layers
                     </span>
 
                     <label className="flex items-center justify-between p-2.5 min-h-[48px] rounded-xl bg-white dark:bg-[#0C171C] border border-[#CBD5E1] dark:border-[#334B56] cursor-pointer">
                       <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2 font-medium">
                         <Building2 className="w-4 h-4 text-[#38BDF8]" />
-                        {t('layer_boundary')}
+                        Khopripada Boundary
                       </span>
                       <input
                         type="checkbox"
@@ -4204,7 +4214,7 @@ export const VillageMap = () => {
                     <label className="flex items-center justify-between p-2.5 min-h-[48px] rounded-xl bg-white dark:bg-[#0C171C] border border-[#CBD5E1] dark:border-[#334B56] cursor-pointer">
                       <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2 font-medium">
                         <FileSpreadsheet className="w-4 h-4 text-[#10B981]" />
-                        {t('layer_facilities')} ({facilityCount})
+                        Village Facilities ({facilitiesList.length || facilityCount})
                       </span>
                       <input
                         type="checkbox"
@@ -4217,7 +4227,7 @@ export const VillageMap = () => {
                     <label className="flex items-center justify-between p-2.5 min-h-[48px] rounded-xl bg-white dark:bg-[#0C171C] border border-[#CBD5E1] dark:border-[#334B56] cursor-pointer">
                       <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2 font-medium">
                         <AlertTriangle className="w-4 h-4 text-[#E05A47]" />
-                        {t('layer_issues')} ({issueCounts.total})
+                        Surveyed Issues ({issueCounts.total})
                       </span>
                       <input
                         type="checkbox"
@@ -4230,7 +4240,7 @@ export const VillageMap = () => {
                     <label className="flex items-center justify-between p-2.5 min-h-[48px] rounded-xl bg-white dark:bg-[#0C171C] border border-[#CBD5E1] dark:border-[#334B56] cursor-pointer">
                       <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2 font-medium">
                         <Flame className="w-4 h-4 text-[#E05A47]" />
-                        {t('layer_heatmap')}
+                        Failure Density Heatmap
                       </span>
                       <input
                         type="checkbox"
@@ -4244,16 +4254,16 @@ export const VillageMap = () => {
                   {/* Category Filter Pills */}
                   <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-[#1B2F38] border border-[#CBD5E1] dark:border-[#334B56] space-y-2">
                     <span className="text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC] block uppercase tracking-wider">
-                      {t('filter_category')}
+                      Filter Category
                     </span>
                     <div className="grid grid-cols-2 gap-1.5">
                       {[
-                        { id: 'all', label: t('all_poi'), color: '#38BDF8' },
-                        { id: 'water', label: t('water'), color: '#38BDF8' },
-                        { id: 'education', label: t('education'), color: '#94A3B8' },
-                        { id: 'commerce', label: t('commerce'), color: '#FCD34D' },
-                        { id: 'health', label: t('health'), color: '#E05A47' },
-                        { id: 'civic', label: t('civic'), color: '#10B981' },
+                        { id: 'all', label: 'All POIs', color: '#38BDF8' },
+                        { id: 'water', label: 'Drinking Water', color: '#38BDF8' },
+                        { id: 'education', label: 'Education', color: '#94A3B8' },
+                        { id: 'commerce', label: 'Commerce', color: '#FCD34D' },
+                        { id: 'health', label: 'Health', color: '#E05A47' },
+                        { id: 'civic', label: 'Civic', color: '#10B981' },
                       ].map((opt) => (
                         <button
                           key={opt.id}

@@ -47,6 +47,7 @@
 .pb-safe {
   padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
 }
+
 .pt-safe {
   padding-top: max(8px, env(safe-area-inset-top, 8px));
 }
@@ -137,6 +138,7 @@
 }
 
 @media (max-width: 768px) {
+
   /* Mobile: Move zoom control to top-20 right-3 (80px, 12px) to prevent collision with bottom dock */
   .leaflet-control-zoom {
     position: fixed !important;
@@ -228,6 +230,7 @@
     border-radius: 14px !important;
     padding: 2px !important;
   }
+
   .gis-dark-popup .leaflet-popup-content {
     margin: 8px 10px !important;
     line-height: 1.4 !important;
@@ -283,6 +286,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -297,14 +301,16 @@
   width: 5px;
   height: 5px;
 }
+
 .scrollbar-thin::-webkit-scrollbar-track {
   background: rgba(19, 34, 40, 0.6);
 }
+
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background: rgba(51, 75, 86, 0.6);
   border-radius: 4px;
 }
+
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: #38BDF8;
 }
-
