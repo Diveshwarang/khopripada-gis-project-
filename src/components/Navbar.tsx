@@ -12,6 +12,7 @@ import {
   LogOut,
   Building2,
   FileText,
+  BarChart3,
 } from 'lucide-react';
 import type { Role } from '../types/auth';
 import {
@@ -246,18 +247,34 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
-          {/* [ Layers & Drawer ] */}
+          {/* [ Village Analytics ] - Admin & Officer Only */}
+          {(userRole === 'admin' || userRole === 'officer') && (
+            <button
+              onClick={onToggleSidebar}
+              className={`h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 border ${
+                sidebarOpen
+                  ? 'bg-slate-800 text-white border-slate-800 shadow-xs'
+                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 shadow-xs'
+              }`}
+              title="Toggle Village Analytics and Decision Support"
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-[#48999E]" />
+              <span>Village Analytics</span>
+            </button>
+          )}
+
+          {/* [ Layers & Filters ] */}
           <button
             onClick={onToggleSidebar}
             className={`h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 border ${
-              sidebarOpen
+              sidebarOpen && userRole === 'user'
                 ? 'bg-slate-800 text-white border-slate-800 shadow-xs'
                 : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 shadow-xs'
             }`}
-            title="Toggle Layers and Analytics Drawer"
+            title="Toggle Map Layers and Amenity Filters"
           >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Layers & Drawer</span>
+            <Layers className="w-3.5 h-3.5 text-slate-600" />
+            <span>Layers & Filters</span>
           </button>
         </div>
 

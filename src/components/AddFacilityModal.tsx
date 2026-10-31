@@ -203,35 +203,35 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget && !verificationNotice) onClose();
       }}
     >
-      <div className="relative w-full max-w-lg mx-auto max-h-[85dvh] sm:max-h-[90dvh] bg-[#132228] border-t sm:border border-[#334B56] rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col text-[#F8FAFC] overflow-hidden">
+      <div className="relative w-full max-w-lg mx-auto max-h-[85dvh] sm:max-h-[90dvh] bg-white border-t sm:border border-slate-200 rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col text-slate-800 overflow-hidden">
         {/* Mobile touch-drag handle pill */}
-        <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
+        <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
 
         {/* Verification Success Notice for Resident / Villager */}
         {verificationNotice ? (
           <div className="p-6 text-center flex flex-col items-center gap-4 my-auto overflow-y-auto">
-            <div className="w-16 h-16 rounded-2xl bg-[#10B981]/20 border border-[#10B981]/60 flex items-center justify-center text-[#6EE7B7] shadow-[0_0_25px_rgba(16,185,129,0.3)] animate-bounce">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-xs animate-bounce">
               <Building2 className="w-8 h-8" />
             </div>
             <div>
-              <span className="px-2.5 py-1 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] text-[11px] font-mono font-bold uppercase tracking-wider">
+              <span className="px-2.5 py-1 rounded-full bg-orange-100 border border-orange-200 text-orange-800 text-[11px] font-mono font-bold uppercase tracking-wider">
                 Pending Verification
               </span>
-              <h3 className="text-lg font-bold text-[#F8FAFC] mt-2">
+              <h3 className="text-lg font-bold text-slate-900 mt-2">
                 Facility Submitted Successfully
               </h3>
-              <p className="text-xs text-[#94A3B8] max-w-sm mx-auto mt-2 leading-relaxed bg-[#0C171C] p-3 rounded-xl border border-[#334B56]">
+              <p className="text-xs text-slate-600 max-w-sm mx-auto mt-2 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
                 {verificationNotice}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="mt-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold text-xs transition active:scale-95 cursor-pointer shadow-md"
+              className="mt-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-[#48999E] hover:bg-[#3D858A] text-white font-bold text-xs transition active:scale-95 cursor-pointer shadow-xs"
             >
               Back to Map Dashboard
             </button>
@@ -239,26 +239,20 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
         ) : (
           <>
             {/* Header */}
-            <div className="px-5 py-3.5 border-b border-[#334B56] bg-[#0C171C]/90 flex items-center justify-between flex-shrink-0">
+            <div className="px-5 py-3.5 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-md ${
-                  userRole === 'officer'
-                    ? 'bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7]'
-                    : userRole === 'user'
-                    ? 'bg-[#1B2F38] border border-[#38BDF8]/40 text-[#38BDF8]'
-                    : 'bg-[#1B2F38] border border-[#334B56] text-[#F8FAFC]'
-                }`}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-xs bg-teal-50 border border-teal-200 text-[#48999E]">
                   <Building2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-[#F8FAFC] tracking-tight flex items-center gap-2">
+                  <h2 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
                     {userRole === 'officer'
                       ? '+ Add Govt Scheme Asset'
                       : userRole === 'user'
                       ? 'Propose Local Community Facility'
                       : 'Register Village Facility'}
                   </h2>
-                  <p className="text-xs text-[#94A3B8]">
+                  <p className="text-xs text-slate-500">
                     {userRole === 'officer'
                       ? 'Government-Sanctioned Schemes Only (Z.P. / Jal Jeevan / NHM)'
                       : userRole === 'user'
@@ -270,7 +264,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
 
               <button
                 onClick={onClose}
-                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1B2F38] transition cursor-pointer"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
                 title="Close (Esc)"
                 aria-label="Close modal"
               >
@@ -281,55 +275,55 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
             {/* Form Body */}
             <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-xs scrollbar-thin">
               {errorMsg && (
-                <div className="p-3 rounded-xl bg-[#E05A47]/20 border border-[#E05A47] text-[#FCA5A5] text-xs flex items-center gap-2">
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
                   <ShieldAlert className="w-4 h-4 flex-shrink-0" />
                   <span>{errorMsg}</span>
                 </div>
               )}
 
               {/* Auto-filled Read-Only Fields: ID & GPS Coords */}
-              <div className="grid grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#0C171C] border border-[#334B56]">
+              <div className="grid grid-cols-3 gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <div>
-                  <label className="text-[10px] font-mono text-[#94A3B8] uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block mb-1">
                     Facility ID
                   </label>
                   <input
                     type="text"
                     readOnly
                     value={facilityId}
-                    className="w-full bg-[#132228] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#38BDF8] font-mono text-xs font-bold focus:outline-none cursor-default"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-[#48999E] font-mono text-xs font-bold focus:outline-none cursor-default"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-mono text-[#94A3B8] uppercase tracking-wider block mb-1 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-[#38BDF8]" /> Latitude
+                  <label className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block mb-1 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-[#48999E]" /> Latitude
                   </label>
                   <input
                     type="text"
                     inputMode="decimal"
                     readOnly
                     value={coords[0].toFixed(6)}
-                    className="w-full bg-[#132228] border border-[#334B56] rounded-lg px-2.5 py-2 text-[#F8FAFC] font-mono text-[16px] sm:text-xs focus:outline-none cursor-default min-h-[44px]"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-slate-800 font-mono text-[16px] sm:text-xs focus:outline-none cursor-default min-h-[44px]"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-mono text-[#94A3B8] uppercase tracking-wider block mb-1 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-[#38BDF8]" /> Longitude
+                  <label className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block mb-1 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-[#48999E]" /> Longitude
                   </label>
                   <input
                     type="text"
                     inputMode="decimal"
                     readOnly
                     value={coords[1].toFixed(6)}
-                    className="w-full bg-[#132228] border border-[#334B56] rounded-lg px-2.5 py-2 text-[#F8FAFC] font-mono text-[16px] sm:text-xs focus:outline-none cursor-default min-h-[44px]"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-slate-800 font-mono text-[16px] sm:text-xs focus:outline-none cursor-default min-h-[44px]"
                   />
                 </div>
               </div>
 
               {/* Facility Name */}
               <div>
-                <label className="font-semibold text-[#94A3B8] block mb-1">
-                  Asset Title <span className="text-[#E05A47]">*</span>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Asset Title <span className="text-[#E56A54]">*</span>
                 </label>
                 <input
                   type="text"
@@ -344,17 +338,17 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                       ? 'e.g. Om Sai General Kirana & Flour Mill'
                       : 'e.g. Wakipada Public Borewell'
                   }
-                  className="w-full bg-[#0C171C] border border-[#334B56] rounded-xl px-3.5 py-2.5 text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] text-[16px] sm:text-xs transition min-h-[44px]"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#48999E] text-[16px] sm:text-xs transition min-h-[44px]"
                 />
               </div>
 
               {/* Category Dropdown (Strictly Role-Restricted) */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="font-semibold text-[#94A3B8]">
-                    Category Badge <span className="text-[#E05A47]">*</span>
+                  <label className="font-semibold text-slate-700">
+                    Category Badge <span className="text-[#E56A54]">*</span>
                   </label>
-                  <span className="text-[10px] font-mono text-[#94A3B8]">
+                  <span className="text-[10px] font-mono text-slate-400">
                     {userRole === 'officer'
                       ? 'Govt-Sanctioned Schemes Only'
                       : userRole === 'user'
@@ -366,7 +360,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-[#0C171C] border border-[#334B56] rounded-xl px-3.5 py-2.5 text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] text-[16px] sm:text-xs transition cursor-pointer appearance-none font-medium min-h-[44px]"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#48999E] text-[16px] sm:text-xs transition cursor-pointer appearance-none font-medium min-h-[44px]"
                   >
                     {userRole === 'officer' ? (
                       <>
@@ -408,7 +402,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                       </>
                     )}
                   </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#94A3B8] text-xs">
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 text-xs">
                     ▼
                   </div>
                 </div>
@@ -416,20 +410,20 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
 
               {/* Operational Status Dropdown */}
               <div>
-                <label className="font-semibold text-[#94A3B8] block mb-1">
-                  Status (Colored Pill) <span className="text-[#E05A47]">*</span>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Status (Colored Pill) <span className="text-[#E56A54]">*</span>
                 </label>
                 <div className="relative">
                   <select
                     value={operationalStatus}
                     onChange={(e) => setOperationalStatus(e.target.value)}
-                    className="w-full bg-[#0C171C] border border-[#334B56] rounded-xl px-3.5 py-2.5 text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] text-xs transition cursor-pointer appearance-none"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#48999E] text-xs transition cursor-pointer appearance-none"
                   >
                     <option value="functional">Functional (Emerald)</option>
                     <option value="partially_functional">Partially Functional / Degraded (Amber)</option>
                     <option value="non_functional">Broken / Inoperative (Terracotta)</option>
                   </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#94A3B8] text-xs">
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 text-xs">
                     ▼
                   </div>
                 </div>
@@ -437,20 +431,20 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
 
               {/* Monsoon Accessibility Dropdown */}
               <div>
-                <label className="font-semibold text-[#94A3B8] block mb-1">
-                  Monsoon Access Condition <span className="text-[#E05A47]">*</span>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Monsoon Access Condition <span className="text-[#E56A54]">*</span>
                 </label>
                 <div className="relative">
                   <select
                     value={monsoonAccessible}
                     onChange={(e) => setMonsoonAccessible(e.target.value)}
-                    className="w-full bg-[#0C171C] border border-[#334B56] rounded-xl px-3.5 py-2.5 text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] text-xs transition cursor-pointer appearance-none"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-800 focus:outline-none focus:border-[#48999E] text-xs transition cursor-pointer appearance-none"
                   >
                     <option value="year_round">Year-round (Fully Accessible)</option>
                     <option value="waterlogged">Seasonal (Waterlogged in Rains)</option>
                     <option value="cut_off">Floods / Cut Off (Isolated in Monsoon)</option>
                   </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#94A3B8] text-xs">
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 text-xs">
                     ▼
                   </div>
                 </div>
@@ -458,26 +452,26 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
 
               {/* DYNAMIC CONTEXT-AWARE ATTRIBUTE FORM SECTIONS */}
               {isCommercialCategory(category) && (
-                <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[#38BDF8] flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-[#48999E] flex items-center gap-1.5">
                       Commercial & Retail Details
                     </span>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">Payment & Services</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Payment & Services</span>
                   </div>
 
-                  <label className="flex items-center gap-2.5 p-2 rounded-lg bg-[#0C171C] border border-[#334B56] cursor-pointer">
+                  <label className="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={upiAvailable}
                       onChange={(e) => setUpiAvailable(e.target.checked)}
-                      className="w-4 h-4 rounded text-[#10B981] bg-[#132228] border-[#334B56] focus:ring-0 cursor-pointer accent-[#10B981]"
+                      className="w-4 h-4 rounded text-[#10B981] bg-white border-slate-300 focus:ring-0 cursor-pointer accent-[#10B981]"
                     />
                     <div>
-                      <span className="text-xs font-semibold text-[#F8FAFC] block">
+                      <span className="text-xs font-semibold text-slate-800 block">
                         Accepts GPay / PhonePe / UPI Payments
                       </span>
-                      <span className="text-[10px] text-[#94A3B8] block">
+                      <span className="text-[10px] text-slate-500 block">
                         QR code setup active on store counter
                       </span>
                     </div>
@@ -485,7 +479,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                      <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                         Operating Hours
                       </label>
                       <input
@@ -493,11 +487,11 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         value={businessHours}
                         onChange={(e) => setBusinessHours(e.target.value)}
                         placeholder="e.g. 7:00 AM – 9:30 PM"
-                        className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                      <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                         Service / Goods Type
                       </label>
                       <input
@@ -505,7 +499,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         value={serviceType}
                         onChange={(e) => setServiceType(e.target.value)}
                         placeholder="e.g. Daily Groceries & Atta Chakki"
-                        className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                       />
                     </div>
                   </div>
@@ -513,26 +507,26 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
               )}
 
               {isHealthCategory(category) && (
-                <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[#E05A47] flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-[#E56A54] flex items-center gap-1.5">
                       Healthcare Facility & OPD Details
                     </span>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">Medical Specifics</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Medical Specifics</span>
                   </div>
 
-                  <label className="flex items-center gap-2.5 p-2 rounded-lg bg-[#0C171C] border border-[#334B56] cursor-pointer">
+                  <label className="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={upiAvailable}
                       onChange={(e) => setUpiAvailable(e.target.checked)}
-                      className="w-4 h-4 rounded text-[#E05A47] bg-[#132228] border-[#334B56] focus:ring-0 cursor-pointer accent-[#E05A47]"
+                      className="w-4 h-4 rounded text-[#E56A54] bg-white border-slate-300 focus:ring-0 cursor-pointer accent-[#E56A54]"
                     />
                     <div>
-                      <span className="text-xs font-semibold text-[#F8FAFC] block">
+                      <span className="text-xs font-semibold text-slate-800 block">
                         Accepts GPay / PM-JAY Ayushman Card
                       </span>
-                      <span className="text-[10px] text-[#94A3B8] block">
+                      <span className="text-[10px] text-slate-500 block">
                         Digital payments & insurance card accepted (or Govt NHM Free Care)
                       </span>
                     </div>
@@ -540,7 +534,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                      <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                         Healthcare Services Focus
                       </label>
                       <input
@@ -548,11 +542,11 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         value={healthServices}
                         onChange={(e) => setHealthServices(e.target.value)}
                         placeholder="e.g. Primary First Aid & Maternal Health"
-                        className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                      <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                         Doctor / Clinic Timings
                       </label>
                       <input
@@ -560,7 +554,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         value={operationalHours}
                         onChange={(e) => setOperationalHours(e.target.value)}
                         placeholder="e.g. 10:00 AM – 5:00 PM (Mon–Sat)"
-                        className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                       />
                     </div>
                   </div>
@@ -568,16 +562,16 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
               )}
 
               {isEducationCategory(category) && (
-                <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[#38BDF8] flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-[#48999E] flex items-center gap-1.5">
                       Educational Institution Amenities
                     </span>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">No Payment Applied</span>
+                    <span className="text-[10px] text-slate-500 font-mono">No Payment Applied</span>
                   </div>
 
                   <div>
-                    <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                    <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                       Grade Levels / Standard
                     </label>
                     <input
@@ -585,31 +579,31 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                       value={gradeLevels}
                       onChange={(e) => setGradeLevels(e.target.value)}
                       placeholder="e.g. Std 1st to 7th (Marathi/Semi-English Medium)"
-                      className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    <label className="flex items-center gap-2 p-2 rounded-lg bg-[#0C171C] border border-[#334B56] cursor-pointer">
+                    <label className="flex items-center gap-2 p-2 rounded-lg bg-white border border-slate-200 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={middayMeal}
                         onChange={(e) => setMiddayMeal(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded text-[#10B981] bg-[#132228] border-[#334B56] focus:ring-0 cursor-pointer accent-[#10B981]"
+                        className="w-3.5 h-3.5 rounded text-[#10B981] bg-white border-slate-300 focus:ring-0 cursor-pointer accent-[#10B981]"
                       />
-                      <span className="text-[10px] text-[#F8FAFC] font-semibold">
+                      <span className="text-[10px] text-slate-800 font-semibold">
                         PM-POSHAN Midday Meal Active
                       </span>
                     </label>
 
-                    <label className="flex items-center gap-2 p-2 rounded-lg bg-[#0C171C] border border-[#334B56] cursor-pointer">
+                    <label className="flex items-center gap-2 p-2 rounded-lg bg-white border border-slate-200 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={filteredWater}
                         onChange={(e) => setFilteredWater(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded text-[#10B981] bg-[#132228] border-[#334B56] focus:ring-0 cursor-pointer accent-[#10B981]"
+                        className="w-3.5 h-3.5 rounded text-[#10B981] bg-white border-slate-300 focus:ring-0 cursor-pointer accent-[#10B981]"
                       />
-                      <span className="text-[10px] text-[#F8FAFC] font-semibold">
+                      <span className="text-[10px] text-slate-800 font-semibold">
                         Filtered Drinking Tap Available
                       </span>
                     </label>
@@ -618,17 +612,17 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
               )}
 
               {isWaterCategory(category) && (
-                <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-[#10B981] flex items-center gap-1.5">
                       Drinking Water Source Details
                     </span>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">No Payment Applied</span>
+                    <span className="text-[10px] text-slate-500 font-mono">No Payment Applied</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                      <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                         Water Availability / Supply Timings
                       </label>
                       <input
@@ -636,17 +630,17 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         value={supplyTimings}
                         onChange={(e) => setSupplyTimings(e.target.value)}
                         placeholder="e.g. Morning 6:30 AM – 9:00 AM (Gravity Tank)"
-                        className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                      <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                         Source Potability Status
                       </label>
                       <select
                         value={potabilityStatus}
                         onChange={(e) => setPotabilityStatus(e.target.value)}
-                        className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8] cursor-pointer"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E] cursor-pointer"
                       >
                         <option value="Potable Drinking Water">Potable Drinking Water (Chlorinated)</option>
                         <option value="Ground Testing Needed">Ground Testing Needed (Unfiltered)</option>
@@ -655,7 +649,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                    <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                       Maintenance Authority
                     </label>
                     <input
@@ -663,24 +657,24 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                       value={maintenanceAuthority}
                       onChange={(e) => setMaintenanceAuthority(e.target.value)}
                       placeholder="e.g. Gram Panchayat Khopripada Water Dept"
-                      className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                     />
                   </div>
                 </div>
               )}
 
               {isCivicCategory(category) && (
-                <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[#FCD34D] flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-amber-600 flex items-center gap-1.5">
                       Civic & Cultural Space Details
                     </span>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">Community Hall / Temple</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Community Hall / Temple</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                      <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                         Community Utilization
                       </label>
                       <input
@@ -688,11 +682,11 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         value={communityUsage}
                         onChange={(e) => setCommunityUsage(e.target.value)}
                         placeholder="e.g. Public Gatherings & Gram Sabha Meetings"
-                        className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                      <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                         Seating / Capacity
                       </label>
                       <input
@@ -700,7 +694,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         value={seatingCapacity}
                         onChange={(e) => setSeatingCapacity(e.target.value)}
                         placeholder="e.g. Capacity: ~150 Persons"
-                        className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                       />
                     </div>
                   </div>
@@ -708,17 +702,17 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
               )}
 
               {isLightingCategory(category) && (
-                <div className="p-3 rounded-xl bg-[#1B2F38]/50 border border-[#334B56] space-y-2.5 animate-in fade-in">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 animate-in fade-in">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[#38BDF8] flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-[#48999E] flex items-center gap-1.5">
                       Public Lighting & Utility Specs
                     </span>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">No Payment Applied</span>
+                    <span className="text-[10px] text-slate-500 font-mono">No Payment Applied</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                      <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                         Fixture / Asset Specification
                       </label>
                       <input
@@ -726,11 +720,11 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         value={fixtureType}
                         onChange={(e) => setFixtureType(e.target.value)}
                         placeholder="e.g. LED 45W / Solar Photovoltaic"
-                        className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-[#94A3B8] font-semibold block mb-1">
+                      <label className="text-[10px] text-slate-600 font-semibold block mb-1">
                         Power Grid Feeder
                       </label>
                       <input
@@ -738,7 +732,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         value={powerGrid}
                         onChange={(e) => setPowerGrid(e.target.value)}
                         placeholder="e.g. MSEDCL Feeder Line"
-                        className="w-full bg-[#0C171C] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-xs focus:outline-none focus:border-[#38BDF8]"
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:border-[#48999E]"
                       />
                     </div>
                   </div>
@@ -746,13 +740,13 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
               )}
 
               {/* Photo Upload & Camera Input Section */}
-              <div className="p-3.5 rounded-xl bg-[#0C171C] border border-[#334B56]">
-                <label className="text-[11px] font-semibold text-[#94A3B8] block mb-2 flex items-center justify-between">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <label className="text-[11px] font-semibold text-slate-700 block mb-2 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <Camera className="w-3.5 h-3.5 text-[#38BDF8]" />
+                    <Camera className="w-3.5 h-3.5 text-[#48999E]" />
                     Facility Inspection Photo
                   </span>
-                  <span className="text-[10px] text-[#94A3B8] font-mono">
+                  <span className="text-[10px] text-slate-400 font-mono">
                     IndexedDB Photo Storage
                   </span>
                 </label>
@@ -774,41 +768,41 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isCompressing}
-                      className="w-full py-3 px-4 rounded-xl border border-dashed border-[#334B56] hover:border-[#38BDF8] bg-[#1B2F38] hover:bg-[#233B46] text-[#F8FAFC] font-semibold text-xs flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
+                      className="w-full py-3 px-4 rounded-xl border border-dashed border-slate-300 hover:border-[#48999E] bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
                     >
                       {isCompressing ? (
                         <>
-                          <span className="w-3.5 h-3.5 border-2 border-[#38BDF8]/30 border-t-[#38BDF8] rounded-full animate-spin"></span>
+                          <span className="w-3.5 h-3.5 border-2 border-[#48999E]/30 border-t-[#48999E] rounded-full animate-spin"></span>
                           <span>Compressing Photo...</span>
                         </>
                       ) : (
                         <>
-                          <Camera className="w-4 h-4 text-[#38BDF8]" />
+                          <Camera className="w-4 h-4 text-[#48999E]" />
                           <span>Upload Inspection Photo</span>
                         </>
                       )}
                     </button>
-                    <p className="text-[10px] text-[#94A3B8] text-center">
+                    <p className="text-[10px] text-slate-500 text-center">
                       Live camera capture on mobile or file upload on desktop • Compressed automatically to save space
                     </p>
                   </div>
                 ) : (
-                  <div className="relative rounded-xl overflow-hidden border border-[#334B56] bg-[#0C171C] group">
+                  <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-100 group">
                     <img
                       src={photoBase64}
                       alt="Inspection Thumbnail"
                       className="w-full h-36 object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#132228]/95 via-transparent to-transparent flex items-end justify-between p-2.5">
-                      <span className="text-[10px] text-[#38BDF8] font-mono font-bold flex items-center gap-1 bg-[#132228]/90 px-2 py-0.5 rounded border border-[#38BDF8]/40">
-                        <ImageIcon className="w-3 h-3" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end justify-between p-2.5">
+                      <span className="text-[10px] text-white font-mono font-bold flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded border border-white/20">
+                        <ImageIcon className="w-3 h-3 text-[#48999E]" />
                         Photo Captured & Compressed
                       </span>
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="px-2 py-1 rounded-lg bg-[#1B2F38] hover:bg-[#233B46] text-[#F8FAFC] text-[10px] font-semibold border border-[#334B56] transition cursor-pointer"
+                          className="px-2 py-1 rounded-lg bg-white/90 hover:bg-white text-slate-800 text-[10px] font-semibold border border-slate-300 transition cursor-pointer"
                           title="Retake / Change Photo"
                         >
                           Retake
@@ -816,7 +810,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                         <button
                           type="button"
                           onClick={handleRemovePhoto}
-                          className="p-1 rounded-lg bg-[#E05A47]/90 hover:bg-[#E05A47] text-[#F8FAFC] border border-[#E05A47] transition cursor-pointer"
+                          className="p-1 rounded-lg bg-[#E56A54] hover:bg-[#D45943] text-white border border-[#E56A54] transition cursor-pointer"
                           title="Remove Photo"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -828,19 +822,19 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
               </div>
 
               {/* Modal Actions */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#334B56]">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-[#1B2F38] hover:bg-[#233B46] text-[#94A3B8] hover:text-[#F8FAFC] font-semibold transition cursor-pointer text-xs border border-[#334B56]"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition cursor-pointer text-xs border border-slate-300"
                 >
-                  Cancel <span className="text-[#94A3B8] text-[10px]">(Esc)</span>
+                  Cancel <span className="text-slate-400 text-[10px]">(Esc)</span>
                 </button>
 
                 <button
                   type="submit"
                   disabled={isSubmitting || isCompressing}
-                  className="min-h-[44px] px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 text-xs"
+                  className="min-h-[44px] px-5 py-2.5 rounded-xl bg-[#48999E] hover:bg-[#3D858A] text-white font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 text-xs"
                 >
                   {isSubmitting ? (
                     <>

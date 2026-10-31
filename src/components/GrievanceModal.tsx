@@ -162,25 +162,25 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-lg mx-auto max-h-[85dvh] sm:max-h-[90dvh] bg-[#132228] border-t sm:border border-[#334B56] rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col text-[#F8FAFC] overflow-hidden">
+    <div className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+      <div className="relative w-full max-w-lg mx-auto max-h-[85dvh] sm:max-h-[90dvh] bg-white border-t sm:border border-slate-200 rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col text-slate-800 overflow-hidden">
         {/* Mobile touch-drag handle pill */}
-        <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
+        <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
 
         {/* Verification Success Notice for Resident */}
         {verificationNotice ? (
           <div className="p-6 text-center flex flex-col items-center gap-4 my-auto overflow-y-auto">
-            <div className="w-16 h-16 rounded-2xl bg-[#E05A47]/20 border border-[#E05A47]/60 flex items-center justify-center text-[#FCA5A5] shadow-[0_0_25px_rgba(224,90,71,0.3)] animate-bounce">
+            <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center text-[#E56A54] shadow-xs animate-bounce">
               <AlertTriangle className="w-8 h-8" />
             </div>
             <div>
-              <span className="px-2.5 py-1 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] text-[11px] font-mono font-bold uppercase tracking-wider">
+              <span className="px-2.5 py-1 rounded-full bg-orange-100 border border-orange-200 text-orange-800 text-[11px] font-mono font-bold uppercase tracking-wider">
                 Pending Verification
               </span>
-              <h3 className="text-lg font-bold text-[#F8FAFC] mt-2">
+              <h3 className="text-lg font-bold text-slate-900 mt-2">
                 Grievance Submitted
               </h3>
-              <p className="text-xs text-[#94A3B8] max-w-sm mx-auto mt-2 leading-relaxed bg-[#0C171C] p-3 rounded-xl border border-[#334B56]">
+              <p className="text-xs text-slate-600 max-w-sm mx-auto mt-2 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
                 {verificationNotice}
               </p>
             </div>
@@ -189,7 +189,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                 setVerificationNotice(null);
                 onClose();
               }}
-              className="mt-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold text-xs transition active:scale-95 cursor-pointer shadow-md"
+              className="mt-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-[#48999E] hover:bg-[#3D858A] text-white font-bold text-xs transition active:scale-95 cursor-pointer shadow-xs"
             >
               Back to Map Dashboard
             </button>
@@ -197,16 +197,16 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
         ) : (
           <>
             {/* Modal Header */}
-            <div className="px-5 py-3.5 border-b border-[#334B56] bg-[#0C171C]/90 flex items-center justify-between flex-shrink-0">
+            <div className="px-5 py-3.5 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#1B2F38] border border-[#334B56] flex items-center justify-center text-[#E05A47]">
+                <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center text-[#E56A54]">
                   <AlertTriangle className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-[#F8FAFC] tracking-tight">
+                  <h2 className="text-base font-bold text-slate-900 tracking-tight">
                     {userRole === 'user' ? 'Report Citizen Grievance' : 'Report Field Grievance'}
                   </h2>
-                  <p className="text-xs text-[#94A3B8]">
+                  <p className="text-xs text-slate-500">
                     {userRole === 'user'
                       ? 'Resident Proposal • Saves as Pending for Panchayat Verification'
                       : 'Saves directly to browser IndexedDB with Photo (Works 100% Offline)'}
@@ -216,7 +216,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
 
               <button
                 onClick={onClose}
-                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1B2F38] transition cursor-pointer"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
                 title="Close"
                 aria-label="Close modal"
               >
@@ -227,12 +227,12 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
             {/* Success Banner */}
             {successMsg ? (
               <div className="p-8 flex flex-col items-center justify-center text-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-[#10B981]/20 border border-[#10B981] text-[#6EE7B7] flex items-center justify-center animate-bounce">
+                <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-600 flex items-center justify-center animate-bounce">
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-bold text-[#6EE7B7]">Grievance & Photo Stored!</h3>
-                <p className="text-xs text-[#94A3B8] max-w-xs">
-                  Saved locally in <code className="text-[#38BDF8] font-mono">SmartVillageOfflineDB</code>. Rendered immediately on the village map canvas.
+                <h3 className="text-lg font-bold text-emerald-700">Grievance & Photo Stored!</h3>
+                <p className="text-xs text-slate-600 max-w-xs">
+                  Saved locally in <code className="text-[#48999E] font-mono">SmartVillageOfflineDB</code>. Rendered immediately on the village map canvas.
                 </p>
               </div>
             ) : (
@@ -240,8 +240,8 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
               <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-3.5 overflow-y-auto scrollbar-thin flex-1">
                 {/* Title */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#94A3B8] mb-1">
-                    Incident Title <span className="text-[#E05A47]">*</span>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Incident Title <span className="text-[#E56A54]">*</span>
                   </label>
                   <input
                     type="text"
@@ -249,20 +249,20 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                     placeholder="e.g. Broken water pipeline valve near school"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] transition"
+                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#48999E] transition"
                   />
                 </div>
 
                 {/* Category & Status/Severity Grid */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-[#94A3B8] mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Category Badge
                     </label>
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value as OfflineGrievance['category'])}
-                      className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
+                      className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-[#48999E] transition cursor-pointer"
                     >
                       <option value="water">Water Supply</option>
                       <option value="roads">Roads / Access</option>
@@ -274,13 +274,13 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-[#94A3B8] mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Status (Colored Pill)
                     </label>
                     <select
                       value={severity}
                       onChange={(e) => setSeverity(e.target.value as OfflineGrievance['severity'])}
-                      className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
+                      className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-[#48999E] transition cursor-pointer"
                     >
                       <option value="low">Solved / Low Priority</option>
                       <option value="medium">In Progress / Medium</option>
@@ -292,13 +292,13 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
 
                 {/* Monsoon Access Condition Dropdown */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#94A3B8] mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Monsoon Access Condition
                   </label>
                   <select
                     value={monsoonCondition}
                     onChange={(e) => setMonsoonCondition(e.target.value)}
-                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
+                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:border-[#48999E] transition cursor-pointer"
                   >
                     <option value="floods">Floods / Isolated (Inundated or Cut Off)</option>
                     <option value="year_round">Year-round (Passable Access)</option>
@@ -306,48 +306,48 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                 </div>
 
                 {/* Spatial Location Coordinates */}
-                <div className="p-2.5 rounded-xl bg-[#0C171C] border border-[#334B56]">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                   <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="font-semibold text-[#38BDF8] flex items-center gap-1 text-[11px]">
+                    <span className="font-semibold text-[#48999E] flex items-center gap-1 text-[11px]">
                       <MapPin className="w-3.5 h-3.5" />
                       Spatial Coordinates (Khopripada Grid)
                     </span>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">Auto-filled</span>
+                    <span className="text-[10px] text-slate-400 font-mono">Auto-filled</span>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-xs font-mono">
                     <div>
-                      <span className="text-[#94A3B8] text-[10px]">Lat:</span>
+                      <span className="text-slate-500 text-[10px]">Lat:</span>
                       <input
                         type="number"
                         step="0.00001"
                         inputMode="decimal"
                         value={lat}
                         onChange={(e) => setLat(parseFloat(e.target.value))}
-                        className="w-full px-2 py-1.5 min-h-[38px] bg-[#132228] border border-[#334B56] rounded text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] text-xs"
+                        className="w-full px-2 py-1.5 min-h-[38px] bg-white border border-slate-300 rounded text-slate-800 focus:outline-none focus:border-[#48999E] text-xs"
                       />
                     </div>
                     <div>
-                      <span className="text-[#94A3B8] text-[10px]">Lng:</span>
+                      <span className="text-slate-500 text-[10px]">Lng:</span>
                       <input
                         type="number"
                         step="0.00001"
                         inputMode="decimal"
                         value={lng}
                         onChange={(e) => setLng(parseFloat(e.target.value))}
-                        className="w-full px-2 py-1.5 min-h-[38px] bg-[#132228] border border-[#334B56] rounded text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] text-xs"
+                        className="w-full px-2 py-1.5 min-h-[38px] bg-white border border-slate-300 rounded text-slate-800 focus:outline-none focus:border-[#48999E] text-xs"
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* Photo Upload & Camera Input Section */}
-                <div className="p-3 rounded-xl bg-[#0C171C] border border-[#334B56]">
-                  <label className="text-[11px] font-semibold text-[#94A3B8] block mb-1.5 flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <label className="text-[11px] font-semibold text-slate-700 block mb-1.5 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
-                      <Camera className="w-3.5 h-3.5 text-[#38BDF8]" />
+                      <Camera className="w-3.5 h-3.5 text-[#48999E]" />
                       Incident Photo Evidence
                     </span>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">IndexedDB Photo Storage</span>
+                    <span className="text-[10px] text-slate-400 font-mono">IndexedDB Photo Storage</span>
                   </label>
 
                   {/* Explicit camera/file input */}
@@ -367,48 +367,48 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isCompressing}
-                        className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#334B56] hover:border-[#38BDF8] bg-[#1B2F38] hover:bg-[#233B46] text-[#F8FAFC] font-semibold text-xs flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
+                        className="w-full py-2.5 px-3 rounded-xl border border-dashed border-slate-300 hover:border-[#48999E] bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition cursor-pointer active:scale-98"
                       >
                         {isCompressing ? (
                           <>
-                            <span className="w-3.5 h-3.5 border-2 border-[#38BDF8]/30 border-t-[#38BDF8] rounded-full animate-spin"></span>
+                            <span className="w-3.5 h-3.5 border-2 border-[#48999E]/30 border-t-[#48999E] rounded-full animate-spin"></span>
                             <span>Compressing Photo...</span>
                           </>
                         ) : (
                           <>
-                            <Camera className="w-4 h-4 text-[#38BDF8]" />
+                            <Camera className="w-4 h-4 text-[#48999E]" />
                             <span>Upload Evidence Photo</span>
                           </>
                         )}
                       </button>
-                      <p className="text-[10px] text-[#94A3B8] text-center">
+                      <p className="text-[10px] text-slate-500 text-center">
                         Uses phone camera on site or file picker on desktop • Automatically compressed
                       </p>
                     </div>
                   ) : (
-                    <div className="relative rounded-xl overflow-hidden border border-[#334B56] bg-[#0C171C] group">
+                    <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-100 group">
                       <img
                         src={photoBase64}
                         alt="Inspection Evidence"
                         className="w-full h-32 object-cover"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#132228]/95 via-transparent to-transparent flex items-end justify-between p-2">
-                        <span className="text-[10px] text-[#38BDF8] font-mono font-bold flex items-center gap-1 bg-[#132228]/90 px-2 py-0.5 rounded border border-[#38BDF8]/40">
-                          <ImageIcon className="w-3 h-3" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end justify-between p-2">
+                        <span className="text-[10px] text-white font-mono font-bold flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded border border-white/20">
+                          <ImageIcon className="w-3 h-3 text-[#48999E]" />
                           Captured & Compressed
                         </span>
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="px-2 py-0.5 rounded bg-[#1B2F38] hover:bg-[#233B46] text-[#F8FAFC] text-[10px] font-semibold border border-[#334B56] transition cursor-pointer"
+                            className="px-2 py-0.5 rounded bg-white/90 hover:bg-white text-slate-800 text-[10px] font-semibold border border-slate-300 transition cursor-pointer"
                           >
                             Retake
                           </button>
                           <button
                             type="button"
                             onClick={handleRemovePhoto}
-                            className="p-1 rounded bg-[#E05A47]/90 hover:bg-[#E05A47] text-[#F8FAFC] border border-[#E05A47] transition cursor-pointer"
+                            className="p-1 rounded bg-[#E56A54] hover:bg-[#D45943] text-white border border-[#E56A54] transition cursor-pointer"
                             title="Remove Photo"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -421,7 +421,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
 
                 {/* Description */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#94A3B8] mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Field Inspection Notes
                   </label>
                   <textarea
@@ -429,13 +429,13 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                     placeholder="Details regarding hazard, affected families, or damage extent..."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] transition resize-none"
+                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#48999E] transition resize-none"
                   />
                 </div>
 
                 {/* Reporter Name */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#94A3B8] mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Surveyor / Inspector Name
                   </label>
                   <input
@@ -443,23 +443,23 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                     placeholder="e.g. Field Surveyor Rahul / Panchayat Volunteer"
                     value={reporterName}
                     onChange={(e) => setReporterName(e.target.value)}
-                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] transition"
+                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#48999E] transition"
                   />
                 </div>
 
                 {/* Submit Action */}
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#334B56]">
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
                   <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-[44px] px-4 py-2 text-xs font-semibold text-[#94A3B8] hover:text-[#F8FAFC] bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] rounded-xl transition cursor-pointer"
+                    className="min-h-[44px] px-4 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting || isCompressing}
-                    className="min-h-[44px] px-5 py-2.5 text-xs font-bold text-[#F8FAFC] bg-gradient-to-r from-[#D9534F] to-[#E05A47] hover:brightness-110 active:scale-95 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="min-h-[44px] px-5 py-2.5 text-xs font-bold text-white bg-[#E56A54] hover:bg-[#D45943] active:scale-95 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <Save className="w-3.5 h-3.5" />
                     <span>Save to IndexedDB</span>
