@@ -162,11 +162,14 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-lg bg-[#132228] border border-[#334B56] rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto text-[#F8FAFC]">
+    <div className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+      <div className="relative w-full max-w-lg mx-auto max-h-[85dvh] sm:max-h-[90dvh] bg-[#132228] border-t sm:border border-[#334B56] rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col text-[#F8FAFC] overflow-hidden">
+        {/* Mobile touch-drag handle pill */}
+        <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
+
         {/* Verification Success Notice for Resident */}
         {verificationNotice ? (
-          <div className="p-6 text-center flex flex-col items-center gap-4 my-auto">
+          <div className="p-6 text-center flex flex-col items-center gap-4 my-auto overflow-y-auto">
             <div className="w-16 h-16 rounded-2xl bg-[#E05A47]/20 border border-[#E05A47]/60 flex items-center justify-center text-[#FCA5A5] shadow-[0_0_25px_rgba(224,90,71,0.3)] animate-bounce">
               <AlertTriangle className="w-8 h-8" />
             </div>
@@ -186,7 +189,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                 setVerificationNotice(null);
                 onClose();
               }}
-              className="mt-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold text-xs transition active:scale-95 cursor-pointer shadow-md"
+              className="mt-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold text-xs transition active:scale-95 cursor-pointer shadow-md"
             >
               Back to Map Dashboard
             </button>
@@ -194,7 +197,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
         ) : (
           <>
             {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-[#334B56] bg-[#0C171C]/90 flex items-center justify-between">
+            <div className="px-5 py-3.5 border-b border-[#334B56] bg-[#0C171C]/90 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-[#1B2F38] border border-[#334B56] flex items-center justify-center text-[#E05A47]">
                   <AlertTriangle className="w-4 h-4" />
@@ -234,7 +237,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
               </div>
             ) : (
               /* Form Content */
-              <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-3.5 overflow-y-auto scrollbar-thin">
+              <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-3.5 overflow-y-auto scrollbar-thin flex-1">
                 {/* Title */}
                 <div>
                   <label className="block text-xs font-semibold text-[#94A3B8] mb-1">
@@ -246,7 +249,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                     placeholder="e.g. Broken water pipeline valve near school"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] transition"
+                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] transition"
                   />
                 </div>
 
@@ -259,7 +262,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value as OfflineGrievance['category'])}
-                      className="w-full px-3 py-2 text-xs bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
+                      className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
                     >
                       <option value="water">Water Supply</option>
                       <option value="roads">Roads / Access</option>
@@ -277,7 +280,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                     <select
                       value={severity}
                       onChange={(e) => setSeverity(e.target.value as OfflineGrievance['severity'])}
-                      className="w-full px-3 py-2 text-xs bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
+                      className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
                     >
                       <option value="low">Solved / Low Priority</option>
                       <option value="medium">In Progress / Medium</option>
@@ -295,7 +298,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                   <select
                     value={monsoonCondition}
                     onChange={(e) => setMonsoonCondition(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
+                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
                   >
                     <option value="floods">Floods / Isolated (Inundated or Cut Off)</option>
                     <option value="year_round">Year-round (Passable Access)</option>
@@ -426,7 +429,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                     placeholder="Details regarding hazard, affected families, or damage extent..."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] transition resize-none"
+                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] transition resize-none"
                   />
                 </div>
 
@@ -440,7 +443,7 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                     placeholder="e.g. Field Surveyor Rahul / Panchayat Volunteer"
                     value={reporterName}
                     onChange={(e) => setReporterName(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] transition"
+                    className="w-full px-3 py-2 text-[16px] sm:text-xs min-h-[44px] bg-[#0C171C] border border-[#334B56] rounded-xl text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] transition"
                   />
                 </div>
 
@@ -449,14 +452,14 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="px-4 py-2 text-xs font-semibold text-[#94A3B8] hover:text-[#F8FAFC] bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] rounded-xl transition cursor-pointer"
+                    className="min-h-[44px] px-4 py-2 text-xs font-semibold text-[#94A3B8] hover:text-[#F8FAFC] bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] rounded-xl transition cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting || isCompressing}
-                    className="px-5 py-2 text-xs font-bold text-[#F8FAFC] bg-gradient-to-r from-[#D9534F] to-[#E05A47] hover:brightness-110 active:scale-95 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="min-h-[44px] px-5 py-2.5 text-xs font-bold text-[#F8FAFC] bg-gradient-to-r from-[#D9534F] to-[#E05A47] hover:brightness-110 active:scale-95 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <Save className="w-3.5 h-3.5" />
                     <span>Save to IndexedDB</span>

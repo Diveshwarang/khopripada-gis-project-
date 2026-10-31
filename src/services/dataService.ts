@@ -1,6 +1,11 @@
 import { supabase } from '../lib/supabase';
 import { db, seedIssuesFromCsv, seedFacilitiesFromCsv } from './offlineDb';
 import type { CivicIssue, Facility } from '../types';
+import {
+  queueOfflineGrievance,
+  queueOfflineFacility,
+  isEffectiveOnline,
+} from './offlineSync';
 
 // Cross-tab broadcast channel for instantaneous local synchronization
 const syncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
@@ -176,43 +181,57 @@ export const upsertIssue = async (issueData: Partial<CivicIssue>): Promise<Civic
     } catch {}
   }
 
-  // 3. Upsert to Supabase
-  try {
-    const payload: any = {
-      title: normalized.title,
-      category: normalized.category,
-      severity: normalized.severity,
-      status: normalized.status,
-      latitude: normalized.latitude,
-      longitude: normalized.longitude,
-      description: normalized.description,
-      notes: normalized.notes,
-      reporter_name: normalized.reporter_name,
-      submitted_by: normalized.submitted_by,
-      photo_url: normalized.photo_url || normalized.photoBase64,
-      resolution_photo_url: normalized.resolution_photo_url,
-      officer_notes: normalized.officer_notes,
-      assigned_to: normalized.assigned_to,
-      verified_by: normalized.verified_by,
-      approval_status: normalized.approval_status,
-      updated_at: new Date().toISOString(),
-    };
+  // 3. Upsert to Supabase if online
+  if (isEffectiveOnline()) {
+    try {
+      const payload: any = {
+        title: normalized.title,
+        category: normalized.category,
+        severity: normalized.severity,
+        status: normalized.status,
+        latitude: normalized.latitude,
+        longitude: normalized.longitude,
+        description: normalized.description,
+        notes: normalized.notes,
+        reporter_name: normalized.reporter_name,
+        submitted_by: normalized.submitted_by,
+        photo_url: normalized.photo_url || normalized.photoBase64,
+        resolution_photo_url: normalized.resolution_photo_url,
+        officer_notes: normalized.officer_notes,
+        assigned_to: normalized.assigned_to,
+        verified_by: normalized.verified_by,
+        approval_status: normalized.approval_status,
+        updated_at: new Date().toISOString(),
+      };
 
-    if (normalized.id && typeof normalized.id === 'string' && !normalized.id.startsWith('ISS_')) {
-      payload.id = normalized.id;
+      if (normalized.id && typeof normalized.id === 'string' && !normalized.id.startsWith('ISS_')) {
+        payload.id = normalized.id;
+      }
+
+      const { data, error } = await supabase
+        .from('issues')
+        .upsert(payload)
+        .select()
+        .single();
+
+      if (!error && data) {
+        // Mark synced in Dexie
+        const numId = typeof normalized.id === 'number'
+          ? normalized.id
+          : parseInt(String(normalized.id).replace(/\D/g, ''), 10) || Date.now();
+        db.offline_grievances.update(numId, { synced: true }).catch(() => {});
+        return normalizeIssue(data);
+      } else if (error) {
+        console.warn('Supabase upsertIssue failed, queuing in outbox:', error);
+        queueOfflineGrievance(normalized).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('Supabase upsertIssue failed (queued in offline outbox):', err);
+      queueOfflineGrievance(normalized).catch(() => {});
     }
-
-    const { data, error } = await supabase
-      .from('issues')
-      .upsert(payload)
-      .select()
-      .single();
-
-    if (!error && data) {
-      return normalizeIssue(data);
-    }
-  } catch (err) {
-    console.warn('Supabase upsertIssue failed (queued in Dexie):', err);
+  } else {
+    // Offline: queue in IndexedDB outbox
+    queueOfflineGrievance(normalized).catch(() => {});
   }
 
   return normalized;
@@ -312,34 +331,43 @@ export const upsertFacility = async (facilityData: Partial<Facility>): Promise<F
     } catch {}
   }
 
-  try {
-    const payload: any = {
-      facility_id: normalized.facility_id,
-      name: normalized.name,
-      category: normalized.category,
-      operational_status: normalized.operational_status,
-      latitude: normalized.latitude,
-      longitude: normalized.longitude,
-      monsoon_accessible: normalized.monsoon_accessible,
-      approval_status: normalized.approval_status,
-      submitted_by: normalized.submitted_by,
-      photo_url: normalized.photo_url || normalized.photoBase64,
-      notes: normalized.notes,
-      upi_available: normalized.upi_available,
-      updated_at: new Date().toISOString(),
-    };
+  if (isEffectiveOnline()) {
+    try {
+      const payload: any = {
+        facility_id: normalized.facility_id,
+        name: normalized.name,
+        category: normalized.category,
+        operational_status: normalized.operational_status,
+        latitude: normalized.latitude,
+        longitude: normalized.longitude,
+        monsoon_accessible: normalized.monsoon_accessible,
+        approval_status: normalized.approval_status,
+        submitted_by: normalized.submitted_by,
+        photo_url: normalized.photo_url || normalized.photoBase64,
+        notes: normalized.notes,
+        upi_available: normalized.upi_available,
+        updated_at: new Date().toISOString(),
+      };
 
-    const { data, error } = await supabase
-      .from('facilities')
-      .upsert(payload, { onConflict: 'facility_id' })
-      .select()
-      .single();
+      const { data, error } = await supabase
+        .from('facilities')
+        .upsert(payload, { onConflict: 'facility_id' })
+        .select()
+        .single();
 
-    if (!error && data) {
-      return normalizeFacility(data);
+      if (!error && data) {
+        return normalizeFacility(data);
+      } else if (error) {
+        console.warn('Supabase upsertFacility failed, queuing in outbox:', error);
+        queueOfflineFacility(normalized).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('Supabase upsertFacility failed (cached locally, queued in outbox):', err);
+      queueOfflineFacility(normalized).catch(() => {});
     }
-  } catch (err) {
-    console.warn('Supabase upsertFacility failed (cached locally):', err);
+  } else {
+    // Offline: queue in IndexedDB outbox
+    queueOfflineFacility(normalized).catch(() => {});
   }
 
   return normalized;

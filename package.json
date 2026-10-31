@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.118.0",
     "@types/papaparse": "^5.5.2",
     "dexie": "^4.4.6",
+    "idb": "^8.0.4",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
     "leaflet": "^1.9.4",
@@ -20,7 +21,8 @@
     "lucide-react": "^1.58.0",
     "papaparse": "^5.7.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "vite-plugin-pwa": "^2.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

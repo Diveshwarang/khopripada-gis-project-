@@ -33,12 +33,14 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[4000] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-4xl bg-[#132228] border border-[#334B56] rounded-2xl shadow-[0_10px_30px_rgba(12,23,28,0.7)] overflow-hidden text-[#F8FAFC] flex flex-col max-h-[95dvh] overscroll-contain">
+      <div className="relative w-full max-w-4xl mx-auto max-h-[85dvh] sm:max-h-[95dvh] bg-[#132228] border-t sm:border border-[#334B56] rounded-t-3xl sm:rounded-2xl shadow-[0_10px_30px_rgba(12,23,28,0.7)] overflow-hidden text-[#F8FAFC] flex flex-col overscroll-contain">
+        {/* Mobile touch-drag handle pill */}
+        <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
         {/* Modal Top Bar */}
         <div className="px-4 sm:px-5 py-3 border-b border-[#334B56] bg-[#132228] flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">

@@ -82,10 +82,13 @@ export const ExportAuditModal: React.FC<ExportAuditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-[#132228] border border-[#334B56] rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto text-[#F8FAFC]">
+    <div className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg mx-auto max-h-[85dvh] sm:max-h-[90dvh] bg-[#132228] border-t sm:border border-[#334B56] rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col text-[#F8FAFC] overflow-hidden">
+        {/* Mobile touch-drag handle pill */}
+        <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
+
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[#334B56] bg-[#0C171C]/90 flex items-center justify-between">
+        <div className="px-5 py-3.5 border-b border-[#334B56] bg-[#0C171C]/90 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#1B2F38] border border-[#334B56] flex items-center justify-center text-[#38BDF8] shadow-sm">
               <FileSpreadsheet className="w-5 h-5" />
@@ -116,7 +119,7 @@ export const ExportAuditModal: React.FC<ExportAuditModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 overflow-y-auto flex-1">
           {/* Success Banner */}
           {successMsg && (
             <div className="p-3 rounded-xl bg-[#10B981]/20 border border-[#10B981] text-[#6EE7B7] text-xs font-semibold flex items-center gap-2 animate-in fade-in">
@@ -264,11 +267,11 @@ export const ExportAuditModal: React.FC<ExportAuditModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#334B56]">
+        <div className="flex items-center justify-end gap-3 p-4 border-t border-[#334B56] flex-shrink-0 bg-[#0C171C]/60">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-[#1B2F38] hover:bg-[#233B46] text-[#94A3B8] hover:text-[#F8FAFC] text-xs font-semibold transition cursor-pointer border border-[#334B56]"
+            className="min-h-[44px] px-6 py-2.5 rounded-xl bg-[#1B2F38] hover:bg-[#233B46] text-[#94A3B8] hover:text-[#F8FAFC] text-xs font-semibold transition cursor-pointer border border-[#334B56]"
           >
             Close
           </button>

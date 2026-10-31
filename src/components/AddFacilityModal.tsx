@@ -203,15 +203,18 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[4000] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget && !verificationNotice) onClose();
       }}
     >
-      <div className="relative w-full max-w-lg bg-[#132228] border border-[#334B56] rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto text-[#F8FAFC]">
+      <div className="relative w-full max-w-lg mx-auto max-h-[85dvh] sm:max-h-[90dvh] bg-[#132228] border-t sm:border border-[#334B56] rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col text-[#F8FAFC] overflow-hidden">
+        {/* Mobile touch-drag handle pill */}
+        <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
+
         {/* Verification Success Notice for Resident / Villager */}
         {verificationNotice ? (
-          <div className="p-6 text-center flex flex-col items-center gap-4 my-auto">
+          <div className="p-6 text-center flex flex-col items-center gap-4 my-auto overflow-y-auto">
             <div className="w-16 h-16 rounded-2xl bg-[#10B981]/20 border border-[#10B981]/60 flex items-center justify-center text-[#6EE7B7] shadow-[0_0_25px_rgba(16,185,129,0.3)] animate-bounce">
               <Building2 className="w-8 h-8" />
             </div>
@@ -228,7 +231,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
             </div>
             <button
               onClick={onClose}
-              className="mt-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold text-xs transition active:scale-95 cursor-pointer shadow-md"
+              className="mt-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold text-xs transition active:scale-95 cursor-pointer shadow-md"
             >
               Back to Map Dashboard
             </button>
@@ -236,7 +239,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
         ) : (
           <>
             {/* Header */}
-            <div className="px-5 py-4 border-b border-[#334B56] bg-[#0C171C]/90 flex items-center justify-between">
+            <div className="px-5 py-3.5 border-b border-[#334B56] bg-[#0C171C]/90 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-md ${
                   userRole === 'officer'
@@ -306,7 +309,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                     inputMode="decimal"
                     readOnly
                     value={coords[0].toFixed(6)}
-                    className="w-full bg-[#132228] border border-[#334B56] rounded-lg px-2.5 py-2 text-[#F8FAFC] font-mono text-xs focus:outline-none cursor-default min-h-[40px]"
+                    className="w-full bg-[#132228] border border-[#334B56] rounded-lg px-2.5 py-2 text-[#F8FAFC] font-mono text-[16px] sm:text-xs focus:outline-none cursor-default min-h-[44px]"
                   />
                 </div>
                 <div>
@@ -318,7 +321,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                     inputMode="decimal"
                     readOnly
                     value={coords[1].toFixed(6)}
-                    className="w-full bg-[#132228] border border-[#334B56] rounded-lg px-2.5 py-2 text-[#F8FAFC] font-mono text-xs focus:outline-none cursor-default min-h-[40px]"
+                    className="w-full bg-[#132228] border border-[#334B56] rounded-lg px-2.5 py-2 text-[#F8FAFC] font-mono text-[16px] sm:text-xs focus:outline-none cursor-default min-h-[44px]"
                   />
                 </div>
               </div>
@@ -341,7 +344,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                       ? 'e.g. Om Sai General Kirana & Flour Mill'
                       : 'e.g. Wakipada Public Borewell'
                   }
-                  className="w-full bg-[#0C171C] border border-[#334B56] rounded-xl px-3.5 py-2.5 text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] text-xs transition"
+                  className="w-full bg-[#0C171C] border border-[#334B56] rounded-xl px-3.5 py-2.5 text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#38BDF8] text-[16px] sm:text-xs transition min-h-[44px]"
                 />
               </div>
 
@@ -363,7 +366,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-[#0C171C] border border-[#334B56] rounded-xl px-3.5 py-2.5 text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] text-xs transition cursor-pointer appearance-none font-medium"
+                    className="w-full bg-[#0C171C] border border-[#334B56] rounded-xl px-3.5 py-2.5 text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] text-[16px] sm:text-xs transition cursor-pointer appearance-none font-medium min-h-[44px]"
                   >
                     {userRole === 'officer' ? (
                       <>
@@ -829,7 +832,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-xl bg-[#1B2F38] hover:bg-[#233B46] text-[#94A3B8] hover:text-[#F8FAFC] font-semibold transition cursor-pointer text-xs border border-[#334B56]"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-[#1B2F38] hover:bg-[#233B46] text-[#94A3B8] hover:text-[#F8FAFC] font-semibold transition cursor-pointer text-xs border border-[#334B56]"
                 >
                   Cancel <span className="text-[#94A3B8] text-[10px]">(Esc)</span>
                 </button>
@@ -837,7 +840,7 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting || isCompressing}
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 text-xs"
+                  className="min-h-[44px] px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 text-xs"
                 >
                   {isSubmitting ? (
                     <>

@@ -345,7 +345,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
   const broLen = (conditionData.broken.pct / 100) * donutCircumference;
 
   return (
-    <div className="pointer-events-auto backdrop-blur-2xl bg-[#132228]/95 border border-[#334B56] rounded-2xl shadow-[0_10px_30px_rgba(12,23,28,0.7)] overflow-hidden w-84 sm:w-96 text-[#F8FAFC] transition-all flex flex-col max-h-[calc(100vh-140px)] animate-in fade-in slide-in-from-right-4">
+    <div className="pointer-events-auto backdrop-blur-2xl bg-[#132228]/95 border border-[#334B56] rounded-2xl shadow-[0_10px_30px_rgba(12,23,28,0.7)] overflow-hidden w-full max-w-lg sm:max-w-md max-h-[85dvh] sm:max-h-[calc(100vh-140px)] text-[#F8FAFC] transition-all flex flex-col animate-in fade-in slide-in-from-bottom sm:slide-in-from-right-4">
       {/* Header Banner */}
       <div className="p-3.5 bg-[#1B2F38] border-b border-[#334B56] flex items-center justify-between">
         <div className="flex items-center gap-2.5">

@@ -171,16 +171,26 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 z-[2000] w-full max-w-md bg-[#132228]/98 backdrop-blur-2xl border-l border-[#334B56] shadow-2xl flex flex-col text-[#F8FAFC] animate-in slide-in-from-right duration-200">
-      {/* Hidden file input for officer photo evidence */}
-      <input
-        type="file"
-        accept="image/*"
-        capture="environment"
-        ref={officerFileInputRef}
-        onChange={handleAttachProofPhoto}
-        className="hidden"
+    <>
+      {/* Mobile Backdrop */}
+      <div
+        className="sm:hidden fixed inset-0 z-[2400] bg-black/60 backdrop-blur-sm animate-in fade-in"
+        onClick={onClose}
       />
+
+      <div className="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:left-auto sm:right-0 z-[2500] sm:z-[2000] w-full max-w-lg sm:max-w-md max-h-[85dvh] sm:max-h-full bg-[#132228]/98 backdrop-blur-2xl border-t sm:border-t-0 sm:border-l border-[#334B56] rounded-t-3xl sm:rounded-none shadow-2xl flex flex-col text-[#F8FAFC] animate-in slide-in-from-bottom sm:slide-in-from-right duration-200 overflow-hidden">
+        {/* Mobile touch-drag handle pill */}
+        <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
+
+        {/* Hidden file input for officer photo evidence */}
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          ref={officerFileInputRef}
+          onChange={handleAttachProofPhoto}
+          className="hidden"
+        />
 
       {/* Header */}
       <div className="p-4 border-b border-[#334B56] bg-[#0C171C]/90 flex flex-col gap-2.5">
@@ -496,6 +506,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
         )}
       </div>
     </div>
+    </>
   );
 };
 
