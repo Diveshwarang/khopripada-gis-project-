@@ -29,6 +29,10 @@ import {
   Shield,
   SlidersHorizontal,
   Image as ImageIcon,
+  Droplets,
+  GraduationCap,
+  Store,
+  Landmark,
 } from 'lucide-react';
 import {
   getCurrentPosition,
@@ -151,7 +155,7 @@ const VILLAGE_BOUNDARY_COORDS: [number, number][] = [
   [19.370, 72.880],
 ];
 
-type BasemapType = 'osm' | 'satellite';
+type BasemapType = 'esri' | 'osm' | 'dark' | 'opentopo' | 'satellite';
 export type FacilityCategoryFilter = 'all' | 'water' | 'education' | 'commerce' | 'health' | 'civic' | 'issues';
 
 export const VillageMap = () => {
@@ -164,7 +168,10 @@ export const VillageMap = () => {
   const grievancesLayerRef = useRef<L.LayerGroup | null>(null);
   const gpsLocationLayerRef = useRef<L.LayerGroup | null>(null);
   const inspectMarkerRef = useRef<L.Marker | null>(null);
+  const esriLayerRef = useRef<L.TileLayer | null>(null);
   const osmLayerRef = useRef<L.TileLayer | null>(null);
+  const darkLayerRef = useRef<L.TileLayer | null>(null);
+  const opentopoLayerRef = useRef<L.TileLayer | null>(null);
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
   const heatmapLayerRef = useRef<L.LayerGroup>(L.layerGroup());
   const allFacilitiesRef = useRef<CachedFacility[]>([]);
@@ -241,7 +248,7 @@ export const VillageMap = () => {
   const [currentZoom, setCurrentZoom] = useState<number>(DEFAULT_ZOOM);
   const [centerCoords, setCenterCoords] = useState<[number, number]>(KHOPRIPADA_CORE);
   const [cursorCoords, setCursorCoords] = useState<[number, number] | null>(null);
-  const [activeBasemap, setActiveBasemap] = useState<BasemapType>('satellite');
+  const [activeBasemap, setActiveBasemap] = useState<BasemapType>('esri');
   const [showBoundary, setShowBoundary] = useState<boolean>(true);
   const [showLandmarks, setShowLandmarks] = useState<boolean>(true);
   const [showFacilities, setShowFacilities] = useState<boolean>(true);
@@ -355,6 +362,73 @@ export const VillageMap = () => {
       low: safeIssues.filter((i) => i?.severity === 'low').length,
     };
   }, [safeIssues]);
+
+  // Category breakdown counts for village facilities (defensive reads)
+  const categoryCounts = useMemo(() => {
+    const counts = {
+      all: safeFacilities.length,
+      water: 0,
+      education: 0,
+      commerce: 0,
+      health: 0,
+      civic: 0,
+    };
+    safeFacilities.forEach((f) => {
+      const cat = (f?.category || '').toLowerCase();
+      if (
+        cat.includes('water') ||
+        cat.includes('handpump') ||
+        cat.includes('well') ||
+        cat.includes('tank') ||
+        cat.includes('borewell')
+      ) {
+        counts.water++;
+      } else if (
+        cat.includes('school') ||
+        cat.includes('education') ||
+        cat.includes('anganwadi') ||
+        cat.includes('college') ||
+        cat.includes('balwadi') ||
+        cat.includes('coaching') ||
+        cat.includes('academy')
+      ) {
+        counts.education++;
+      } else if (
+        cat.includes('shop') ||
+        cat.includes('commerce') ||
+        cat.includes('store') ||
+        cat.includes('ration') ||
+        cat.includes('dairy') ||
+        cat.includes('hardware') ||
+        cat.includes('market') ||
+        cat.includes('vendor') ||
+        cat.includes('saloon') ||
+        cat.includes('laundry')
+      ) {
+        counts.commerce++;
+      } else if (
+        cat.includes('health') ||
+        cat.includes('clinic') ||
+        cat.includes('hospital') ||
+        cat.includes('sub-center')
+      ) {
+        counts.health++;
+      } else if (
+        cat.includes('civic') ||
+        cat.includes('social') ||
+        cat.includes('mandir') ||
+        cat.includes('temple') ||
+        cat.includes('graveyard') ||
+        cat.includes('chwal') ||
+        cat.includes('chawl') ||
+        cat.includes('panchayat') ||
+        cat.includes('admin')
+      ) {
+        counts.civic++;
+      }
+    });
+    return counts;
+  }, [safeFacilities]);
 
   // Mobile Touch Interface States (< 768px viewports)
   const [mobileSheet, setMobileSheet] = useState<'action' | 'analytics' | 'worklist' | 'layers' | 'role' | null>(null);
@@ -1741,20 +1815,20 @@ export const VillageMap = () => {
         safeIssues.forEach((issue) => {
           if (!issue?.latitude || !issue?.longitude) return;
 
-          // Core high-intensity circle
+          // Core hotspot circle
           L.circleMarker([issue.latitude, issue.longitude], {
-            radius: issue.severity === 'high' ? 30 : 20,
-            fillColor: issue.severity === 'high' ? '#E56A54' : '#F6AA6E',
+            radius: issue.severity === 'high' || issue.severity === 'critical' ? 32 : 22,
+            fillColor: '#EF4444',
             color: 'transparent',
-            fillOpacity: 0.55,
+            fillOpacity: 0.35,
           }).addTo(heatmapLayerRef.current);
 
           // Ambient density aura
           L.circleMarker([issue.latitude, issue.longitude], {
-            radius: issue.severity === 'high' ? 60 : 40,
-            fillColor: issue.severity === 'high' ? '#E56A54' : '#F6AA6E',
+            radius: issue.severity === 'high' || issue.severity === 'critical' ? 64 : 44,
+            fillColor: '#EF4444',
             color: 'transparent',
-            fillOpacity: 0.18,
+            fillOpacity: 0.15,
           }).addTo(heatmapLayerRef.current);
         });
 
@@ -1990,23 +2064,34 @@ export const VillageMap = () => {
       mapInstanceRef.current = null;
     }
 
-    // 1. Standard Clean Tile Layers: OSM Street vs Satellite (Requirement 3)
+    // 1. Standard Clean Tile Layers: ESRI Satellite, OSM, Dark Matter, OpenTopo
+    esriLayerRef.current = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: 'Tiles &copy; Esri' }
+    );
+    satelliteLayerRef.current = esriLayerRef.current;
+
     osmLayerRef.current = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
     });
 
-    satelliteLayerRef.current = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { maxZoom: 19, attribution: 'Tiles &copy; Esri' }
+    darkLayerRef.current = L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      { maxZoom: 19, subdomains: ['a', 'b', 'c', 'd'], attribution: '&copy; CARTO' }
     );
 
-    // 2. Initialize Map Instance centered at Khopripada Core with Satellite default
+    opentopoLayerRef.current = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom: 17,
+      attribution: '&copy; OpenTopoMap contributors',
+    });
+
+    // 2. Initialize Map Instance centered at Khopripada Core with ESRI Satellite default
     const map = L.map(mapContainerRef.current, {
       center: KHOPRIPADA_CORE,
       zoom: DEFAULT_ZOOM,
       zoomControl: false,
-      layers: [satelliteLayerRef.current],
+      layers: [esriLayerRef.current],
     });
 
     mapInstanceRef.current = map;
@@ -2023,18 +2108,18 @@ export const VillageMap = () => {
       })
       .addTo(map);
 
-    // 4. Village Boundary AOI Overlay
+    // 4. Village Boundary AOI Overlay (Glowing Cyan Line)
     const boundary = L.polygon(VILLAGE_BOUNDARY_COORDS, {
-      color: '#38BDF8',
+      color: '#00E5FF',
       weight: 2,
-      opacity: 0.85,
-      dashArray: '6, 8',
-      fillColor: '#38BDF8',
-      fillOpacity: 0.06,
+      opacity: 0.9,
+      dashArray: '4, 4',
+      fillColor: '#00E5FF',
+      fillOpacity: 0.05,
     }).addTo(map);
 
     boundary.bindTooltip(
-      '<div class="px-2.5 py-1 font-sans text-xs font-semibold text-[#F8FAFC] bg-[#132228]/95 border border-[#334B56] rounded-lg shadow-lg">Khopripada & Bapane Study Corridor</div>',
+      '<div class="px-2.5 py-1 font-sans text-xs font-semibold text-[#F1F5F9] bg-[#0D1C2A]/95 border border-[#1D3B52] rounded-lg shadow-lg">Khopripada & Bapane Study Corridor</div>',
       { sticky: true, className: 'gis-boundary-tooltip' }
     );
     boundaryLayerRef.current = boundary;
@@ -2501,37 +2586,43 @@ export const VillageMap = () => {
     });
   }, []);
 
-  // Switch Basemap
+  // Switch Basemap across the 4 providers (Requirement 4 & 6)
   const changeBasemap = useCallback((type: BasemapType) => {
     setActiveBasemap(type);
-  }, []);
-
-  // Safe basemap switching effect (Requirement 3)
-  useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    try {
-      if (activeBasemap === 'osm') {
-        if (satelliteLayerRef.current && map.hasLayer(satelliteLayerRef.current)) {
-          map.removeLayer(satelliteLayerRef.current);
-        }
-        if (osmLayerRef.current && !map.hasLayer(osmLayerRef.current)) {
-          osmLayerRef.current.addTo(map);
-        }
-      } else {
-        if (osmLayerRef.current && map.hasLayer(osmLayerRef.current)) {
-          map.removeLayer(osmLayerRef.current);
-        }
-        if (satelliteLayerRef.current && !map.hasLayer(satelliteLayerRef.current)) {
-          satelliteLayerRef.current.addTo(map);
-        }
+    const allLayers = [
+      esriLayerRef.current,
+      osmLayerRef.current,
+      darkLayerRef.current,
+      opentopoLayerRef.current,
+      satelliteLayerRef.current,
+    ];
+
+    allLayers.forEach((l) => {
+      if (l && map.hasLayer(l)) {
+        map.removeLayer(l);
       }
-      setTimeout(() => map.invalidateSize(), 100);
-    } catch (err) {
-      console.warn('Basemap transition protected:', err);
+    });
+
+    if (type === 'esri' || type === 'satellite') {
+      esriLayerRef.current?.addTo(map);
+    } else if (type === 'osm') {
+      osmLayerRef.current?.addTo(map);
+    } else if (type === 'dark') {
+      darkLayerRef.current?.addTo(map);
+    } else if (type === 'opentopo') {
+      opentopoLayerRef.current?.addTo(map);
     }
-  }, [activeBasemap]);
+
+    setTimeout(() => map.invalidateSize(), 80);
+  }, []);
+
+  // Safe basemap switching effect
+  useEffect(() => {
+    changeBasemap(activeBasemap);
+  }, [activeBasemap, changeBasemap]);
 
   // Leaflet Dynamic Size Invalidation on Resize/Mount
   useEffect(() => {
@@ -2716,6 +2807,7 @@ export const VillageMap = () => {
         onMobileLogout={handleMobileLogout}
         onOpenMobileSheet={(sheet) => setMobileSheet(sheet)}
         mobileSheet={mobileSheet}
+        facilityCount={facilitiesList.length}
       />
 
       {/* 2. MAIN DASHBOARD VIEWPORT (MAP + SIDEBAR SPLIT) */}
@@ -2723,18 +2815,18 @@ export const VillageMap = () => {
 
         {/* 2.1 RIGHT ANALYTICS & DECISION DRAWER (DESKTOP DOCKED, MOBILE SLIDE-OVER) */}
         {sidebarOpen && (
-          <aside className="order-2 fixed inset-y-0 right-0 z-[1500] w-84 sm:w-96 md:static md:flex md:flex-col md:h-full md:flex-shrink-0 bg-white border-l border-slate-200 overflow-y-auto p-4 space-y-4 shadow-xl text-slate-800">
+          <aside className="order-2 fixed inset-y-0 right-0 z-[1500] w-80 sm:w-96 md:static md:flex md:flex-col md:h-full md:flex-shrink-0 bg-[#081018]/95 backdrop-blur-lg border-l border-[#1D3B52] overflow-y-auto p-4 space-y-4 shadow-2xl text-xs text-[#F1F5F9]">
             {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-shrink-0">
+            <div className="flex items-center justify-between pb-3 border-b border-[#1D3B52] flex-shrink-0">
               <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-[#48999E]" />
-                <span className="font-bold text-sm text-slate-800">
+                <Layers className="w-4 h-4 text-[#00E5FF]" />
+                <span className="font-bold text-sm text-[#F1F5F9]">
                   {isAdminOrOfficer ? 'Village Analytics & Layers' : 'Layers & Filters'}
                 </span>
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer text-xs font-semibold"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#0D1C2A] hover:bg-[#142C3F] text-[#8CB0C9] hover:text-[#F1F5F9] border border-[#1D3B52] transition cursor-pointer text-xs font-semibold"
                 title="Close"
               >
                 <X className="w-3.5 h-3.5" />
@@ -2744,184 +2836,244 @@ export const VillageMap = () => {
 
             {/* Drawer Body */}
             <div className="flex-1 overflow-y-auto space-y-4 scrollbar-thin pr-0.5">
-              {/* SECTION 1: SELECT BASEMAP */}
-              <div className="space-y-1.5">
-                <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 flex items-center justify-between">
+              {/* SECTION 1: SELECT BASEMAP (2x2 Grid) */}
+              <div className="space-y-2">
+                <div className="text-[11px] uppercase tracking-wider font-bold text-[#5A7C93] flex items-center justify-between">
                   <span>SELECT BASEMAP</span>
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-mono font-medium">
+                  <span className="text-[10px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-1.5 py-0.5 rounded font-mono font-medium">
                     TILE CACHE ACTIVE
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => changeBasemap('osm')}
-                    className={`py-2 px-3 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
-                      activeBasemap === 'osm'
-                        ? 'bg-[#10B981] text-white font-semibold shadow-sm'
-                        : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
-                    }`}
-                  >
-                    OSM Street
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => changeBasemap('satellite')}
-                    className={`py-2 px-3 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
-                      activeBasemap === 'satellite'
-                        ? 'bg-[#10B981] text-white font-semibold shadow-sm'
-                        : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
-                    }`}
-                  >
-                    Satellite
-                  </button>
+                  {[
+                    { id: 'esri', label: 'ESRI Satellite' },
+                    { id: 'osm', label: 'OpenStreetMap' },
+                    { id: 'dark', label: 'Dark Matter' },
+                    { id: 'opentopo', label: 'OpenTopo' },
+                  ].map((bm) => (
+                    <button
+                      key={bm.id}
+                      type="button"
+                      onClick={() => changeBasemap(bm.id as BasemapType)}
+                      className={`py-2 px-3 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
+                        activeBasemap === bm.id || (bm.id === 'esri' && activeBasemap === 'satellite')
+                          ? 'bg-[#00E5FF]/20 border border-[#00E5FF] text-[#00E5FF] shadow-[0_0_10px_rgba(0,229,255,0.25)]'
+                          : 'bg-[#0D1C2A] border border-[#1D3B52] text-[#8CB0C9] hover:border-[#00E5FF]/50 hover:text-[#F1F5F9]'
+                      }`}
+                    >
+                      {bm.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* SECTION 2: ACTIVE LAYERS & LAYER STACK */}
-              <div className="space-y-1.5">
-                <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500">
-                  ACTIVE LAYERS & LAYER STACK
+              {/* SECTION 2: CATEGORIES & ISSUES */}
+              <div className="space-y-2.5">
+                <div className="text-[11px] uppercase tracking-wider font-bold text-[#5A7C93] flex items-center justify-between">
+                  <span>CATEGORIES & ISSUES</span>
+                  <span className="text-[10px] text-[#8CB0C9] font-mono">{facilitiesList.length} Facilities</span>
                 </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5">
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
-                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 shrink-0"></span>
+
+                {/* 2-column grid of 6 category buttons */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { id: 'all', label: 'All POIs', icon: Layers, count: categoryCounts.all },
+                    { id: 'water', label: 'Drinking Water', icon: Droplets, count: categoryCounts.water },
+                    { id: 'education', label: 'Schools & Edu', icon: GraduationCap, count: categoryCounts.education },
+                    { id: 'commerce', label: 'Commerce & Shops', icon: Store, count: categoryCounts.commerce },
+                    { id: 'health', label: 'Health Centers', icon: Activity, count: categoryCounts.health },
+                    { id: 'civic', label: 'Civic & Mandir', icon: Landmark, count: categoryCounts.civic },
+                  ].map((cat) => {
+                    const Icon = cat.icon;
+                    const isActive = facilityFilter === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => handleFilterFacilities(cat.id as FacilityCategoryFilter)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer flex items-center justify-between gap-1 text-left ${
+                          isActive
+                            ? 'bg-[#142C3F] border-[#00E5FF] text-[#00E5FF] shadow-[0_0_8px_rgba(0,229,255,0.3)]'
+                            : 'bg-[#0D1C2A] border-[#1D3B52] text-[#8CB0C9] hover:border-[#00E5FF]/40 hover:text-white'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 truncate">
+                          <Icon className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{cat.label}</span>
+                        </span>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded shrink-0 ${
+                          isActive ? 'bg-[#00E5FF]/20 text-[#00E5FF]' : 'bg-[#081018] text-[#5A7C93]'
+                        }`}>
+                          {cat.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Facility Health & Issues Severity metric breakdown boxes */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  {/* Facility Health Breakdown */}
+                  <div className="p-2.5 rounded-xl bg-[#0D1C2A] border border-[#1D3B52]">
+                    <span className="text-[9px] uppercase font-bold text-[#5A7C93] block mb-1.5">
+                      Facility Health
+                    </span>
+                    <div className="grid grid-cols-3 gap-1 text-center font-mono text-[10px]">
+                      <div className="text-emerald-400">
+                        <span className="text-[8px] uppercase block font-sans text-emerald-500/80">Func</span>
+                        <strong>{operationalCounts.functional}</strong>
+                      </div>
+                      <div className="text-amber-400 border-x border-[#1D3B52]/60">
+                        <span className="text-[8px] uppercase block font-sans text-amber-500/80">Part</span>
+                        <strong>{operationalCounts.partial}</strong>
+                      </div>
+                      <div className="text-rose-400">
+                        <span className="text-[8px] uppercase block font-sans text-rose-500/80">Degr</span>
+                        <strong>{operationalCounts.nonFunctional}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Issues Severity Breakdown */}
+                  <div className="p-2.5 rounded-xl bg-[#0D1C2A] border border-[#1D3B52]">
+                    <span className="text-[9px] uppercase font-bold text-[#5A7C93] block mb-1.5">
+                      Issues Severity
+                    </span>
+                    <div className="grid grid-cols-3 gap-1 text-center font-mono text-[10px]">
+                      <div className="text-rose-400">
+                        <span className="text-[8px] uppercase block font-sans text-rose-500/80">High</span>
+                        <strong>{issueCounts.high}</strong>
+                      </div>
+                      <div className="text-amber-400 border-x border-[#1D3B52]/60">
+                        <span className="text-[8px] uppercase block font-sans text-amber-500/80">Med</span>
+                        <strong>{issueCounts.medium}</strong>
+                      </div>
+                      <div className="text-emerald-400">
+                        <span className="text-[8px] uppercase block font-sans text-emerald-500/80">Low</span>
+                        <strong>{issueCounts.low}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 3: ACTIVE MAP LAYERS */}
+              <div className="space-y-2">
+                <div className="text-[11px] uppercase tracking-wider font-bold text-[#5A7C93]">
+                  ACTIVE MAP LAYERS
+                </div>
+                <div className="bg-[#0D1C2A] border border-[#1D3B52] rounded-xl p-2.5 space-y-1.5">
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/60 border border-[#1D3B52] hover:border-[#00E5FF]/40 cursor-pointer transition">
+                    <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#00E5FF] shrink-0 shadow-[0_0_6px_#00E5FF]"></span>
                       Khopripada Boundary (AOI)
                     </span>
                     <input
                       type="checkbox"
                       checked={showBoundary}
                       onChange={toggleBoundary}
-                      className="w-4 h-4 rounded text-cyan-600 focus:ring-0 accent-cyan-600 cursor-pointer"
+                      className="w-4 h-4 rounded text-[#00E5FF] focus:ring-0 accent-[#00E5FF] cursor-pointer"
                     />
                   </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
-                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/60 border border-[#1D3B52] hover:border-[#00E5FF]/40 cursor-pointer transition">
+                    <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
                       Village Facilities ({facilitiesList.length || facilityCount})
                     </span>
                     <input
                       type="checkbox"
                       checked={showFacilities}
                       onChange={toggleFacilities}
-                      className="w-4 h-4 rounded text-emerald-600 focus:ring-0 accent-emerald-600 cursor-pointer"
+                      className="w-4 h-4 rounded text-[#00E5FF] focus:ring-0 accent-[#00E5FF] cursor-pointer"
                     />
                   </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
-                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/60 border border-[#1D3B52] hover:border-[#00E5FF]/40 cursor-pointer transition">
+                    <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-400 shrink-0"></span>
                       Surveyed Issues ({issueCounts.total})
                     </span>
                     <input
                       type="checkbox"
                       checked={showIssues}
                       onChange={toggleIssues}
-                      className="w-4 h-4 rounded text-red-600 focus:ring-0 accent-red-600 cursor-pointer"
+                      className="w-4 h-4 rounded text-[#00E5FF] focus:ring-0 accent-[#00E5FF] cursor-pointer"
                     />
                   </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
-                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/60 border border-[#1D3B52] hover:border-[#00E5FF]/40 cursor-pointer transition">
+                    <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0"></span>
                       Reported Grievances (IndexedDB)
                     </span>
                     <input
                       type="checkbox"
                       checked={showGrievancePins}
                       onChange={toggleGrievancePins}
-                      className="w-4 h-4 rounded text-red-600 focus:ring-0 accent-red-600 cursor-pointer"
+                      className="w-4 h-4 rounded text-[#00E5FF] focus:ring-0 accent-[#00E5FF] cursor-pointer"
                     />
                   </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
-                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0"></span>
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/60 border border-[#1D3B52] hover:border-[#00E5FF]/40 cursor-pointer transition">
+                    <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0"></span>
                       Key Landmark POIs
                     </span>
                     <input
                       type="checkbox"
                       checked={showLandmarks}
                       onChange={toggleLandmarks}
-                      className="w-4 h-4 rounded text-blue-600 focus:ring-0 accent-blue-600 cursor-pointer"
-                    />
-                  </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
-                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
-                      DBSCAN Failure Zones (3 Hotspots)
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={showDbscanClusters}
-                      onChange={(e) => toggleDbscanClusters(e.target.checked)}
-                      className="w-4 h-4 rounded text-red-600 focus:ring-0 accent-red-600 cursor-pointer"
-                    />
-                  </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
-                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
-                      Failure Density Heatmap
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={showHeatmap}
-                      onChange={(e) => toggleHeatmap(e.target.checked)}
-                      className="w-4 h-4 rounded text-red-600 focus:ring-0 accent-red-600 cursor-pointer"
+                      className="w-4 h-4 rounded text-[#00E5FF] focus:ring-0 accent-[#00E5FF] cursor-pointer"
                     />
                   </label>
                 </div>
               </div>
 
-              {/* SECTION 3: FILTER AMENITIES BY CATEGORY */}
-              <div className="space-y-1.5">
-                <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 flex items-center justify-between">
-                  <span>FILTER AMENITIES BY CATEGORY</span>
-                  <span className="text-[10px] text-slate-400 font-mono">{facilitiesList.length} Facilities</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {[
-                    { id: 'all', label: 'All POIs' },
-                    { id: 'water', label: 'Drinking Water' },
-                    { id: 'education', label: 'Schools & Education' },
-                    { id: 'commerce', label: 'Commerce & Kirana' },
-                    { id: 'health', label: 'Health & Anganwadi' },
-                    { id: 'civic', label: 'Civic & Mandir' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => handleFilterFacilities(opt.id as FacilityCategoryFilter)}
-                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer text-center truncate ${
-                        facilityFilter === opt.id
-                          ? 'bg-[#48999E] border-[#48999E] text-white shadow-xs'
-                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* SECTION 4: VILLAGE ANALYTICS & DECISION SUPPORT (Admin & Officer View Only) */}
+              {/* SECTION 4: ML SPATIAL ANALYTICS (Panchayat View Only) */}
               {isAdminOrOfficer && (
-                <div className="space-y-1.5 village-analytics-container">
-                  <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500">
-                    VILLAGE ANALYTICS & DECISION SUPPORT
+                <div className="space-y-2 village-analytics-container">
+                  <div className="text-[11px] uppercase tracking-wider font-bold text-[#5A7C93]">
+                    ML SPATIAL ANALYTICS (Panchayat View Only)
                   </div>
-                  <div className="bg-[#0D1C24] text-white rounded-2xl p-4 border border-slate-700/60 shadow-lg space-y-3">
+                  <div className="bg-[#0D1C2A] text-[#F1F5F9] rounded-2xl p-4 border border-[#1D3B52] shadow-xl space-y-3">
                     {/* Header */}
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-700/60">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#1D3B52]">
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-teal-400 tracking-wider block">
+                        <span className="text-[10px] uppercase font-bold text-[#00E5FF] tracking-wider block">
                           PANCHAYAT ADMIN
                         </span>
                         <h4 className="text-xs font-bold text-white leading-tight">
                           Executive Decision Console
                         </h4>
                       </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-teal-300 border border-slate-700">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#081018] text-[#00E5FF] border border-[#1D3B52]">
                         Live Active
                       </span>
+                    </div>
+
+                    {/* Layer Toggles for DBSCAN & Heatmap */}
+                    <div className="space-y-1.5">
+                      <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/80 border border-[#1D3B52] hover:border-[#EF4444]/50 cursor-pointer transition">
+                        <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] shrink-0 animate-pulse"></span>
+                          DBSCAN Failure Zones (3 Hotspots)
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={showDbscanClusters}
+                          onChange={(e) => toggleDbscanClusters(e.target.checked)}
+                          className="w-4 h-4 rounded text-[#EF4444] focus:ring-0 accent-[#EF4444] cursor-pointer"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/80 border border-[#1D3B52] hover:border-[#F59E0B]/50 cursor-pointer transition">
+                        <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] shrink-0"></span>
+                          Failure Density Heatmap
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={showHeatmap}
+                          onChange={(e) => toggleHeatmap(e.target.checked)}
+                          className="w-4 h-4 rounded text-[#F59E0B] focus:ring-0 accent-[#F59E0B] cursor-pointer"
+                        />
+                      </label>
                     </div>
 
                     {/* Stat Badges */}
@@ -2937,27 +3089,6 @@ export const VillageMap = () => {
                           Hotspots
                         </span>
                         <span className="text-xs font-bold font-mono">3 DBSCAN CLUSTERS</span>
-                      </div>
-                    </div>
-
-                    {/* Facility Conditions breakdown */}
-                    <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-[10px]">
-                      <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">
-                        Facility Operational Conditions
-                      </span>
-                      <div className="grid grid-cols-3 gap-1 text-center font-mono">
-                        <div className="text-emerald-400">
-                          <span className="text-[8px] uppercase block font-sans">Functional</span>
-                          <strong>{operationalCounts.functional}</strong>
-                        </div>
-                        <div className="text-amber-400 border-x border-slate-800">
-                          <span className="text-[8px] uppercase block font-sans">Partial</span>
-                          <strong>{operationalCounts.partial}</strong>
-                        </div>
-                        <div className="text-red-400">
-                          <span className="text-[8px] uppercase block font-sans">Degraded</span>
-                          <strong>{operationalCounts.nonFunctional}</strong>
-                        </div>
                       </div>
                     </div>
 
@@ -3018,22 +3149,65 @@ export const VillageMap = () => {
 
         {/* 2.2 MAP CANVAS CONTAINER */}
         <div className="order-1 flex-1 min-w-0 relative h-full flex flex-col">
+          {/* 3. FLOATING QUICK-FILTER WIDGET (TOP-LEFT MAP OVERLAY) */}
+          <div className="absolute top-4 left-4 z-[1000] bg-[#0D1C2A]/90 backdrop-blur-md border border-[#1D3B52] rounded-xl p-2 flex items-center gap-2 shadow-2xl pointer-events-auto">
+            {/* Branding Block */}
+            <div className="pr-2 border-r border-[#1D3B52] flex flex-col">
+              <span className="text-white font-bold text-xs tracking-wide flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#00E5FF] shadow-[0_0_6px_#00E5FF]"></span>
+                Smart Village GIS
+              </span>
+              <span className="text-[#8CB0C9] text-[10px] font-mono">Khopripada Digital Twin</span>
+            </div>
+
+            {/* Quick-Filter Icon Buttons */}
+            <div className="flex items-center gap-1">
+              {[
+                { id: 'all', label: 'All', icon: Layers, tooltip: 'All Facilities' },
+                { id: 'water', label: 'Water', icon: Droplets, tooltip: 'Drinking Water' },
+                { id: 'education', label: 'Edu', icon: GraduationCap, tooltip: 'Schools & Education' },
+                { id: 'commerce', label: 'Shop', icon: Store, tooltip: 'Commerce & Kirana' },
+                { id: 'health', label: 'Health', icon: Activity, tooltip: 'Health & Anganwadi' },
+                { id: 'civic', label: 'Civic', icon: Landmark, tooltip: 'Civic & Mandir' },
+              ].map((item) => {
+                const Icon = item.icon;
+                const isActive = facilityFilter === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleFilterFacilities(item.id as FacilityCategoryFilter)}
+                    title={item.tooltip}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      isActive
+                        ? 'bg-[#142C3F] border border-[#00E5FF] text-[#00E5FF] shadow-[0_0_8px_rgba(0,229,255,0.4)]'
+                        : 'bg-[#081018]/60 hover:bg-[#142C3F] border border-[#1D3B52] text-[#8CB0C9] hover:text-white'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Add Facility Mode Instruction Banner */}
           {isAddFacilityMode && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1500] pointer-events-auto animate-in fade-in slide-in-from-top-4 duration-200">
-              <div className="backdrop-blur-xl bg-white/95 border border-slate-200 rounded-2xl px-5 py-2.5 shadow-xl flex items-center gap-3 text-xs text-slate-800">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] shadow-xs flex-shrink-0 animate-pulse"></span>
-                <span className="font-semibold text-slate-800">
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[1500] pointer-events-auto animate-in fade-in slide-in-from-top-4 duration-200">
+              <div className="backdrop-blur-xl bg-[#0D1C2A]/95 border border-[#1D3B52] text-[#F1F5F9] rounded-2xl px-5 py-2.5 shadow-2xl flex items-center gap-3 text-xs">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#00E5FF] shadow-[0_0_8px_#00E5FF] flex-shrink-0 animate-pulse"></span>
+                <span className="font-semibold text-[#F1F5F9]">
                   {userRole === 'officer'
                     ? 'Click on the map to place Government Scheme Asset GPS point'
                     : userRole === 'user'
                     ? 'Click on the map to propose Community Facility GPS point'
                     : 'Click anywhere on the map to place the new facility'}{' '}
-                  <span className="text-slate-500 font-mono text-[11px]">(Press Esc to cancel)</span>
+                  <span className="text-[#8CB0C9] font-mono text-[11px]">(Press Esc to cancel)</span>
                 </span>
                 <button
                   onClick={cleanupAddFacilityMode}
-                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer text-[11px] font-bold"
+                  className="px-2.5 py-1 rounded-lg bg-[#081018] hover:bg-[#142C3F] text-[#8CB0C9] hover:text-white border border-[#1D3B52] transition cursor-pointer text-[11px] font-bold"
                 >
                   Cancel
                 </button>
@@ -3043,69 +3217,76 @@ export const VillageMap = () => {
 
           {/* Selected / Inspected Point Floating Card */}
           {inspectedPoint && (
-            <div className="absolute top-4 left-4 sm:left-6 z-[1000] pointer-events-auto backdrop-blur-xl bg-white/95 border border-slate-200 text-slate-800 rounded-xl p-3 shadow-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 max-w-sm">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center text-[#48999E]">
-              <MapPin className="w-4 h-4" />
+            <div className="absolute top-16 left-4 sm:left-6 z-[1000] pointer-events-auto backdrop-blur-xl bg-[#0D1C2A]/95 border border-[#1D3B52] text-[#F1F5F9] rounded-xl p-3 shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 max-w-sm">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[#142C3F] border border-[#00E5FF]/40 flex items-center justify-center text-[#00E5FF]">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div className="text-xs">
+                  <div className="font-semibold text-[#F1F5F9] flex items-center gap-1">
+                    Point Inspected
+                    <span className="text-[10px] text-[#8CB0C9]">
+                      ({inspectedPoint.distKm} km from Core)
+                    </span>
+                  </div>
+                  <div className="font-mono text-[#00E5FF] text-[11px] mt-0.5">
+                    {inspectedPoint.lat}°N, {inspectedPoint.lng}°E
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setIsGrievanceModalOpen(true)}
+                  className="text-[11px] px-2 py-1 rounded bg-[#EF4444]/20 hover:bg-[#EF4444]/30 text-[#EF4444] border border-[#EF4444]/50 transition cursor-pointer flex items-center gap-1 font-semibold"
+                  title="Log Grievance here"
+                >
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>Report</span>
+                </button>
+                <button
+                  onClick={() => copyCoords(`${inspectedPoint.lat}, ${inspectedPoint.lng}`)}
+                  className="text-xs px-2 py-1 rounded bg-[#081018] hover:bg-[#142C3F] text-[#8CB0C9] hover:text-white border border-[#1D3B52] transition cursor-pointer font-semibold"
+                >
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+                <button
+                  onClick={() => setInspectedPoint(null)}
+                  className="text-xs p-1 rounded hover:bg-[#142C3F] text-[#5A7C93] hover:text-[#F1F5F9] transition cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-            <div className="text-xs">
-              <div className="font-semibold text-slate-900 flex items-center gap-1">
-                Point Inspected
-                <span className="text-[10px] text-slate-500">
-                  ({inspectedPoint.distKm} km from Core)
-                </span>
-              </div>
-              <div className="font-mono text-[#48999E] text-[11px] mt-0.5">
-                {inspectedPoint.lat}°N, {inspectedPoint.lng}°E
-              </div>
+          )}
+
+          {/* 5. FLOATING BOTTOM STATUS BAR */}
+          <div className="absolute bottom-20 md:bottom-3 left-3 z-[1000] bg-[#081018]/90 backdrop-blur-md border border-[#1D3B52] px-3 py-1.5 rounded-lg flex items-center gap-3 text-[11px] text-[#8CB0C9] font-mono shadow-xl pointer-events-auto">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#00E5FF] animate-pulse"></span>
+              <span className="text-[#F1F5F9] font-semibold">Khopripada Core:</span>
+              <span>19.3551°N, 72.8846°E</span>
+            </div>
+            <span className="text-[#1D3B52]">|</span>
+            <div>
+              <span className="text-[#5A7C93]">Boundary:</span> 19.3601°N, 72.8778°E
+            </div>
+            <span className="text-[#1D3B52]">|</span>
+            <div>
+              <span className="text-[#00E5FF] font-semibold">{facilitiesList.length}</span> mapped
+            </div>
+            <span className="text-[#1D3B52]">|</span>
+            <div>
+              <span className="text-[#5A7C93]">Cursor:</span>{' '}
+              <span className="text-[#F1F5F9]">
+                {cursorCoords ? `${cursorCoords[0].toFixed(4)}°N, ${cursorCoords[1].toFixed(4)}°E` : `${centerCoords[0].toFixed(4)}°N, ${centerCoords[1].toFixed(4)}°E`}
+              </span>
+            </div>
+            <span className="text-[#1D3B52]">|</span>
+            <div>
+              <span className="text-[#5A7C93]">Zoom:</span> {currentZoom}
             </div>
           </div>
-
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setIsGrievanceModalOpen(true)}
-              className="text-[11px] px-2 py-1 rounded bg-orange-50 hover:bg-orange-100 text-[#E56A54] border border-orange-200 transition cursor-pointer flex items-center gap-1 font-semibold"
-              title="Log Grievance here"
-            >
-              <AlertTriangle className="w-3 h-3" />
-              <span>Report</span>
-            </button>
-            <button
-              onClick={() => copyCoords(`${inspectedPoint.lat}, ${inspectedPoint.lng}`)}
-              className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer font-semibold"
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-            <button
-              onClick={() => setInspectedPoint(null)}
-              className="text-xs p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 4.9 FLOATING COORDINATE & CLUSTER SCALE BAR */}
-      <div className="absolute bottom-20 md:bottom-6 left-4 md:left-6 z-[1200] bg-white border border-slate-200 rounded-xl px-3.5 py-2 shadow-lg flex items-center gap-3 text-xs font-medium text-slate-700 pointer-events-auto">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-xs" />
-          <span className="text-[11px] text-slate-700 font-semibold">मध्यम समस्या (Moderate)</span>
-        </div>
-        <span className="text-slate-300">|</span>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block shadow-xs animate-pulse" />
-          <span className="text-[11px] text-red-600 font-bold">तातडीचे केंद्र (Critical Cluster)</span>
-        </div>
-        <span className="text-slate-300">|</span>
-        <span className="font-mono text-slate-600 text-[11px]">
-          {cursorCoords ? `${cursorCoords[0].toFixed(4)}°N, ${cursorCoords[1].toFixed(4)}°E` : `${centerCoords[0].toFixed(4)}°N, ${centerCoords[1].toFixed(4)}°E`}
-        </span>
-        <span className="text-slate-300">|</span>
-        <span className="font-mono text-slate-500 text-[11px]">
-          Zoom {currentZoom}
-        </span>
-      </div>
 
       {/* 5. FULL-SCREEN LEAFLET MAP CANVAS */}
       <div
@@ -3117,9 +3298,9 @@ export const VillageMap = () => {
 
       {/* 5.1 SYMMETRICAL TOUCH-FIRST MOBILE BOTTOM DOCK (< 768px) */}
       <nav
-        className={`md:hidden fixed bottom-0 inset-x-0 z-[2000] h-16 bg-white/95 backdrop-blur-xl border-t border-slate-200 ${
+        className={`md:hidden fixed bottom-0 inset-x-0 z-[2000] h-16 bg-[#081018]/95 backdrop-blur-xl border-t border-[#1D3B52] ${
           isAdminOrOfficer ? 'grid grid-cols-5' : 'flex items-center justify-around'
-        } items-center px-1 pb-safe select-none shadow-lg`}
+        } items-center px-1 pb-safe select-none shadow-2xl`}
       >
         {/* Tab 1: Map icon / MAP */}
         <button
@@ -3128,7 +3309,7 @@ export const VillageMap = () => {
             setActiveMobileTab('map');
           }}
           className={`flex-1 flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer py-1 ${
-            activeMobileTab === 'map' && !mobileSheet ? 'text-[#48999E] font-bold' : 'text-slate-600 hover:text-slate-900'
+            activeMobileTab === 'map' && !mobileSheet ? 'text-[#00E5FF] font-bold' : 'text-[#8CB0C9] hover:text-[#F1F5F9]'
           }`}
           title="Map View"
         >
@@ -3143,7 +3324,7 @@ export const VillageMap = () => {
             setActiveMobileTab('filters');
           }}
           className={`flex-1 flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer py-1 ${
-            mobileSheet === 'layers' ? 'text-[#48999E] font-bold' : 'text-slate-600 hover:text-slate-900'
+            mobileSheet === 'layers' ? 'text-[#00E5FF] font-bold' : 'text-[#8CB0C9] hover:text-[#F1F5F9]'
           }`}
           title="Filters & Layers"
         >
@@ -3155,12 +3336,12 @@ export const VillageMap = () => {
         <div className="flex justify-center -mt-5 flex-shrink-0 px-1">
           <button
             onClick={() => setMobileSheet(mobileSheet === 'action' ? null : 'action')}
-            className="relative w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#48999E] to-teal-400 shadow-md active:scale-95 transition-transform cursor-pointer"
+            className="relative w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#00E5FF] to-cyan-400 shadow-lg active:scale-95 transition-transform cursor-pointer"
             aria-label="Quick Actions"
             title="Propose Community Facility or Report Civic Grievance"
           >
-            <div className="w-full h-full rounded-full bg-[#48999E] hover:bg-[#3D858A] flex items-center justify-center text-white border border-teal-300">
-              <Plus className="w-5 h-5 text-white stroke-[2.5]" />
+            <div className="w-full h-full rounded-full bg-[#00E5FF] hover:bg-[#38BDF8] flex items-center justify-center text-[#081018] border border-cyan-300">
+              <Plus className="w-5 h-5 text-[#081018] stroke-[2.5]" />
             </div>
           </button>
         </div>
@@ -3173,7 +3354,7 @@ export const VillageMap = () => {
               setActiveMobileTab('analytics');
             }}
             className={`flex-1 flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer py-1 ${
-              mobileSheet === 'analytics' ? 'text-[#48999E] font-bold' : 'text-slate-600 hover:text-slate-900'
+              mobileSheet === 'analytics' ? 'text-[#00E5FF] font-bold' : 'text-[#8CB0C9] hover:text-[#F1F5F9]'
             }`}
             title="Executive Decision Support & ML Analytics"
           >
@@ -3189,7 +3370,7 @@ export const VillageMap = () => {
             setActiveMobileTab('worklist');
           }}
           className={`flex-1 flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer py-1 ${
-            mobileSheet === 'worklist' ? 'text-[#48999E] font-bold' : 'text-slate-600 hover:text-slate-900'
+            mobileSheet === 'worklist' ? 'text-[#00E5FF] font-bold' : 'text-[#8CB0C9] hover:text-[#F1F5F9]'
           }`}
           title={userRole === 'officer' ? 'Field Worklist' : userRole === 'admin' ? 'Pending Approvals' : 'My Reports'}
         >
@@ -3205,26 +3386,26 @@ export const VillageMap = () => {
         <>
           {/* Backdrop Overlay */}
           <div
-            className="md:hidden fixed inset-0 z-[2400] bg-black/50 backdrop-blur-xs animate-in fade-in duration-200"
+            className="md:hidden fixed inset-0 z-[2400] bg-black/70 backdrop-blur-xs animate-in fade-in duration-200"
             onClick={() => setMobileSheet(null)}
           />
 
           {/* Bottom Sheet Drawer */}
-          <div className="md:hidden fixed inset-x-0 bottom-0 z-[2500] max-h-[85dvh] bg-white border-t border-slate-200 text-slate-800 rounded-t-3xl shadow-2xl flex flex-col transition-all duration-300 ease-out overscroll-contain animate-in slide-in-from-bottom duration-300">
+          <div className="md:hidden fixed inset-x-0 bottom-0 z-[2500] max-h-[85dvh] bg-[#0D1C2A] border-t border-[#1D3B52] text-[#F1F5F9] rounded-t-3xl shadow-2xl flex flex-col transition-all duration-300 ease-out overscroll-contain animate-in slide-in-from-bottom duration-300">
             {/* Touch-drag handle pill */}
-            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto my-2.5 flex-shrink-0" />
+            <div className="w-10 h-1 bg-[#1D3B52] rounded-full mx-auto my-2.5 flex-shrink-0" />
 
             {/* Header */}
-            <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 flex items-center justify-between flex-shrink-0">
+            <div className="px-4 py-2 border-b border-[#1D3B52] bg-[#081018] flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2">
-                {mobileSheet === 'analytics' && <BarChart3 className="w-4 h-4 text-[#48999E]" />}
-                {mobileSheet === 'worklist' && <ClipboardCheck className="w-4 h-4 text-[#48999E]" />}
-                {mobileSheet === 'layers' && <SlidersHorizontal className="w-4 h-4 text-[#48999E]" />}
-                {mobileSheet === 'action' && <Plus className="w-4 h-4 text-[#48999E]" />}
-                {mobileSheet === 'role' && <ShieldCheck className="w-4 h-4 text-[#48999E]" />}
+                {mobileSheet === 'analytics' && <BarChart3 className="w-4 h-4 text-[#00E5FF]" />}
+                {mobileSheet === 'worklist' && <ClipboardCheck className="w-4 h-4 text-[#00E5FF]" />}
+                {mobileSheet === 'layers' && <SlidersHorizontal className="w-4 h-4 text-[#00E5FF]" />}
+                {mobileSheet === 'action' && <Plus className="w-4 h-4 text-[#00E5FF]" />}
+                {mobileSheet === 'role' && <ShieldCheck className="w-4 h-4 text-[#00E5FF]" />}
 
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 tracking-wide uppercase">
+                  <h3 className="text-xs font-bold text-[#F1F5F9] tracking-wide uppercase">
                     {mobileSheet === 'analytics' && 'Executive Decision Support'}
                     {mobileSheet === 'worklist' &&
                       (userRole === 'officer'
@@ -3236,7 +3417,7 @@ export const VillageMap = () => {
                     {mobileSheet === 'action' && 'Propose Asset'}
                     {mobileSheet === 'role' && 'Select Portal'}
                   </h3>
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] text-[#8CB0C9]">
                     {mobileSheet === 'analytics' && 'ML Priority Hotspots & Facility Health'}
                     {mobileSheet === 'worklist' &&
                       (userRole === 'officer'
@@ -3254,7 +3435,7 @@ export const VillageMap = () => {
               {/* Explicit Close button in the header */}
               <button
                 onClick={() => setMobileSheet(null)}
-                className="min-h-[36px] px-2.5 py-1 flex items-center gap-1.5 rounded-lg text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-medium transition cursor-pointer active:scale-95"
+                className="min-h-[36px] px-2.5 py-1 flex items-center gap-1.5 rounded-lg text-[#8CB0C9] hover:text-[#F1F5F9] bg-[#0D1C2A] hover:bg-[#142C3F] border border-[#1D3B52] text-xs font-medium transition cursor-pointer active:scale-95"
                 title="Close sheet"
                 aria-label="Close bottom sheet"
               >
