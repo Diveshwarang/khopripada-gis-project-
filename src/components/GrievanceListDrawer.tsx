@@ -178,9 +178,9 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
         onClick={onClose}
       />
 
-      <div className="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:left-auto sm:right-0 z-[2500] sm:z-[2000] w-full max-w-lg sm:max-w-md max-h-[85dvh] sm:max-h-full bg-[#132228]/98 backdrop-blur-2xl border-t sm:border-t-0 sm:border-l border-[#334B56] rounded-t-3xl sm:rounded-none shadow-2xl flex flex-col text-[#F8FAFC] animate-in slide-in-from-bottom sm:slide-in-from-right duration-200 overflow-hidden">
+      <div className="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:left-auto sm:right-0 z-[2500] sm:z-[2000] w-full max-w-lg sm:max-w-md max-h-[85dvh] sm:max-h-full bg-white dark:bg-[#0F1D24] border-t sm:border-t-0 sm:border-l border-slate-200 dark:border-[#2C4654] rounded-t-3xl sm:rounded-none shadow-2xl flex flex-col text-slate-800 dark:text-[#F1F5F9] animate-in slide-in-from-bottom sm:slide-in-from-right duration-200 overflow-hidden">
         {/* Mobile touch-drag handle pill */}
-        <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
+        <div className="w-10 h-1 bg-slate-400 dark:bg-slate-600 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
 
         {/* Hidden file input for officer photo evidence */}
         <input
@@ -193,42 +193,42 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
         />
 
       {/* Header */}
-      <div className="p-4 border-b border-[#334B56] bg-[#0C171C]/90 flex flex-col gap-2.5">
+      <div className="p-4 border-b border-slate-200 dark:border-[#2C4654] bg-slate-50 dark:bg-[#0F1D24] flex flex-col gap-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
               userRole === 'officer'
-                ? 'bg-[#10B981]/20 border border-[#10B981]/50 text-[#6EE7B7]'
-                : 'bg-[#1B2F38] border border-[#334B56] text-[#38BDF8]'
+                ? 'bg-[#0284C7]/20 border border-[#0284C7]/50 text-[#0284C7] dark:text-[#38BDF8]'
+                : 'bg-slate-100 dark:bg-[#172A33] border border-slate-200 dark:border-[#2C4654] text-[#0284C7]'
             }`}>
               {userRole === 'officer' ? <ShieldCheck className="w-4 h-4" /> : <Database className="w-4 h-4" />}
             </div>
             <div>
-              <h2 className="text-sm font-bold text-[#F8FAFC] tracking-tight flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-[#F1F5F9] tracking-tight flex items-center gap-2">
                 {userRole === 'officer' ? (
                   <>
                     Officer Field Worklist
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/50 text-[#6EE7B7] font-mono">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-[#0284C7]/20 border border-[#0284C7]/50 text-[#0284C7] dark:text-[#38BDF8] font-mono">
                       {grievances.length} Active Tasks
                     </span>
                   </>
                 ) : userRole === 'admin' ? (
                   <>
                     Offline Field Records
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-[#1B2F38] border border-[#334B56] text-[#38BDF8] font-mono">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-[#172A33] border border-slate-200 dark:border-[#2C4654] text-[#0284C7] dark:text-[#38BDF8] font-mono">
                       {grievances.length}
                     </span>
                   </>
                 ) : (
                   <>
                     Citizen Field Grievances
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/50 text-[#FCA5A5] font-mono">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 font-mono">
                       {grievances.length}
                     </span>
                   </>
                 )}
               </h2>
-              <p className="text-[11px] text-[#94A3B8]">
+              <p className="text-[11px] text-slate-500 dark:text-[#94A3B8]">
                 {userRole === 'officer'
                   ? 'Officially Approved Panchayat Tasks • Update Status & Proof'
                   : 'Persistent in IndexedDB • Zero Cloud Dependency'}
@@ -238,7 +238,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
 
           <button
             onClick={onClose}
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1B2F38] transition cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-500 dark:text-[#94A3B8] hover:text-slate-900 dark:hover:text-[#F1F5F9] hover:bg-slate-100 dark:hover:bg-[#172A33] transition cursor-pointer"
             title="Close Drawer"
             aria-label="Close drawer"
           >
@@ -311,7 +311,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
             return (
               <div
                 key={g.id}
-                className="p-3 rounded-xl bg-[#1B2F38] border border-[#334B56] hover:border-[#38BDF8]/60 transition flex flex-col gap-2"
+                className="p-3.5 rounded-xl bg-[#F1F5F9] dark:bg-[#172A33] border border-slate-200 dark:border-[#2C4654] hover:border-[#0284C7] transition flex flex-col gap-2 text-slate-800 dark:text-[#F1F5F9]"
               >
                 {/* Photo Thumbnail */}
                 {hasPhoto ? (

@@ -63,6 +63,7 @@ interface PanchayatAdminPanelProps {
   onOpenPhotoLightbox?: (data: { photoUrl: string; title: string; category?: string; coords?: [number, number] }) => void;
   onFlyToCoords?: (coords: [number, number]) => void;
   onExportAudit?: () => void;
+  hideHeader?: boolean;
 }
 
 export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
@@ -76,6 +77,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
   onOpenPhotoLightbox,
   onFlyToCoords,
   onExportAudit,
+  hideHeader = false,
 }) => {
   const [isDecisionSupportOpen, setIsDecisionSupportOpen] = useState(true);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(true);
@@ -345,53 +347,59 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
   const broLen = (conditionData.broken.pct / 100) * donutCircumference;
 
   return (
-    <div className="pointer-events-auto backdrop-blur-2xl bg-[#132228]/95 border border-[#334B56] rounded-2xl shadow-[0_10px_30px_rgba(12,23,28,0.7)] overflow-hidden w-full max-w-lg sm:max-w-md max-h-[85dvh] sm:max-h-[calc(100vh-140px)] text-[#F8FAFC] transition-all flex flex-col animate-in fade-in slide-in-from-bottom sm:slide-in-from-right-4">
-      {/* Header Banner */}
-      <div className="p-3.5 bg-[#1B2F38] border-b border-[#334B56] flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#10B981]/20 border border-[#10B981]/60 flex items-center justify-center text-[#6EE7B7] shadow-sm">
-            <Brain className="w-4 h-4 text-[#6EE7B7]" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#6EE7B7] bg-[#10B981]/20 px-1.5 py-0.5 rounded border border-[#10B981]/60">
-                Panchayat Admin
-              </span>
-              <span className="text-[10px] text-[#38BDF8] font-mono font-bold flex items-center gap-0.5">
-                <ShieldCheck className="w-3 h-3" /> Live Twin
-              </span>
+    <div className={`pointer-events-auto text-[#0F172A] dark:text-[#F1F5F9] transition-all flex flex-col ${
+      hideHeader
+        ? 'w-full space-y-3'
+        : 'backdrop-blur-2xl bg-white dark:bg-[#0F1D24] border border-slate-200 dark:border-[#2C4654] rounded-2xl shadow-xl overflow-hidden w-full max-w-lg sm:max-w-md max-h-[85dvh] sm:max-h-[calc(100vh-140px)] animate-in fade-in slide-in-from-bottom sm:slide-in-from-right-4'
+    }`}>
+      {/* Header Banner - hidden when docked in sidebar */}
+      {!hideHeader && (
+        <div className="p-3.5 bg-slate-100 dark:bg-[#172A33] border-b border-slate-200 dark:border-[#2C4654] flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#0284C7]/20 border border-[#0284C7]/60 flex items-center justify-center text-[#0284C7] dark:text-[#38BDF8] shadow-sm">
+              <Brain className="w-4 h-4" />
             </div>
-            <h3 className="text-xs font-bold text-[#F8FAFC] tracking-tight flex items-center gap-1 mt-0.5">
-              Executive Decision Console
-              <Sparkles className="w-3 h-3 text-[#38BDF8]" />
-            </h3>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#0284C7] dark:text-[#38BDF8] bg-[#0284C7]/15 px-1.5 py-0.5 rounded border border-[#0284C7]/40">
+                  Panchayat Admin
+                </span>
+                <span className="text-[10px] text-[#0284C7] dark:text-[#38BDF8] font-mono font-bold flex items-center gap-0.5">
+                  <ShieldCheck className="w-3 h-3" /> Live Twin
+                </span>
+              </div>
+              <h3 className="text-xs font-bold text-slate-900 dark:text-[#F1F5F9] tracking-tight flex items-center gap-1 mt-0.5">
+                Executive Decision Console
+                <Sparkles className="w-3 h-3 text-[#0284C7] dark:text-[#38BDF8]" />
+              </h3>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {onExportAudit && (
+              <button
+                onClick={onExportAudit}
+                className="px-2.5 py-1 rounded-lg bg-white dark:bg-[#0F1D24] hover:bg-slate-200 dark:hover:bg-[#2C4654] border border-[#0284C7]/40 text-[#0284C7] dark:text-[#38BDF8] font-bold text-[10px] flex items-center gap-1 transition cursor-pointer active:scale-95 shadow-sm"
+                title="Open Executive Panchayat Audit (PDF & CSV)"
+              >
+                <FileText className="w-3 h-3 text-[#0284C7] dark:text-[#38BDF8]" />
+                <span>Export Audit</span>
+              </button>
+            )}
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-1 rounded-lg text-slate-500 dark:text-[#94A3B8] hover:text-slate-900 dark:hover:text-[#F1F5F9] hover:bg-slate-200 dark:hover:bg-[#172A33] transition cursor-pointer"
+                title="Close Panel"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-1.5">
-          {onExportAudit && (
-            <button
-              onClick={onExportAudit}
-              className="px-2.5 py-1 rounded-lg bg-[#1B2F38] hover:bg-[#233B46] border border-[#38BDF8]/40 text-[#38BDF8] font-bold text-[10px] flex items-center gap-1 transition cursor-pointer active:scale-95 shadow-sm"
-              title="Open Executive Panchayat Audit (PDF & CSV)"
-            >
-              <FileText className="w-3 h-3 text-[#38BDF8]" />
-              <span>Export Audit</span>
-            </button>
-          )}
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="p-1 rounded-lg text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1B2F38] transition cursor-pointer"
-              title="Close Panel"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="overflow-y-auto flex-1 p-3 space-y-3.5 scrollbar-thin">
+      <div className={`flex-1 space-y-3.5 ${hideHeader ? 'p-1' : 'overflow-y-auto p-3 scrollbar-thin'}`}>
         {/* PROMINENT SECTION: 3-Tier Structured Panchayat Verification Queue */}
         <div className="rounded-xl border border-[#334B56] bg-[#1B2F38] overflow-hidden shadow-md">
           <button

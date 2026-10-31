@@ -111,48 +111,48 @@ export const isLightingCategory = (category: string = '', name: string = ''): bo
 export const getCategoryTheme = (category: string = '', name: string = '') => {
   if (isCommercialCategory(category)) {
     return {
-      glyph: '🏪',
+      glyph: 'Retail',
       badgeClass: 'bg-[#1B2F38] border border-[#334B56] text-[#38BDF8]',
       label: 'Commercial & Retail',
     };
   }
   if (isHealthCategory(category)) {
     return {
-      glyph: '🏥',
+      glyph: 'Health',
       badgeClass: 'bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5]',
       label: 'Healthcare Facility',
     };
   }
   if (isEducationCategory(category)) {
     return {
-      glyph: '🏫',
+      glyph: 'School',
       badgeClass: 'bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7]',
       label: 'Educational Institution',
     };
   }
   if (isLightingCategory(category, name)) {
     return {
-      glyph: '💡',
+      glyph: 'Light',
       badgeClass: 'bg-[#1B2F38] border border-[#334B56] text-[#38BDF8]',
       label: 'Lighting & Infrastructure',
     };
   }
   if (isWaterCategory(category, name)) {
     return {
-      glyph: '🚰',
+      glyph: 'Water',
       badgeClass: 'bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7]',
       label: 'Drinking Water Source',
     };
   }
   if (isCivicCategory(category, name)) {
     return {
-      glyph: '🏛️',
+      glyph: 'Civic',
       badgeClass: 'bg-[#1B2F38] border border-[#334B56] text-[#94A3B8]',
       label: 'Civic & Cultural Space',
     };
   }
   return {
-    glyph: '📌',
+    glyph: 'POI',
     badgeClass: 'bg-[#1B2F38] border border-[#334B56] text-[#94A3B8]',
     label: category.replace(/_/g, ' '),
   };
@@ -174,10 +174,10 @@ export const buildFacilityContextAttributesHtml = (fac: CachedFacility): string 
     const isUpi = fac.upi_available !== false;
     const paymentBadge = isUpi
       ? `<div class="flex items-center gap-1.5 text-[10px] font-bold text-[#6EE7B7] bg-[#10B981]/20 border border-[#10B981]/60 px-2 py-0.5 rounded-lg shadow-sm">
-           <span>💳</span> <span>UPI / GPay Accepted (QR Active)</span>
+           <span>UPI / GPay Accepted (QR Active)</span>
          </div>`
       : `<div class="flex items-center gap-1.5 text-[10px] font-semibold text-[#94A3B8] bg-[#1B2F38] border border-[#334B56] px-2 py-0.5 rounded-lg">
-           <span>💵</span> <span>Cash Only</span>
+           <span>Cash Only</span>
          </div>`;
 
     let serviceType = fac.service_type;
@@ -292,11 +292,11 @@ export const buildFacilityContextAttributesHtml = (fac: CachedFacility): string 
     return `
       <div class="mb-2 p-2.5 rounded-xl bg-[#1B2F38] border border-[#334B56] text-[10px] space-y-1.5 shadow-sm">
         <div class="flex items-center justify-between text-[#94A3B8]">
-          <span class="text-[#94A3B8] flex items-center gap-1">💡 Specification:</span>
+          <span class="text-[#94A3B8] flex items-center gap-1">Specification:</span>
           <span class="font-semibold text-[#F8FAFC] truncate max-w-[140px] text-right">${fixture}</span>
         </div>
         <div class="flex items-center justify-between text-[#94A3B8] pt-1.5 border-t border-[#334B56]/50">
-          <span class="text-[#94A3B8] flex items-center gap-1">⚡ Power Line:</span>
+          <span class="text-[#94A3B8] flex items-center gap-1">Power Line:</span>
           <span class="font-semibold text-[#38BDF8] truncate max-w-[140px] text-right">${powerGrid}</span>
         </div>
       </div>

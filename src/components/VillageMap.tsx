@@ -29,8 +29,6 @@ import {
   Shield,
   SlidersHorizontal,
   Image as ImageIcon,
-  Sun,
-  Moon,
 } from 'lucide-react';
 import {
   getCurrentPosition,
@@ -86,8 +84,7 @@ import {
   JUCHANDRA_STN,
   DEFAULT_ZOOM,
 } from '../constants/gis';
-import { useTheme } from '../context/ThemeContext';
-import { useLanguage } from '../context/LanguageContext';
+import { translations } from '../constants/translations';
 
 // Key Landmarks & POIs in Khopripada, Bapane, and Naigaon East
 interface LandmarkPOI {
@@ -154,12 +151,13 @@ const VILLAGE_BOUNDARY_COORDS: [number, number][] = [
   [19.370, 72.880],
 ];
 
-type BasemapType = 'osm' | 'esri' | 'topo';
+type BasemapType = 'osm' | 'satellite';
 export type FacilityCategoryFilter = 'all' | 'water' | 'education' | 'commerce' | 'health' | 'civic' | 'issues';
 
 export const VillageMap = () => {
-  const { theme, toggleTheme } = useTheme();
-  const { language, setLanguage, t } = useLanguage();
+  const t = useCallback((key: string, fallback?: string): string => {
+    return (translations.en as Record<string, string>)[key] || fallback || key;
+  }, []);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -237,7 +235,7 @@ export const VillageMap = () => {
 
   // Spatial ML: DBSCAN Clusters & Heatmap layers
   const dbscanLayerRef = useRef<L.LayerGroup | null>(null);
-  const heatmapLayerRef = useRef<L.LayerGroup | null>(null);
+  const heatmapGroup = useRef<L.LayerGroup | null>(null);
   const [showDbscanClusters, setShowDbscanClusters] = useState<boolean>(true);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(false);
   const handleUpdateIssueStatusRef = useRef<((id: string, st: string) => Promise<void>) | null>(null);
@@ -795,13 +793,13 @@ export const VillageMap = () => {
 
       filtered.forEach((fac) => {
         // Status Coding:
-        // functional: Fresh Emerald (#10B981)
+        // functional: Teal/Cyan (#38BDF8)
         // partially_functional: Warm Gold (#F59E0B)
-        // non_functional: Controlled Terracotta (#E05A47)
+        // non_functional: Coral Terracotta (#E05A47)
         const status = fac.operational_status.toLowerCase();
-        let statusColor = '#10B981'; // Functional Emerald
+        let statusColor = '#38BDF8'; // Functional Facilities: Teal/Cyan
         let statusLabel = 'Functional';
-        let statusBadge = 'bg-[#10B981]/20 text-[#6EE7B7] border border-[#10B981]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
+        let statusBadge = 'bg-[#38BDF8]/20 text-[#7DD3FC] border border-[#38BDF8]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
 
         if (status.includes('partial')) {
           statusColor = '#F59E0B'; // Partially Functional Warm Gold
@@ -813,7 +811,7 @@ export const VillageMap = () => {
           status.includes('broken') ||
           status.includes('degraded')
         ) {
-          statusColor = '#E05A47'; // Broken / Non-functional Terracotta
+          statusColor = '#E05A47'; // Broken / Urgent Terracotta
           statusLabel = 'Broken / Non-functional';
           statusBadge = 'bg-[#E05A47]/20 text-[#FCA5A5] border border-[#E05A47]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
         }
@@ -828,24 +826,14 @@ export const VillageMap = () => {
           fac.name.toLowerCase().includes('lake');
 
         const glyph = isWater
-          ? '💧'
+          ? `<svg class="w-3.5 h-3.5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg>`
           : fac.category.includes('edu') || fac.category.includes('school') || fac.category.includes('coaching') || fac.category.includes('academy')
-          ? '🏫'
-          : fac.category.includes('angan') || fac.category.includes('child') || fac.category.includes('balwadi')
-          ? '🎒'
-          : fac.category.includes('shop') || fac.category.includes('store') || fac.category.includes('hardware') || fac.category.includes('vendor') || fac.category.includes('saloon') || fac.category.includes('laundry')
-          ? '🏪'
-          : fac.category.includes('ration') || fac.category.includes('commerce') || fac.category.includes('dairy')
-          ? '🛒'
+          ? `<svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l9-5-9-5-9 5 9 5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>`
           : fac.category.includes('health') || fac.category.includes('clinic') || fac.category.includes('hospital')
-          ? '🏥'
-          : fac.category.includes('mandir') || fac.category.includes('temple')
-          ? '🛕'
-          : fac.category.includes('graveyard')
-          ? '⚰️'
-          : fac.name.toLowerCase().includes('light')
-          ? '💡'
-          : '🏛️';
+          ? `<svg class="w-3.5 h-3.5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>`
+          : fac.category.includes('shop') || fac.category.includes('store') || fac.category.includes('commerce') || fac.category.includes('kirana')
+          ? `<svg class="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>`
+          : `<svg class="w-3.5 h-3.5 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>`;
 
         // Custom divIcon with high-contrast outer ring and pulse animation for water
         const customIcon = L.divIcon({
@@ -858,7 +846,7 @@ export const VillageMap = () => {
                   : ''
               }
               <div class="relative w-8 h-8 rounded-full bg-[#132228] border-2 shadow-2xl flex items-center justify-center text-xs font-bold transition-transform group-hover:scale-125" style="border-color: ${statusColor}; box-shadow: 0 0 14px ${statusColor}80;">
-                <span>${glyph}</span>
+                <span class="flex items-center justify-center">${glyph}</span>
                 <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-[#132228] flex items-center justify-center" style="background-color: ${statusColor}">
                   <span class="w-1 h-1 rounded-full bg-white"></span>
                 </span>
@@ -892,8 +880,8 @@ export const VillageMap = () => {
           monsoonLower.includes('isolated');
 
         const monsoonPill = isFloods
-          ? `<span class="px-2.5 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] font-semibold text-[10px] flex items-center gap-1">⚠️ Floods/Isolated</span>`
-          : `<span class="px-2.5 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] font-semibold text-[10px] flex items-center gap-1">✅ Year-round</span>`;
+          ? `<span class="px-2.5 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] font-semibold text-[10px] flex items-center gap-1">Floods / Isolated</span>`
+          : `<span class="px-2.5 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] font-semibold text-[10px] flex items-center gap-1">Year-round Accessible</span>`;
 
         // Check KoboToolbox / Survey Photo evidence
         const rawPhoto = fac.photoBase64 || fac.photo_url || (fac as any).photo || '';
@@ -921,17 +909,16 @@ export const VillageMap = () => {
               <img src="${resolvedPhoto}" alt="${fac.name}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
               <div class="absolute inset-0 bg-[#132228]/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
                 <span class="opacity-0 group-hover:opacity-100 transition-opacity px-2.5 py-1 rounded-lg bg-[#132228]/95 text-[10px] font-bold text-[#38BDF8] border border-[#38BDF8]/60 shadow-md">
-                  🔍 Inspect Ground-Truth
+                  Inspect Ground-Truth
                 </span>
               </div>
               <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-[#132228]/90 text-[#94A3B8] border border-[#334B56]">
-                📷 KoboCollect Field Photo
+                KoboCollect Field Photo
               </span>
             </div>
           `
           : `
             <div class="mb-2 p-2 rounded-xl bg-[#1B2F38] border border-[#334B56] text-center flex items-center justify-center gap-1.5 text-[#94A3B8] text-xs">
-              <span class="text-[#38BDF8] text-[11px]">📷</span>
               <span class="text-[10px] font-semibold text-[#94A3B8]">No Field Photo Recorded</span>
             </div>
           `;
@@ -1122,20 +1109,22 @@ export const VillageMap = () => {
         const sev = (iss.severity || 'medium').toLowerCase();
         const st = (iss.status || 'pending_initial_approval').toLowerCase();
 
-        // Requirement 5: Ensure marker pins dynamically update their color:
-        // under_inspection -> Amber / Orange (#F59E0B)
-        // resolved -> Green (#10B981)
-        // intermediate stages: assigned/inspecting -> Sky Blue (#38BDF8), pending_resolution -> Purple (#A855F7), pending_initial -> Terracotta (#E05A47)
+        // Marker Pin Colors:
+        // Functional Facilities: Teal/Cyan (#38BDF8)
+        // Active Inspections: Amber (#F59E0B)
+        // Resolved Grievances: Emerald (#10B981)
+        // Urgent Unassigned: Coral (#E05A47)
         let pinColor = '#F59E0B';
         if (st === 'resolved') {
           pinColor = '#10B981';
-        } else if (st === 'under_inspection') {
+        } else if (
+          st === 'under_inspection' ||
+          st === 'assigned_for_inspection' ||
+          st === 'pending_inspection_verification' ||
+          st === 'pending_resolution_approval'
+        ) {
           pinColor = '#F59E0B';
-        } else if (st === 'pending_resolution_approval') {
-          pinColor = '#A855F7';
-        } else if (st === 'assigned_for_inspection' || st === 'pending_inspection_verification') {
-          pinColor = '#38BDF8';
-        } else if (st === 'pending_initial_approval') {
+        } else if (st === 'pending_initial_approval' || st === 'reported' || sev === 'critical' || sev === 'high') {
           pinColor = '#E05A47';
         }
 
@@ -1151,18 +1140,7 @@ export const VillageMap = () => {
         }
 
         const cat = (iss.category || '').toLowerCase();
-        const glyph =
-          cat.includes('road') || cat.includes('pothole')
-            ? '🚧'
-            : cat.includes('waste') || cat.includes('dump')
-            ? '🚯'
-            : cat.includes('drain') || cat.includes('runoff')
-            ? '🌊'
-            : cat.includes('water')
-            ? '🚰'
-            : cat.includes('light') || cat.includes('electric')
-            ? '⚡'
-            : '⚠️';
+        const glyphSvg = `<svg class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`;
 
         const customIcon = L.divIcon({
           className: 'custom-issue-marker',
@@ -1174,7 +1152,7 @@ export const VillageMap = () => {
                   : ''
               }
               <div class="relative w-8 h-8 rounded-full bg-[#132228] border-2 shadow-2xl flex items-center justify-center text-xs font-bold transition-transform group-hover:scale-125" style="border-color: ${pinColor}; box-shadow: 0 0 16px ${pinColor}90;">
-                <span>${glyph}</span>
+                <span class="flex items-center justify-center">${glyphSvg}</span>
                 <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-[#132228]" style="background-color: ${pinColor}"></span>
               </div>
             </div>
@@ -1222,10 +1200,10 @@ export const VillageMap = () => {
                 class="issue-status-select w-full bg-[#0C171C] border border-[#334B56] rounded-lg text-xs text-[#F8FAFC] p-1.5 focus:outline-none focus:border-[#38BDF8] transition cursor-pointer"
                 data-issue-id="${iss.issue_id}"
               >
-                <option value="assigned_for_inspection" ${iss.status === 'assigned_for_inspection' ? 'selected' : ''}>📋 Assigned For Inspection</option>
-                <option value="pending_inspection_verification" ${iss.status === 'pending_inspection_verification' ? 'selected' : ''}>⏳ Inspection Req Sign-off</option>
-                <option value="under_inspection" ${iss.status === 'under_inspection' ? 'selected' : ''}>🔍 Under Inspection</option>
-                <option value="pending_resolution_approval" ${iss.status === 'pending_resolution_approval' ? 'selected' : ''}>🛠️ Repair Proof Uploaded</option>
+                <option value="assigned_for_inspection" ${iss.status === 'assigned_for_inspection' ? 'selected' : ''}>Assigned For Inspection</option>
+                <option value="pending_inspection_verification" ${iss.status === 'pending_inspection_verification' ? 'selected' : ''}>Inspection Req Sign-off</option>
+                <option value="under_inspection" ${iss.status === 'under_inspection' ? 'selected' : ''}>Under Inspection</option>
+                <option value="pending_resolution_approval" ${iss.status === 'pending_resolution_approval' ? 'selected' : ''}>Repair Proof Uploaded</option>
               </select>
             </div>
           `;
@@ -1240,12 +1218,12 @@ export const VillageMap = () => {
                 class="issue-status-select w-full bg-[#0C171C] border border-[#334B56] rounded-lg text-xs text-[#F8FAFC] p-1.5 focus:outline-none focus:border-[#E05A47] transition cursor-pointer"
                 data-issue-id="${iss.issue_id}"
               >
-                <option value="pending_initial_approval" ${iss.status === 'pending_initial_approval' ? 'selected' : ''}>⚠️ Step 1: Resident Submission</option>
-                <option value="assigned_for_inspection" ${iss.status === 'assigned_for_inspection' ? 'selected' : ''}>📋 Step 2: Assigned To Officer</option>
-                <option value="pending_inspection_verification" ${iss.status === 'pending_inspection_verification' ? 'selected' : ''}>⏳ Step 3: Officer Requested Auth</option>
-                <option value="under_inspection" ${iss.status === 'under_inspection' ? 'selected' : ''}>🔍 Step 4: Under Inspection (AMBER)</option>
-                <option value="pending_resolution_approval" ${iss.status === 'pending_resolution_approval' ? 'selected' : ''}>🛠️ Step 5: Repair Proof Awaiting Audit</option>
-                <option value="resolved" ${iss.status === 'resolved' ? 'selected' : ''}>✅ Step 6: Officially Resolved (GREEN)</option>
+                <option value="pending_initial_approval" ${iss.status === 'pending_initial_approval' ? 'selected' : ''}>Step 1: Resident Submission</option>
+                <option value="assigned_for_inspection" ${iss.status === 'assigned_for_inspection' ? 'selected' : ''}>Step 2: Assigned To Officer</option>
+                <option value="pending_inspection_verification" ${iss.status === 'pending_inspection_verification' ? 'selected' : ''}>Step 3: Officer Requested Auth</option>
+                <option value="under_inspection" ${iss.status === 'under_inspection' ? 'selected' : ''}>Step 4: Under Inspection</option>
+                <option value="pending_resolution_approval" ${iss.status === 'pending_resolution_approval' ? 'selected' : ''}>Step 5: Repair Proof Awaiting Audit</option>
+                <option value="resolved" ${iss.status === 'resolved' ? 'selected' : ''}>Step 6: Officially Resolved</option>
               </select>
             </div>
           `;
@@ -1277,17 +1255,16 @@ export const VillageMap = () => {
               <img src="${resolvedPhoto}" alt="${iss.title}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
               <div class="absolute inset-0 bg-[#132228]/30 group-hover:bg-transparent transition-colors flex items-center justify-center">
                 <span class="opacity-0 group-hover:opacity-100 transition-opacity px-2.5 py-1 rounded-lg bg-[#132228]/95 text-[10px] font-bold text-[#F8FAFC] border border-[#334B56] shadow-md">
-                  🔍 Inspect Ground-Truth
+                  Inspect Ground-Truth
                 </span>
               </div>
               <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-[#132228]/90 text-[#94A3B8] border border-[#334B56]">
-                📷 Field Evidence
+                Field Evidence
               </span>
             </div>
           `
           : `
             <div class="mb-2 p-2 rounded-xl bg-[#1B2F38] border border-[#334B56] text-center flex items-center justify-center gap-1.5 text-[#94A3B8] text-xs">
-              <span class="text-[#38BDF8] text-[11px]">📷</span>
               <span class="text-[10px] font-semibold text-[#94A3B8]">No Initial Photo Attached</span>
             </div>
           `;
@@ -1301,8 +1278,8 @@ export const VillageMap = () => {
           iss.severity === 'high';
 
         const monsoonPill = isFloods
-          ? `<span class="px-2.5 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] font-semibold text-[10px] flex items-center gap-1">⚠️ Floods/Isolated</span>`
-          : `<span class="px-2.5 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] font-semibold text-[10px] flex items-center gap-1">✅ Year-round</span>`;
+          ? `<span class="px-2.5 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] font-semibold text-[10px] flex items-center gap-1">Floods / Isolated</span>`
+          : `<span class="px-2.5 py-0.5 rounded-full bg-[#10B981]/20 border border-[#10B981]/60 text-[#6EE7B7] font-semibold text-[10px] flex items-center gap-1">Year-round Accessible</span>`;
 
         const statusPill =
           iss.status === 'resolved'
@@ -1734,61 +1711,46 @@ export const VillageMap = () => {
     }
   };
 
-  // 4. Stable Leaflet Circle Failure Heatmap Layer using L.layerGroup() (Requirement 4)
+  // 5. Stable Native Leaflet Canvas Heatmap Engine (Requirement 5)
   useEffect(() => {
-    if (!mapInstanceRef.current || !heatmapLayerRef.current) return;
-    const map = mapInstanceRef.current;
-    const heatmapGroup = heatmapLayerRef.current;
-
-    heatmapGroup.clearLayers();
+    if (!mapInstanceRef.current) return;
+    if (!heatmapGroup.current) {
+      heatmapGroup.current = L.layerGroup();
+    }
+    heatmapGroup.current.clearLayers();
 
     if (showHeatmap) {
-      // Gather surveyed issues and active grievances
-      const activeIssues = allIssuesRef.current.filter((iss) => iss.latitude && iss.longitude);
+      const targetIssues = issuesList.length > 0 ? issuesList : allIssuesRef.current;
+      const openIssues = targetIssues.filter(
+        (issue) => (issue.status || '').toLowerCase() !== 'resolved' && issue.latitude && issue.longitude
+      );
 
-      activeIssues.forEach((iss) => {
-        const lat = iss.latitude;
-        const lng = iss.longitude;
-        const isHigh =
-          iss.severity === 'high' || iss.severity === 'critical' || iss.severity === 'urgent';
+      openIssues.forEach((issue) => {
+        const sev = (issue.severity || 'medium').toLowerCase();
+        const isHigh = sev === 'high' || sev === 'critical' || sev === 'urgent';
+        const isMed = sev === 'medium';
 
-        if (isHigh) {
-          // For each issue where severity === 'high': concentric circles with radii 65m and 35m, color #CC6346 (Terracotta) with fillOpacity: 0.22, weight: 0
-          const outer = L.circle([lat, lng], {
-            radius: 65,
-            color: '#CC6346',
-            fillColor: '#CC6346',
-            fillOpacity: 0.22,
-            weight: 0,
-          });
-          const inner = L.circle([lat, lng], {
-            radius: 35,
-            color: '#CC6346',
-            fillColor: '#CC6346',
-            fillOpacity: 0.22,
-            weight: 0,
-          });
-          heatmapGroup.addLayer(outer);
-          heatmapGroup.addLayer(inner);
-        } else {
-          // For each issue where severity === 'medium' or 'low': render circle with radius 45m, color #F6AA6E (Atomic Tangerine) with fillOpacity: 0.18, weight: 0
-          const circle = L.circle([lat, lng], {
-            radius: 45,
-            color: '#F6AA6E',
-            fillColor: '#F6AA6E',
-            fillOpacity: 0.18,
-            weight: 0,
-          });
-          heatmapGroup.addLayer(circle);
-        }
+        // High: Radius 35px, fill #EF4444, opacity 0.55
+        // Medium: Radius 25px, fill #F59E0B, opacity 0.35
+        // Low: Radius 15px, fill #38BDF8, opacity 0.20
+        const radius = isHigh ? 35 : isMed ? 25 : 15;
+        const fillColor = isHigh ? '#EF4444' : isMed ? '#F59E0B' : '#38BDF8';
+        const fillOpacity = isHigh ? 0.55 : isMed ? 0.35 : 0.20;
+
+        L.circleMarker([issue.latitude, issue.longitude], {
+          radius,
+          fillColor,
+          color: 'transparent',
+          fillOpacity,
+        }).addTo(heatmapGroup.current!);
       });
 
-      if (!map.hasLayer(heatmapGroup)) {
-        heatmapGroup.addTo(map);
+      if (!mapInstanceRef.current.hasLayer(heatmapGroup.current)) {
+        heatmapGroup.current.addTo(mapInstanceRef.current);
       }
     } else {
-      if (map.hasLayer(heatmapGroup)) {
-        map.removeLayer(heatmapGroup);
+      if (mapInstanceRef.current.hasLayer(heatmapGroup.current)) {
+        mapInstanceRef.current.removeLayer(heatmapGroup.current);
       }
     }
   }, [showHeatmap, issuesList]);
@@ -1861,15 +1823,16 @@ export const VillageMap = () => {
         // Dynamic pin color based on verification lifecycle
         let pinColor = '#F59E0B';
         if (st === 'resolved') {
-          pinColor = '#10B981'; // Green
-        } else if (st === 'under_inspection') {
+          pinColor = '#10B981'; // Emerald
+        } else if (
+          st === 'under_inspection' ||
+          st === 'assigned_for_inspection' ||
+          st === 'pending_inspection_verification' ||
+          st === 'pending_resolution_approval'
+        ) {
           pinColor = '#F59E0B'; // Amber
-        } else if (st === 'pending_resolution_approval') {
-          pinColor = '#A855F7'; // Purple (waiting audit)
-        } else if (st === 'assigned_for_inspection' || st === 'pending_inspection_verification') {
-          pinColor = '#38BDF8'; // Sky Blue
-        } else if (st === 'pending_initial_approval') {
-          pinColor = '#E05A47'; // Terracotta
+        } else if (st === 'pending_initial_approval' || st === 'reported' || g.severity === 'critical') {
+          pinColor = '#E05A47'; // Coral
         }
 
         const customIcon = L.divIcon({
@@ -2011,7 +1974,16 @@ export const VillageMap = () => {
       mapInstanceRef.current = null;
     }
 
-    // 1. Create Tile Layers (Zero-Key OSM Standard + Satellite World Imagery)
+    // 1. Standard Clean Tile Layers: OSM Street vs Satellite
+    const osmStreet = L.tileLayer(
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {
+        maxZoom: 19,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>',
+      }
+    );
+
     const esriWorldImagery = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       {
@@ -2021,25 +1993,13 @@ export const VillageMap = () => {
       }
     );
 
-    const osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
-    });
-
-    const openTopo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-      maxZoom: 17,
-      attribution: '&copy; OpenTopoMap contributors',
-    });
-
     tileLayersRef.current = {
-      osm: osmStandard,
-      esri: esriWorldImagery,
-      topo: openTopo,
+      osm: osmStreet,
+      satellite: esriWorldImagery,
     };
 
-    // 2. Initialize Map Instance centered at Khopripada Core with reliable OpenStreetMap
-    const initialBasemapLayer = osmStandard;
+    // 2. Initialize Map Instance centered at Khopripada Core with OSM Street default
+    const initialBasemapLayer = osmStreet;
 
     const map = L.map(mapContainerRef.current, {
       center: KHOPRIPADA_CORE,
@@ -2111,10 +2071,10 @@ export const VillageMap = () => {
       dbscanGroup.addTo(map);
     }
 
-    const heatmapGroup = L.layerGroup();
-    heatmapLayerRef.current = heatmapGroup;
-    if (userRoleRef.current === 'admin' && showHeatmap) {
-      heatmapGroup.addTo(map);
+    const heatmapLayer = L.layerGroup();
+    heatmapGroup.current = heatmapLayer;
+    if (showHeatmap) {
+      heatmapLayer.addTo(map);
     }
 
 
@@ -2130,7 +2090,7 @@ export const VillageMap = () => {
           <div class="relative flex items-center justify-center group cursor-pointer">
             <span class="absolute w-8 h-8 rounded-full ${isCore ? 'bg-[#38BDF8]/40 animate-ping' : isStation ? 'bg-[#94A3B8]/30 animate-ping' : 'bg-[#38BDF8]/20'}"></span>
             <div class="relative w-7 h-7 rounded-xl ${isCore ? 'bg-[#1B2F38] border-2 border-[#38BDF8] text-[#F8FAFC] scale-110 shadow-[0_0_15px_rgba(56,189,248,0.5)]' : isStation ? 'bg-[#1B2F38] border-2 border-[#94A3B8] text-[#F8FAFC] shadow-[0_0_12px_rgba(148,163,184,0.4)]' : 'bg-[#132228] border-2 border-[#334B56] text-[#F8FAFC]'} shadow-xl flex items-center justify-center text-xs font-bold transition-transform group-hover:scale-125">
-              ${isCore ? '🎯' : isStation ? '🚆' : poi.category === 'heritage' ? '🛕' : poi.category === 'corridor' ? '🛣️' : '📍'}
+              ${isCore ? '<span class="w-2.5 h-2.5 rounded-full bg-[#38BDF8]"></span>' : isStation ? '<span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>' : '<span class="w-2 h-2 rounded-full bg-amber-400"></span>'}
             </div>
           </div>
         `,
@@ -2431,15 +2391,6 @@ export const VillageMap = () => {
       ) {
         mapInstanceRef.current.removeLayer(dbscanLayerRef.current);
       }
-      if (
-        mapInstanceRef.current &&
-        heatLayerRef.current &&
-        mapInstanceRef.current.hasLayer(heatLayerRef.current)
-      ) {
-        mapInstanceRef.current.removeLayer(heatLayerRef.current);
-        heatLayerRef.current = null;
-      }
-      setShowHeatmap(false);
     }
   }, [
     userRole,
@@ -2575,7 +2526,7 @@ export const VillageMap = () => {
     []
   );
 
-  // Leaflet Dynamic Size Invalidation on Theme Change (Requirement 3: 100ms timeout)
+  // Leaflet Dynamic Size Invalidation on Resize/Mount
   useEffect(() => {
     if (!mapInstanceRef.current) return;
     const timer = setTimeout(() => {
@@ -2583,7 +2534,7 @@ export const VillageMap = () => {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [theme]);
+  }, []);
 
   // Toggle Boundary
   const toggleBoundary = () => {
@@ -2709,15 +2660,15 @@ export const VillageMap = () => {
   }, [userRole, mobileSheet]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0D161A] font-sans select-none text-[#F8FAFC] overscroll-none [touch-action:pan-x_pan-y]">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#F8FAFC] font-sans select-none text-slate-800 overscroll-none [touch-action:pan-x_pan-y]">
       {/* TOAST NOTIFICATION BANNER */}
       {toastWarning && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] px-5 py-3 rounded-2xl backdrop-blur-xl bg-[#132228]/95 border border-[#334B56] text-[#F8FAFC] text-sm font-medium shadow-[0_15px_40px_rgba(12,23,28,0.7)] flex items-center gap-3 max-w-lg animate-in fade-in slide-from-top-4">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8] animate-pulse shadow-[0_0_8px_#38BDF8] flex-shrink-0" />
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] px-5 py-3 rounded-2xl backdrop-blur-xl bg-white border border-slate-200 text-slate-800 text-sm font-medium shadow-xl flex items-center gap-3 max-w-lg animate-in fade-in slide-from-top-4">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#48999E] animate-pulse flex-shrink-0" />
           <span className="flex-1">{toastWarning}</span>
           <button
             onClick={() => setToastWarning(null)}
-            className="text-[#94A3B8] hover:text-[#F8FAFC] transition p-1 text-xs cursor-pointer ml-1"
+            className="text-slate-400 hover:text-slate-700 transition p-1 text-xs cursor-pointer ml-1"
           >
             ✕
           </button>
@@ -2733,8 +2684,8 @@ export const VillageMap = () => {
           setIsSimulatedOffline(!isSimulatedOffline);
           showToast(
             isSimulatedOffline
-              ? '🟢 Live Network restored. Syncing with remote database.'
-              : '🟡 Simulated Offline mode active. Utilizing local IndexedDB.'
+              ? 'Live Network restored. Syncing with remote database.'
+              : 'Simulated Offline mode active. Utilizing local IndexedDB.'
           );
         }}
         isLocating={isLocating}
@@ -2765,343 +2716,247 @@ export const VillageMap = () => {
 
         {/* 2.1 RIGHT ANALYTICS & DECISION DRAWER (DESKTOP DOCKED, MOBILE SLIDE-OVER) */}
         {sidebarOpen && (
-          <aside className="order-2 fixed inset-y-0 right-0 z-[2200] w-full sm:w-96 md:static md:flex md:flex-col md:w-96 xl:w-[420px] md:h-full md:flex-shrink-0 bg-white/95 dark:bg-[#132228]/95 backdrop-blur-xl md:border-l border-[#CBD5E1] dark:border-[#334B56] overflow-y-auto p-5 space-y-5 shadow-2xl transition-colors duration-200">
-        {/* Drawer Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#D3DFD8] dark:border-[#334B56] bg-[#F4F6F5] dark:bg-[#0C171C]/90 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-[#55949F] dark:text-[#38BDF8]" />
-            <span className="font-bold text-sm text-[#1C2927] dark:text-[#F8FAFC]">{t('layers_and_drawer')}</span>
-          </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-[#1B2F38] hover:bg-[#EBF2EE] dark:hover:bg-[#233B46] text-[#1C2927] dark:text-[#F8FAFC] border border-[#D3DFD8] dark:border-[#334B56] transition cursor-pointer text-xs font-semibold"
-            title={t('close')}
-          >
-            <span>✕ {t('close')}</span>
-          </button>
-        </div>
-
-        {/* Drawer Body (Scrollable) */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
-          {/* BASEMAPS: Clean segmented toggle button group: [ OSM Street | Satellite ] */}
-          <div className="p-3 rounded-2xl bg-[#F4F6F5] dark:bg-[#1B2F38] border border-[#D3DFD8] dark:border-[#334B56]">
-            <div className="text-[11px] uppercase tracking-wider font-bold text-[#566E67] dark:text-[#94A3B8] mb-2 flex items-center justify-between">
-              <span>{t('select_basemap')}</span>
-              <span className="text-[10px] text-[#55949F] dark:text-[#38BDF8] font-mono">{t('tile_cache_active')}</span>
+          <aside className="order-2 fixed inset-y-0 right-0 z-[1500] w-84 sm:w-96 md:static md:flex md:flex-col md:h-full md:flex-shrink-0 bg-white border-l border-slate-200 overflow-y-auto p-4 space-y-4 shadow-xl text-slate-800">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[#48999E]" />
+                <span className="font-bold text-sm text-slate-800">Layers & Drawer</span>
+              </div>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer text-xs font-semibold"
+                title="Close"
+              >
+                <span>✕ Close</span>
+              </button>
             </div>
-            <div className="grid grid-cols-2 p-1 rounded-xl bg-white dark:bg-[#0C171C] border border-[#D3DFD8] dark:border-[#334B56] text-xs">
-              {[
-                { id: 'osm', label: t('basemap_osm') },
-                { id: 'esri', label: t('basemap_satellite') },
-              ].map((b) => (
-                <button
-                  key={b.id}
-                  onClick={() => changeBasemap(b.id as BasemapType)}
-                  className={`py-1.5 px-2 rounded-lg font-semibold text-center transition cursor-pointer text-xs truncate ${
-                    activeBasemap === b.id
-                      ? 'bg-[#10B981] text-white shadow-xs'
-                      : 'text-[#566E67] dark:text-[#94A3B8] hover:text-[#1C2927] dark:hover:text-[#F8FAFC] hover:bg-[#EBF2EE] dark:hover:bg-[#1B2F38]'
-                  }`}
-                  title={b.label}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
-          {/* ACCORDION 1: > Active Layers */}
-          <div className="rounded-2xl bg-slate-100/80 dark:bg-[#1B2F38]/50 border border-[#CBD5E1] dark:border-[#334B56] overflow-hidden">
-            <button
-              onClick={() => setActiveLayersOpen(!activeLayersOpen)}
-              className="w-full flex items-center justify-between p-3 text-xs font-bold uppercase tracking-wider text-[#0F172A] dark:text-[#F8FAFC] hover:bg-slate-200 dark:hover:bg-[#233B46] bg-slate-100 dark:bg-[#1B2F38] transition cursor-pointer"
-            >
-              <span className="flex items-center gap-1.5">
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${activeLayersOpen ? '' : '-rotate-90'}`} />
-                {t('active_layers')}
-              </span>
-              <span className="text-[10px] font-mono text-[#38BDF8]">Layer Stack</span>
-            </button>
-
-            {activeLayersOpen && (
-              <div className="p-3 pt-2 space-y-2 border-t border-[#CBD5E1] dark:border-[#334B56]">
-                {/* Village Boundary AOI */}
-                <label className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-[#0C171C]/70 border border-[#CBD5E1] dark:border-[#334B56] hover:border-[#38BDF8]/50 cursor-pointer transition">
-                  <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2">
-                    <Building2 className="w-3.5 h-3.5 text-[#38BDF8]" />
-                    {t('layer_boundary')}
+            {/* Drawer Body */}
+            <div className="flex-1 overflow-y-auto space-y-4 scrollbar-thin pr-0.5">
+              {/* SECTION 1: SELECT BASEMAP */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 flex items-center justify-between">
+                  <span>SELECT BASEMAP</span>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-mono font-medium">
+                    TILE CACHE ACTIVE
                   </span>
-                  <input
-                    type="checkbox"
-                    checked={showBoundary}
-                    onChange={toggleBoundary}
-                    className="w-4 h-4 rounded text-[#38BDF8] focus:ring-0 accent-[#38BDF8] cursor-pointer"
-                  />
-                </label>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => changeBasemap('osm')}
+                    className={`py-2 px-3 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
+                      activeBasemap === 'osm'
+                        ? 'bg-[#10B981] text-white font-semibold shadow-sm'
+                        : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    OSM Street
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => changeBasemap('satellite')}
+                    className={`py-2 px-3 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
+                      activeBasemap === 'satellite'
+                        ? 'bg-[#10B981] text-white font-semibold shadow-sm'
+                        : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    Satellite
+                  </button>
+                </div>
+              </div>
 
-                {/* Village Facilities */}
-                <label className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-[#0C171C]/70 border border-[#CBD5E1] dark:border-[#334B56] hover:border-[#38BDF8]/50 cursor-pointer transition">
-                  <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2">
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-[#10B981]" />
-                    {t('layer_facilities')} ({facilityCount})
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={showFacilities}
-                    onChange={toggleFacilities}
-                    className="w-4 h-4 rounded text-[#10B981] focus:ring-0 accent-[#10B981] cursor-pointer"
-                  />
-                </label>
-
-                {/* Surveyed Issues */}
-                <label className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-[#0C171C]/70 border border-[#CBD5E1] dark:border-[#334B56] hover:border-[#38BDF8]/50 cursor-pointer transition">
-                  <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-[#E05A47]" />
-                    {t('layer_issues')} ({issueCounts.total})
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={showIssues}
-                    onChange={toggleIssues}
-                    className="w-4 h-4 rounded text-[#E05A47] focus:ring-0 accent-[#E05A47] cursor-pointer"
-                  />
-                </label>
-
-                {/* Grievances Pins */}
-                <label className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-[#0C171C]/70 border border-[#CBD5E1] dark:border-[#334B56] hover:border-[#38BDF8]/50 cursor-pointer transition">
-                  <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-[#E05A47]" />
-                    {t('layer_grievances')}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={showGrievancePins}
-                    onChange={toggleGrievancePins}
-                    className="w-4 h-4 rounded text-[#E05A47] focus:ring-0 accent-[#E05A47] cursor-pointer"
-                  />
-                </label>
-
-                {/* Key Landmark POIs */}
-                <label className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-[#0C171C]/70 border border-[#CBD5E1] dark:border-[#334B56] hover:border-[#38BDF8]/50 cursor-pointer transition">
-                  <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-[#38BDF8]" />
-                    {t('layer_landmarks')}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={showLandmarks}
-                    onChange={toggleLandmarks}
-                    className="w-4 h-4 rounded text-[#38BDF8] focus:ring-0 accent-[#38BDF8] cursor-pointer"
-                  />
-                </label>
-
-                {/* DBSCAN Failure Zones (Admin & Field Officer Portal Only) */}
-                {(userRole === 'admin' || userRole === 'officer') && (
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-[#E05A47]/10 dark:bg-[#E05A47]/15 border border-[#E05A47]/40 hover:border-[#E05A47]/60 cursor-pointer transition">
-                    <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2">
-                      <AlertTriangle className="w-3.5 h-3.5 text-[#E05A47] dark:text-[#FCA5A5]" />
-                      {t('layer_dbscan')}
+              {/* SECTION 2: ACTIVE LAYERS & LAYER STACK */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500">
+                  ACTIVE LAYERS & LAYER STACK
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5">
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
+                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 shrink-0"></span>
+                      Khopripada Boundary (AOI)
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={showBoundary}
+                      onChange={toggleBoundary}
+                      className="w-4 h-4 rounded text-cyan-600 focus:ring-0 accent-cyan-600 cursor-pointer"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
+                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                      Village Facilities ({facilitiesList.length || facilityCount})
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={showFacilities}
+                      onChange={toggleFacilities}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-0 accent-emerald-600 cursor-pointer"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
+                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
+                      Surveyed Issues ({issueCounts.total})
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={showIssues}
+                      onChange={toggleIssues}
+                      className="w-4 h-4 rounded text-red-600 focus:ring-0 accent-red-600 cursor-pointer"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
+                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
+                      Reported Grievances (IndexedDB)
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={showGrievancePins}
+                      onChange={toggleGrievancePins}
+                      className="w-4 h-4 rounded text-red-600 focus:ring-0 accent-red-600 cursor-pointer"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
+                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0"></span>
+                      Key Landmark POIs
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={showLandmarks}
+                      onChange={toggleLandmarks}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-0 accent-blue-600 cursor-pointer"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
+                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
+                      DBSCAN Failure Zones (3 Hotspots)
                     </span>
                     <input
                       type="checkbox"
                       checked={showDbscanClusters}
                       onChange={(e) => toggleDbscanClusters(e.target.checked)}
-                      className="w-4 h-4 rounded text-[#E05A47] focus:ring-0 accent-[#E05A47] cursor-pointer"
+                      className="w-4 h-4 rounded text-red-600 focus:ring-0 accent-red-600 cursor-pointer"
                     />
                   </label>
-                )}
-
-                {/* Failure Density Heatmap (Admin & Field Officer Portal Only) */}
-                {(userRole === 'admin' || userRole === 'officer') && (
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-[#E05A47]/10 dark:bg-[#E05A47]/15 border border-[#E05A47]/40 hover:border-[#E05A47]/60 cursor-pointer transition">
-                    <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2">
-                      <Flame className="w-3.5 h-3.5 text-[#E05A47] dark:text-[#FCA5A5]" />
-                      {t('layer_heatmap')}
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 cursor-pointer transition">
+                    <span className="text-xs font-medium text-slate-800 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
+                      Failure Density Heatmap
                     </span>
                     <input
                       type="checkbox"
                       checked={showHeatmap}
                       onChange={(e) => toggleHeatmap(e.target.checked)}
-                      className="w-4 h-4 rounded text-[#E05A47] focus:ring-0 accent-[#E05A47] cursor-pointer"
+                      className="w-4 h-4 rounded text-red-600 focus:ring-0 accent-red-600 cursor-pointer"
                     />
                   </label>
-                )}
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* ACCORDION 2: > Category Filters */}
-          <div className="rounded-2xl bg-slate-100/80 dark:bg-[#1B2F38]/50 border border-[#CBD5E1] dark:border-[#334B56] overflow-hidden">
-            <button
-              onClick={() => setCategoryFiltersOpen(!categoryFiltersOpen)}
-              className="w-full flex items-center justify-between p-3 text-xs font-bold uppercase tracking-wider text-[#0F172A] dark:text-[#F8FAFC] hover:bg-slate-200 dark:hover:bg-[#233B46] bg-slate-100 dark:bg-[#1B2F38] transition cursor-pointer"
-            >
-              <span className="flex items-center gap-1.5">
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${categoryFiltersOpen ? '' : '-rotate-90'}`} />
-                {t('filter_category')}
-              </span>
-              <span className="text-[10px] font-mono text-slate-500 dark:text-[#94A3B8]">{facilitiesList.length} Fac</span>
-            </button>
-
-            {categoryFiltersOpen && (
-              <div className="p-3 pt-2 space-y-3 border-t border-[#CBD5E1] dark:border-[#334B56]">
-                {/* Dataset Switcher (Admin & Field Officer Portal Only) */}
-                {(userRole === 'admin' || userRole === 'officer') && (
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-[#94A3B8] block mb-1">Dataset Model</span>
-                    <div className="grid grid-cols-2 p-0.5 rounded-lg bg-white dark:bg-[#0C171C] border border-[#CBD5E1] dark:border-[#334B56] text-[11px]">
-                      <button
-                        onClick={() => handleSwitchDataset('survey')}
-                        className={`py-1 px-1.5 rounded-md font-semibold text-center transition cursor-pointer ${
-                          activeDataset === 'survey' ? 'bg-[#10B981] text-white shadow-xs' : 'text-slate-600 dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-[#F8FAFC]'
-                        }`}
-                      >
-                        Field Survey (22 / 3)
-                      </button>
-                      <button
-                        onClick={() => handleSwitchDataset('unified')}
-                        className={`py-1 px-1.5 rounded-md font-semibold text-center transition cursor-pointer ${
-                          activeDataset === 'unified' ? 'bg-[#10B981] text-white shadow-xs' : 'text-slate-600 dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-[#F8FAFC]'
-                        }`}
-                      >
-                        All Model (172 / 203)
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Category Filter Buttons */}
+              {/* SECTION 3: FILTER AMENITIES BY CATEGORY */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 flex items-center justify-between">
+                  <span>FILTER AMENITIES BY CATEGORY</span>
+                  <span className="text-[10px] text-slate-400 font-mono">{facilitiesList.length} Facilities</span>
+                </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   {[
-                    { id: 'all', label: t('all_poi'), icon: '🏢' },
-                    { id: 'water', label: t('water'), icon: '💧' },
-                    { id: 'education', label: t('education'), icon: '🏫' },
-                    { id: 'commerce', label: t('commerce'), icon: '🏪' },
-                    { id: 'health', label: t('health'), icon: '🏥' },
-                    { id: 'civic', label: t('civic'), icon: '🏛️' },
-                    { id: 'issues', label: `${t('layer_issues')} (${issuesList.length})`, icon: '⚠️' },
+                    { id: 'all', label: 'All POIs' },
+                    { id: 'water', label: 'Drinking Water' },
+                    { id: 'education', label: 'Schools & Education' },
+                    { id: 'commerce', label: 'Commerce & Kirana' },
+                    { id: 'health', label: 'Health & Anganwadi' },
+                    { id: 'civic', label: 'Civic & Mandir' },
                   ].map((opt) => (
                     <button
                       key={opt.id}
+                      type="button"
                       onClick={() => handleFilterFacilities(opt.id as FacilityCategoryFilter)}
-                      className={`px-2 py-1.5 rounded-lg text-[10px] font-semibold border transition cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer text-center truncate ${
                         facilityFilter === opt.id
-                          ? opt.id === 'issues'
-                            ? 'bg-[#E05A47]/25 border-[#E05A47] text-[#E05A47] dark:text-[#FCA5A5] shadow-xs'
-                            : 'bg-[#10B981]/25 border-[#10B981] text-emerald-700 dark:text-[#6EE7B7] shadow-xs'
-                          : 'bg-white dark:bg-[#0C171C] border-[#CBD5E1] dark:border-[#334B56] text-slate-600 dark:text-[#94A3B8] hover:bg-slate-200 dark:hover:bg-[#1B2F38] hover:text-[#0F172A] dark:hover:text-[#F8FAFC]'
+                          ? 'bg-[#48999E] border-[#48999E] text-white shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900'
                       }`}
                     >
-                      <span>{opt.icon}</span>
-                      <span className="truncate">{opt.label}</span>
+                      {opt.label}
                     </button>
                   ))}
                 </div>
+              </div>
 
-                {/* Resident Clean Map Legend & Guide (Resident Portal Only) */}
-                {userRole === 'user' && (
-                  <div className="p-3 rounded-xl bg-[#0C171C]/80 border border-[#334B56] text-xs space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase font-bold text-[#94A3B8] tracking-wider">Map Legend & Amenities</span>
-                      <span className="text-[10px] font-mono text-[#38BDF8]">Citizen View</span>
+              {/* SECTION 4: VILLAGE ANALYTICS & DECISION SUPPORT */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500">
+                  VILLAGE ANALYTICS & DECISION SUPPORT
+                </div>
+                <div className="bg-[#0D1C24] text-white rounded-2xl p-4 border border-slate-700/60 shadow-lg space-y-3">
+                  {/* Header */}
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-700/60">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-teal-400 tracking-wider block">
+                        PANCHAYAT ADMIN
+                      </span>
+                      <h4 className="text-xs font-bold text-white leading-tight">
+                        Executive Decision Console
+                      </h4>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-[11px] text-[#94A3B8]">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8] shadow-[0_0_6px_#38BDF8] flex-shrink-0"></span>
-                        <span className="truncate text-[#F8FAFC]">💧 Drinking Water</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#94A3B8] shadow-[0_0_6px_#94A3B8] flex-shrink-0"></span>
-                        <span className="truncate text-[#F8FAFC]">🏫 Schools & Balwadi</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#FCD34D] shadow-[0_0_6px_#FCD34D] flex-shrink-0"></span>
-                        <span className="truncate text-[#F8FAFC]">🏪 Kirana & Vendors</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#E05A47] shadow-[0_0_6px_#E05A47] flex-shrink-0"></span>
-                        <span className="truncate text-[#F8FAFC]">🏥 Health Clinics</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] shadow-[0_0_6px_#10B981] flex-shrink-0"></span>
-                        <span className="truncate text-[#F8FAFC]">🏛️ Mandirs & Civic</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#E05A47] shadow-[0_0_6px_#E05A47] flex-shrink-0"></span>
-                        <span className="truncate text-[#F8FAFC]">⚠️ Civic Issues</span>
-                      </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-teal-300 border border-slate-700">
+                      Live Active
+                    </span>
+                  </div>
+
+                  {/* Stat Badges */}
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                    <div className="p-2 rounded-lg bg-red-950/40 border border-red-800/60 text-red-300">
+                      <span className="text-[9px] uppercase block text-red-400 font-sans font-bold">
+                        Priority
+                      </span>
+                      <span className="text-xs font-bold font-mono">15 ACTIVE ISSUES</span>
                     </div>
-                    <div className="pt-2 border-t border-[#334B56] text-[10px] text-[#94A3B8] leading-relaxed">
-                      💡 Click any pin on the map to inspect operational status, business timings, UPI payment availability, and field photos.
+                    <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-800/60 text-amber-300">
+                      <span className="text-[9px] uppercase block text-amber-400 font-sans font-bold">
+                        Hotspots
+                      </span>
+                      <span className="text-xs font-bold font-mono">3 DBSCAN CLUSTERS</span>
                     </div>
                   </div>
-                )}
 
-                {/* Facility Health Breakdown & Issues Severity (Admin & Field Officer Portal Only) */}
-                {(userRole === 'admin' || userRole === 'officer') && (
-                  <>
-                    <div className="pt-2 border-t border-[#334B56]">
-                      <span className="text-[10px] uppercase font-bold text-[#94A3B8] block mb-1">Facility Health</span>
-                      <div className="grid grid-cols-3 gap-1 text-[10px] p-2 rounded-xl bg-[#0C171C]/80 border border-[#334B56] text-center">
-                        <div>
-                          <span className="text-[#6EE7B7] block text-[9px] font-semibold">● Functional</span>
-                          <strong className="text-[#F8FAFC] text-xs font-mono">{operationalCounts.functional}</strong>
-                        </div>
-                        <div className="border-x border-[#334B56]">
-                          <span className="text-[#FDE68A] block text-[9px] font-semibold">● Partial</span>
-                          <strong className="text-[#F8FAFC] text-xs font-mono">{operationalCounts.partial}</strong>
-                        </div>
-                        <div>
-                          <span className="text-[#FCA5A5] block text-[9px] font-semibold">● Degraded</span>
-                          <strong className="text-[#F8FAFC] text-xs font-mono">{operationalCounts.nonFunctional}</strong>
-                        </div>
+                  {/* Facility Conditions breakdown */}
+                  <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-[10px]">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">
+                      Facility Operational Conditions
+                    </span>
+                    <div className="grid grid-cols-3 gap-1 text-center font-mono">
+                      <div className="text-emerald-400">
+                        <span className="text-[8px] uppercase block font-sans">Functional</span>
+                        <strong>{operationalCounts.functional}</strong>
+                      </div>
+                      <div className="text-amber-400 border-x border-slate-800">
+                        <span className="text-[8px] uppercase block font-sans">Partial</span>
+                        <strong>{operationalCounts.partial}</strong>
+                      </div>
+                      <div className="text-red-400">
+                        <span className="text-[8px] uppercase block font-sans">Degraded</span>
+                        <strong>{operationalCounts.nonFunctional}</strong>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="pt-2 border-t border-[#334B56]">
-                      <span className="text-[10px] uppercase font-bold text-[#94A3B8] block mb-1">Issues Severity</span>
-                      <div className="grid grid-cols-3 gap-1 text-[10px] p-2 rounded-xl bg-[#0C171C]/80 border border-[#334B56] text-center">
-                        <div>
-                          <span className="text-[#FCA5A5] block text-[9px] font-semibold">● High/Crit</span>
-                          <strong className="text-[#F8FAFC] text-xs font-mono">{issueCounts.high}</strong>
-                        </div>
-                        <div className="border-x border-[#334B56]">
-                          <span className="text-[#FDE68A] block text-[9px] font-semibold">● Medium</span>
-                          <strong className="text-[#F8FAFC] text-xs font-mono">{issueCounts.medium}</strong>
-                        </div>
-                        <div>
-                          <span className="text-[#6EE7B7] block text-[9px] font-semibold">● Low</span>
-                          <strong className="text-[#F8FAFC] text-xs font-mono">{issueCounts.low}</strong>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ACCORDION 3: > Analytics & Health (Admin & Field Officer Portal Only) */}
-          {(userRole === 'admin' || userRole === 'officer') && (
-            <div className="rounded-2xl bg-[#F4F6F5] dark:bg-[#1B2F38]/50 border border-[#D3DFD8] dark:border-[#334B56] overflow-hidden">
-              <button
-                onClick={() => setAnalyticsHealthOpen(!analyticsHealthOpen)}
-                className="w-full flex items-center justify-between p-3 text-xs font-bold uppercase tracking-wider text-[#1C2927] dark:text-[#F8FAFC] hover:bg-[#EBF2EE] dark:hover:bg-[#233B46] bg-[#F4F6F5] dark:bg-[#1B2F38] transition cursor-pointer"
-              >
-                <span className="flex items-center gap-1.5">
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${analyticsHealthOpen ? '' : '-rotate-90'}`} />
-                  {t('analytics')}
-                </span>
-                <span className="text-[10px] font-mono text-[#55949F] dark:text-[#38BDF8]">Decision Support</span>
-              </button>
-
-              {analyticsHealthOpen && (
-                <div className="p-2 border-t border-[#D3DFD8] dark:border-[#334B56]">
+                  {/* Embedded Action Queue and ML Console */}
                   <PanchayatAdminPanel
                     issues={issuesList}
                     facilities={facilitiesList}
                     onFlyToIssue={handleFlyToIssue}
                     isOpen={true}
+                    hideHeader={true}
                     onClose={() => {}}
                     onExportAudit={() => setIsExportAuditModalOpen(true)}
                     onApproveSubmission={(item) => {
@@ -3115,7 +2970,7 @@ export const VillageMap = () => {
                       } else {
                         refreshGrievanceMarkers();
                       }
-                      showToast(`✅ "${item.title}" approved and published to live map!`);
+                      showToast(`"${item.title}" approved and published to live map!`);
                     }}
                     onRejectSubmission={(item) => {
                       if (item.type === 'facility') {
@@ -3128,7 +2983,7 @@ export const VillageMap = () => {
                       } else {
                         refreshGrievanceMarkers();
                       }
-                      showToast(`❌ Submission "${item.title}" rejected.`);
+                      showToast(`Submission "${item.title}" rejected.`);
                     }}
                     onOpenPhotoLightbox={(data) => {
                       setLightboxData({
@@ -3142,10 +2997,8 @@ export const VillageMap = () => {
                     onFlyToCoords={flyToCoords}
                   />
                 </div>
-              )}
+              </div>
             </div>
-          )}
-        </div>
           </aside>
         )}
 
@@ -3219,20 +3072,26 @@ export const VillageMap = () => {
         </div>
       )}
 
-      {/* 4.9 FLOATING FAILURE HEATMAP LEGEND CARD (Requirement 4) */}
-      {showHeatmap && (
-        <div className="absolute bottom-20 md:bottom-6 left-4 md:left-6 z-[1200] bg-white/95 dark:bg-[#132228]/95 border border-[#D3DFD8] dark:border-[#334B56] rounded-xl px-3.5 py-2 shadow-xl backdrop-blur-md flex items-center gap-3 text-xs font-semibold text-[#1C2927] dark:text-[#F8FAFC] pointer-events-auto transition-all animate-in fade-in slide-in-from-bottom-2">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#F6AA6E] inline-block shadow-xs" />
-            <span>मध्यम समस्या (Moderate)</span>
-          </div>
-          <span className="text-[#D3DFD8] dark:text-[#334B56]">|</span>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#CC6346] inline-block shadow-xs animate-pulse" />
-            <span>तातडीचे केंद्र (Critical Cluster)</span>
-          </div>
+      {/* 4.9 FLOATING COORDINATE & CLUSTER SCALE BAR */}
+      <div className="absolute bottom-20 md:bottom-6 left-4 md:left-6 z-[1200] bg-white border border-slate-200 rounded-xl px-3.5 py-2 shadow-lg flex items-center gap-3 text-xs font-medium text-slate-700 pointer-events-auto">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-xs" />
+          <span className="text-[11px] text-slate-700 font-semibold">मध्यम समस्या (Moderate)</span>
         </div>
-      )}
+        <span className="text-slate-300">|</span>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block shadow-xs animate-pulse" />
+          <span className="text-[11px] text-red-600 font-bold">तातडीचे केंद्र (Critical Cluster)</span>
+        </div>
+        <span className="text-slate-300">|</span>
+        <span className="font-mono text-slate-600 text-[11px]">
+          {cursorCoords ? `${cursorCoords[0].toFixed(4)}°N, ${cursorCoords[1].toFixed(4)}°E` : `${centerCoords[0].toFixed(4)}°N, ${centerCoords[1].toFixed(4)}°E`}
+        </span>
+        <span className="text-slate-300">|</span>
+        <span className="font-mono text-slate-500 text-[11px]">
+          Zoom {currentZoom}
+        </span>
+      </div>
 
       {/* 5. FULL-SCREEN LEAFLET MAP CANVAS */}
       <div
@@ -3244,7 +3103,7 @@ export const VillageMap = () => {
 
       {/* 5.1 SYMMETRICAL TOUCH-FIRST MOBILE BOTTOM DOCK (< 768px) */}
       <nav
-        className={`md:hidden fixed bottom-0 inset-x-0 z-[2000] h-16 bg-white/95 dark:bg-[#132228]/95 backdrop-blur-xl border-t border-[#CBD5E1] dark:border-[#334B56] ${
+        className={`md:hidden fixed bottom-0 inset-x-0 z-[2000] h-16 bg-white/95 dark:bg-[#0F1D24]/95 backdrop-blur-xl border-t border-slate-200 dark:border-[#2C4654] ${
           isAdminOrOfficer ? 'grid grid-cols-5' : 'flex items-center justify-around'
         } items-center px-1 pb-safe select-none shadow-[0_-10px_30px_rgba(12,23,28,0.7)]`}
       >
@@ -3337,12 +3196,12 @@ export const VillageMap = () => {
           />
 
           {/* Bottom Sheet Drawer */}
-          <div className="md:hidden fixed inset-x-0 bottom-0 z-[2500] max-h-[85dvh] bg-white dark:bg-[#132228] border-t border-[#CBD5E1] dark:border-[#334B56] text-[#0F172A] dark:text-[#F8FAFC] rounded-t-3xl shadow-[0_-10px_40px_rgba(12,23,28,0.85)] flex flex-col transition-all duration-300 ease-out overscroll-contain animate-in slide-in-from-bottom duration-300">
+          <div className="md:hidden fixed inset-x-0 bottom-0 z-[2500] max-h-[85dvh] bg-white dark:bg-[#0F1D24] border-t border-slate-200 dark:border-[#2C4654] text-[#0F172A] dark:text-[#F1F5F9] rounded-t-3xl shadow-[0_-10px_40px_rgba(12,23,28,0.85)] flex flex-col transition-all duration-300 ease-out overscroll-contain animate-in slide-in-from-bottom duration-300">
             {/* Touch-drag handle pill */}
             <div className="w-10 h-1 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto my-2.5 flex-shrink-0" />
 
             {/* Header */}
-            <div className="px-4 py-2 border-b border-[#CBD5E1] dark:border-[#334B56] bg-slate-100 dark:bg-[#0C171C]/90 flex items-center justify-between flex-shrink-0">
+            <div className="px-4 py-2 border-b border-slate-200 dark:border-[#2C4654] bg-slate-50 dark:bg-[#0F1D24] flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2">
                 {mobileSheet === 'analytics' && <BarChart3 className="w-4 h-4 text-[#38BDF8]" />}
                 {mobileSheet === 'worklist' && <ClipboardCheck className="w-4 h-4 text-[#38BDF8]" />}
@@ -3835,7 +3694,7 @@ export const VillageMap = () => {
                                         : 'bg-[#E05A47]/20 text-[#FCA5A5] border-[#E05A47]/60'
                                     }`}
                                   >
-                                    {item.type === 'facility' ? '🏢 Proposed Facility' : '⚠️ Step 1: Resident Grievance'}
+                                    {item.type === 'facility' ? 'Proposed Facility' : 'Step 1: Resident Grievance'}
                                   </span>
                                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#0C171C] border border-[#334B56] text-[#94A3B8]">
                                     By: <strong className="text-[#F8FAFC]">{item.submitted_by}</strong>
@@ -4069,12 +3928,12 @@ export const VillageMap = () => {
                                   }`}
                                 >
                                   {isAssigned
-                                    ? '📋 Step 2: Assigned For Inspection'
+                                    ? 'Step 2: Assigned For Inspection'
                                     : isPendingAuth
-                                    ? '⏳ Step 3: Awaiting Admin Sign-off'
+                                    ? 'Step 3: Awaiting Admin Sign-off'
                                     : isUnderInspection
-                                    ? '🔍 Step 4: Authorized Under Inspection'
-                                    : '🛠️ Step 5: Submitted for Audit'}
+                                    ? 'Step 4: Authorized Under Inspection'
+                                    : 'Step 5: Submitted for Audit'}
                                 </span>
                                 <span className="text-[10px] font-mono text-[#94A3B8]">#{g.id}</span>
                               </div>
@@ -4103,7 +3962,7 @@ export const VillageMap = () => {
 
                               {isPendingAuth && (
                                 <div className="p-2 rounded-xl bg-[#0C171C] border border-[#F59E0B]/40 text-center text-xs text-[#FDE68A]">
-                                  ⏳ Inspection request sent to Admin for sign-off.
+                                  Inspection request sent to Admin for sign-off.
                                 </div>
                               )}
 
@@ -4169,7 +4028,7 @@ export const VillageMap = () => {
 
                               {isPendingResolution && (
                                 <div className="p-2 rounded-xl bg-[#0C171C] border border-[#10B981]/40 text-center text-xs text-[#6EE7B7]">
-                                  🛠️ Repair proof submitted — Awaiting Sarpanch official verification.
+                                  Repair proof submitted — Awaiting Sarpanch official verification.
                                 </div>
                               )}
 
@@ -4298,22 +4157,22 @@ export const VillageMap = () => {
               {mobileSheet === 'layers' && (
                 <div className="space-y-4">
                   {/* Basemap Switcher */}
-                  <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-[#1B2F38] border border-[#CBD5E1] dark:border-[#334B56] space-y-2">
-                    <span className="text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC] block uppercase tracking-wider">
+                  <div className="p-3.5 rounded-2xl bg-[#F1F5F9] dark:bg-[#172A33] border border-[#E2E8F0] dark:border-[#2C4654] space-y-2">
+                    <span className="text-xs font-bold text-[#0F172A] dark:text-[#F1F5F9] block uppercase tracking-wider">
                       {t('select_basemap')}
                     </span>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {[
-                        { id: 'osm', label: t('basemap_osm') },
-                        { id: 'esri', label: t('basemap_satellite') },
+                        { id: 'osm', label: 'OSM Street' },
+                        { id: 'satellite', label: 'Satellite' },
                       ].map((b) => (
                         <button
                           key={b.id}
                           onClick={() => changeBasemap(b.id as BasemapType)}
-                          className={`py-2 px-2 min-h-[44px] rounded-xl font-bold text-xs text-center transition cursor-pointer active:scale-95 truncate ${
+                          className={`py-2 px-1 min-h-[44px] rounded-xl font-bold text-xs text-center transition cursor-pointer active:scale-95 truncate ${
                             activeBasemap === b.id
-                              ? 'bg-[#10B981] text-white shadow-md'
-                              : 'bg-white dark:bg-[#0C171C] text-[#566E67] dark:text-[#94A3B8] hover:text-[#1C2927] dark:hover:text-[#F8FAFC] border border-[#D3DFD8] dark:border-[#334B56]'
+                              ? 'bg-[#10B981] text-white font-semibold shadow-sm'
+                              : 'bg-slate-100 text-slate-700 border border-slate-300'
                           }`}
                           title={b.label}
                         >
@@ -4420,60 +4279,6 @@ export const VillageMap = () => {
               {/* VIEW 4: QUICK FIELD OPERATIONS */}
               {mobileSheet === 'action' && (
                 <div className="space-y-3">
-                  {/* Preferences: Language & Theme Switchers accessible directly in Mobile Action Sheet */}
-                  <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-[#1B2F38] border border-[#CBD5E1] dark:border-[#334B56] flex items-center justify-between gap-3 shadow-xs">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-                        {language === 'en' ? 'Display & Language' : 'भाषा व डिस्प्ले'}
-                      </span>
-                      <span className="text-[10px] text-slate-500 dark:text-[#94A3B8]">
-                        {theme === 'dark' ? t('theme_dark') : t('theme_light')} • {language === 'en' ? 'English' : 'मराठी'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Language Toggle */}
-                      <div className="inline-flex rounded-lg border border-[#CBD5E1] dark:border-[#334B56] bg-white dark:bg-black/20 p-0.5 text-xs font-semibold">
-                        <button
-                          type="button"
-                          onClick={() => setLanguage('en')}
-                          className={
-                            language === 'en'
-                              ? 'px-2 py-1 rounded bg-[#38BDF8] text-slate-900 font-bold transition shadow-xs'
-                              : 'px-2 py-1 text-slate-600 dark:text-slate-400'
-                          }
-                        >
-                          EN
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setLanguage('mr')}
-                          className={
-                            language === 'mr'
-                              ? 'px-2 py-1 rounded bg-[#38BDF8] text-slate-900 font-bold transition shadow-xs'
-                              : 'px-2 py-1 text-slate-600 dark:text-slate-400'
-                          }
-                        >
-                          मराठी
-                        </button>
-                      </div>
-
-                      {/* Theme Toggle Button */}
-                      <button
-                        type="button"
-                        onClick={toggleTheme}
-                        className="w-9 h-9 rounded-xl border border-[#CBD5E1] dark:border-[#334B56] bg-white dark:bg-[#0C171C] text-slate-700 dark:text-[#F8FAFC] flex items-center justify-center transition active:scale-95 cursor-pointer shadow-xs"
-                        title={theme === 'dark' ? t('switch_to_light') : t('switch_to_dark')}
-                        aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                      >
-                        {theme === 'dark' ? (
-                          <Sun className="w-4 h-4 text-amber-400" />
-                        ) : (
-                          <Moon className="w-4 h-4 text-sky-600" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
 
                   {/* Option 1: Propose Community Facility */}
                   <button

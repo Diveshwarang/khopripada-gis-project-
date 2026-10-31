@@ -425,9 +425,9 @@ export const AddFacilityModal: React.FC<AddFacilityModalProps> = ({
                     onChange={(e) => setOperationalStatus(e.target.value)}
                     className="w-full bg-[#0C171C] border border-[#334B56] rounded-xl px-3.5 py-2.5 text-[#F8FAFC] focus:outline-none focus:border-[#38BDF8] text-xs transition cursor-pointer appearance-none"
                   >
-                    <option value="functional">🟢 Functional (Emerald Green)</option>
-                    <option value="partially_functional">🟡 Partially Functional / Degraded (Warm Amber)</option>
-                    <option value="non_functional">🔴 Broken / Inoperative (Terracotta)</option>
+                    <option value="functional">Functional (Emerald)</option>
+                    <option value="partially_functional">Partially Functional / Degraded (Amber)</option>
+                    <option value="non_functional">Broken / Inoperative (Terracotta)</option>
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#94A3B8] text-xs">
                     ▼
