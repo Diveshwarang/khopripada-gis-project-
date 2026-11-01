@@ -143,7 +143,7 @@ export function useIssuesSync() {
     if (syncChannel) {
       syncChannel.onmessage = (event) => {
         if (event.data?.type === 'ISSUE_UPDATED') {
-          const { issueId, status, notes, assignedOfficer } = event.data;
+          const { issueId, status, notes, assignedOfficer, resolutionPhotoUrl } = event.data;
           setIssues((prev) =>
             prev.map((item) =>
               String(item.id) === String(issueId) || item.issue_id === String(issueId)
@@ -154,6 +154,7 @@ export function useIssuesSync() {
                     assigned_to: assignedOfficer !== undefined ? assignedOfficer : item.assigned_to,
                     resolution_notes: notes || item.resolution_notes,
                     officer_notes: notes || item.officer_notes,
+                    resolution_photo_url: resolutionPhotoUrl || item.resolution_photo_url,
                     updated_at: new Date().toISOString(),
                   }
                 : item

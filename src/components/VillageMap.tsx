@@ -33,6 +33,7 @@ import {
   GraduationCap,
   Store,
   Landmark,
+  Send,
 } from 'lucide-react';
 import {
   getCurrentPosition,
@@ -948,10 +949,11 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     const photo = officerPhotoMap[item.id];
     const notes = officerNotesMap[item.id] || 'Field repair completed as per standard specification.';
     if (!photo) {
-      showToast('Please capture or attach repair proof photo before submitting.');
+      showToast('Transparency Requirement: Please attach repair proof photo before submitting.');
       return;
     }
     try {
+      await updateIssueStatus(String(item.id), 'pending_resolution_approval', notes, photo).catch(() => {});
       await transitionToResolutionApproval(item.id, photo, notes, 'Field Officer');
       showToast('Resolution & photo proof submitted for Admin audit.');
       setOfficerPhotoMap((prev) => {
@@ -964,6 +966,45 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         delete copy[item.id];
         return copy;
       });
+      if (propSetIssues) {
+        propSetIssues((prev) =>
+          prev.map((i) =>
+            String(i.id) === String(item.id) || i.issue_id === String(item.id)
+              ? {
+                  ...i,
+                  status: 'pending_resolution_approval',
+                  officer_notes: notes,
+                  resolution_photo_url: photo,
+                  updated_at: new Date().toISOString(),
+                }
+              : i
+          )
+        );
+      }
+      setIssuesList((prev) =>
+        prev.map((i) =>
+          String((i as any).id) === String(item.id) || i.issue_id === String(item.id)
+            ? {
+                ...i,
+                status: 'pending_resolution_approval',
+                officer_notes: notes,
+                resolution_photo_url: photo,
+                updated_at: new Date().toISOString(),
+              }
+            : i
+        )
+      );
+      allIssuesRef.current = allIssuesRef.current.map((i) =>
+        String((i as any).id) === String(item.id) || i.issue_id === String(item.id)
+          ? {
+              ...i,
+              status: 'pending_resolution_approval',
+              officer_notes: notes,
+              resolution_photo_url: photo,
+              updated_at: new Date().toISOString(),
+            }
+          : i
+      );
       refreshGrievanceMarkers();
       await refreshMobileWorklist();
     } catch (err) {
@@ -4679,41 +4720,77 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                               )}
 
                               {isUnderInspection && (
-                                <div className="space-y-2 p-2.5 rounded-xl bg-[#0C171C] border border-[#334B56]">
-                                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#38BDF8] block">
-                                    Capture / Upload Repair Proof
-                                  </label>
-
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      capture="environment"
-                                      id={`photo-input-${g.id}`}
-                                      className="hidden"
-                                      onChange={(e) => handleOfficerPhotoSelect(g.id!, e)}
-                                    />
-                                    <label
-                                      htmlFor={`photo-input-${g.id}`}
-                                      className="flex-1 py-2 px-3 rounded-lg bg-[#1B2F38] border border-[#334B56] hover:bg-[#233B46] text-xs font-semibold text-[#F8FAFC] flex items-center justify-center gap-1.5 cursor-pointer min-h-[40px]"
-                                    >
+                                <div className="space-y-2.5 p-2.5 rounded-xl bg-[#0C171C] border border-[#334B56]">
+                                  <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#38BDF8] flex items-center gap-1.5">
                                       <ImageIcon className="w-3.5 h-3.5 text-[#38BDF8]" />
-                                      <span>
-                                        {officerPhotoMap[g.id!] ? 'Change Photo Proof' : 'Attach Repair Photo'}
-                                      </span>
+                                      <span>Repair Photo Evidence</span>
                                     </label>
+                                    {officerPhotoMap[g.id!] ? (
+                                      <span className="px-2 py-0.5 rounded-full bg-[#10B981]/20 text-[#6EE7B7] border border-[#10B981]/40 text-[9px] font-bold">
+                                        Proof Ready
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-full bg-[#F59E0B]/20 text-[#FDE68A] border border-[#F59E0B]/40 text-[9px] font-bold">
+                                        Proof Required
+                                      </span>
+                                    )}
                                   </div>
 
-                                  {officerPhotoMap[g.id!] && (
-                                    <div className="relative w-full h-24 rounded-lg overflow-hidden border border-[#10B981]/50">
-                                      <img
-                                        src={officerPhotoMap[g.id!]}
-                                        alt="Proof preview"
-                                        className="w-full h-full object-cover"
-                                      />
-                                      <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-[#10B981] text-white">
-                                        Ready
-                                      </span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    id={`photo-input-${g.id}`}
+                                    className="hidden"
+                                    onChange={(e) => handleOfficerPhotoSelect(g.id!, e)}
+                                  />
+
+                                  {/* 1. Proper option to capture or attach repaired photo */}
+                                  {!officerPhotoMap[g.id!] ? (
+                                    <label
+                                      htmlFor={`photo-input-${g.id}`}
+                                      className="w-full py-2.5 px-3 rounded-lg bg-[#1B2F38] border-2 border-dashed border-[#38BDF8]/60 hover:bg-[#233B46] text-xs font-bold text-[#F8FAFC] flex items-center justify-center gap-2 cursor-pointer min-h-[44px] transition active:scale-[0.98]"
+                                    >
+                                      <ImageIcon className="w-4 h-4 text-[#38BDF8]" />
+                                      <span>Capture / Attach Repaired Photo</span>
+                                    </label>
+                                  ) : (
+                                    <div className="space-y-1.5">
+                                      <div className="relative w-full h-32 rounded-lg overflow-hidden border border-[#10B981]/50 bg-[#040A0F]">
+                                        <img
+                                          src={officerPhotoMap[g.id!]}
+                                          alt="Proof preview"
+                                          className="w-full h-full object-cover"
+                                        />
+                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent p-2 flex items-center justify-between">
+                                          <span className="text-[10px] text-[#6EE7B7] font-bold flex items-center gap-1">
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-[#10B981]" />
+                                            Ground-Truth Photo Ready
+                                          </span>
+                                          <div className="flex items-center gap-1.5">
+                                            <label
+                                              htmlFor={`photo-input-${g.id}`}
+                                              className="px-2 py-0.5 rounded text-[9px] font-bold bg-[#38BDF8] text-[#0C171C] cursor-pointer"
+                                            >
+                                              Change
+                                            </label>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setOfficerPhotoMap((prev) => {
+                                                  const copy = { ...prev };
+                                                  delete copy[g.id!];
+                                                  return copy;
+                                                });
+                                              }}
+                                              className="px-2 py-0.5 rounded text-[9px] font-bold bg-[#EF4444] text-white cursor-pointer"
+                                            >
+                                              Remove
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
                                     </div>
                                   )}
 
@@ -4727,14 +4804,25 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                                     className="w-full p-2 text-xs rounded-lg bg-[#132228] border border-[#334B56] text-[#F8FAFC] focus:outline-none focus:border-[#10B981]"
                                   />
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOfficerSubmitResolution({ id: g.id!, title: g.title })}
-                                    className="w-full py-2.5 px-3 min-h-[44px] rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] text-[#F8FAFC] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
-                                  >
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    <span>Submit Resolution & Photo</span>
-                                  </button>
+                                  {/* 2. Strict Transparency Gate: ONLY show the option to send report to admin when photo is attached! */}
+                                  {officerPhotoMap[g.id!] ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOfficerSubmitResolution({ id: g.id!, title: g.title })}
+                                      className="w-full py-2.5 px-3 min-h-[44px] rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-teal-900/30 transition active:scale-95 cursor-pointer animate-in fade-in duration-300"
+                                    >
+                                      <Send className="w-4 h-4" />
+                                      <span>Send Repair Report & Photo to Admin</span>
+                                    </button>
+                                  ) : (
+                                    <div className="p-2.5 rounded-lg bg-[#F59E0B]/10 border border-[#F59E0B]/30 text-[#FDE68A] text-[11px] flex items-start gap-2">
+                                      <AlertCircle className="w-4 h-4 shrink-0 text-[#F59E0B] mt-0.5" />
+                                      <div>
+                                        <span className="font-semibold block text-amber-200">Work Transparency Gate</span>
+                                        <span>Attach a photo of the completed repair work above to unlock the <em>"Send Report to Admin"</em> option. Physical proof is mandatory.</span>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
 

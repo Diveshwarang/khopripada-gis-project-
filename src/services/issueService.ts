@@ -255,7 +255,8 @@ export async function assignAndAdvanceIssue(
 export async function updateIssueStatus(
   issueId: string,
   newStatus: AnyIssueStatus,
-  officerNotes?: string
+  officerNotes?: string,
+  resolutionPhotoUrl?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(issueId);
@@ -267,6 +268,10 @@ export async function updateIssueStatus(
     if (officerNotes) {
       updatePayload.resolution_notes = officerNotes;
       updatePayload.officer_notes = officerNotes;
+    }
+
+    if (resolutionPhotoUrl) {
+      updatePayload.resolution_photo_url = resolutionPhotoUrl;
     }
 
     let updatedRows: any[] = [];
@@ -308,6 +313,7 @@ export async function updateIssueStatus(
           assigned_to: seedItem.assigned_to || null,
           resolution_notes: officerNotes || seedItem.resolution_notes || '',
           officer_notes: officerNotes || seedItem.officer_notes || '',
+          resolution_photo_url: resolutionPhotoUrl || (seedItem as any).resolution_photo_url || null,
           created_at: seedItem.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -320,6 +326,7 @@ export async function updateIssueStatus(
       issueId,
       status: newStatus,
       officerNotes,
+      resolutionPhotoUrl,
     });
 
     return { success: true };

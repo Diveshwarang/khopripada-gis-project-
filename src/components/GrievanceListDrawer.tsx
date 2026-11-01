@@ -14,6 +14,7 @@ import {
   User,
   Clock,
   FileText,
+  Send,
 } from 'lucide-react';
 import {
   db,
@@ -194,14 +195,18 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
   // Step 4 (Officer): Submit Resolution & Photo -> sends audit to admin (pending_resolution_approval)
   const handleSubmitResolutionAndPhoto = async (id: string) => {
     const photo = proofPhotoMap[id];
+    if (!photo) {
+      alert('Transparency Requirement: Repair proof photo is mandatory before submitting audit report to Admin.');
+      return;
+    }
     const notes = officerNotesMap[id] || 'Field repair completed as per specifications.';
     try {
-      await updateIssueStatus(id, 'pending_resolution_approval', notes);
+      await updateIssueStatus(id, 'pending_resolution_approval', notes, photo);
       await transitionToResolutionApproval(parseInt(id.replace(/\D/g, '') || '0', 10) || 0, photo || '', notes).catch(() => {});
       setGrievances((prev) =>
-        prev.map((g) => (g.id === id || g.issue_id === id ? { ...g, status: 'pending_resolution_approval', officer_notes: notes } : g))
+        prev.map((g) => (g.id === id || g.issue_id === id ? { ...g, status: 'pending_resolution_approval', officer_notes: notes, resolution_photo_url: photo } : g))
       );
-      setDrawerToast('Repair audit submitted to Panchayat Admin for verification!');
+      setDrawerToast('Repair audit & verified photo proof submitted to Panchayat Admin!');
       setTimeout(() => setDrawerToast(null), 3500);
       if (onGrievanceStatusUpdated) onGrievanceStatusUpdated();
     } catch (err) {
@@ -655,18 +660,80 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                       )}
 
                       {(rawStatus === 'under_inspection' || rawStatus === 'in_progress') && (
-                        <div className="space-y-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActivePhotoUploadId(g.id);
-                              officerFileInputRef.current?.click();
-                            }}
-                            className="w-full py-1 px-2.5 rounded-lg border border-dashed border-[#00E5FF]/60 bg-[#0D1C2A] text-[#00E5FF] text-[10px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                          >
-                            <Camera className="w-3 h-3" />
-                            <span>{proofPhotoMap[g.id] ? 'Photo Attached (Retake)' : 'Capture Repair Photo Proof'}</span>
-                          </button>
+                        <div className="space-y-2 p-2.5 rounded-xl bg-[#08121A] border border-[#1D3B52]">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#00E5FF] flex items-center gap-1.5">
+                              <Camera className="w-3.5 h-3.5 text-[#00E5FF]" />
+                              Repair Photo Evidence
+                            </span>
+                            {proofPhotoMap[g.id] ? (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] font-bold">
+                                Proof Ready
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-bold">
+                                Proof Required
+                              </span>
+                            )}
+                          </div>
+
+                          {/* 1. Proper option to capture / attach repaired photo */}
+                          {!proofPhotoMap[g.id] ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActivePhotoUploadId(g.id);
+                                officerFileInputRef.current?.click();
+                              }}
+                              className="w-full py-2.5 px-3 rounded-lg border-2 border-dashed border-[#00E5FF]/60 hover:border-[#00E5FF] bg-[#00E5FF]/5 hover:bg-[#00E5FF]/10 text-[#00E5FF] text-[11px] font-bold flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.98]"
+                            >
+                              <Camera className="w-4 h-4 text-[#00E5FF]" />
+                              <span>Take / Attach Repaired Site Photo</span>
+                            </button>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <div className="relative w-full h-32 rounded-lg overflow-hidden border border-emerald-500/50 bg-[#040A0F] shadow-inner">
+                                <img
+                                  src={proofPhotoMap[g.id]}
+                                  alt="Repaired work proof"
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#040A0F]/95 via-[#040A0F]/60 to-transparent p-1.5 flex items-center justify-between">
+                                  <span className="text-[9px] text-emerald-300 font-bold flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    Ground-Truth Photo Ready
+                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActivePhotoUploadId(g.id);
+                                        officerFileInputRef.current?.click();
+                                      }}
+                                      className="px-2 py-0.5 rounded text-[9px] font-bold bg-[#00E5FF]/90 hover:bg-[#00E5FF] text-[#040A0F] transition cursor-pointer"
+                                    >
+                                      Change
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setProofPhotoMap((prev) => {
+                                          const copy = { ...prev };
+                                          delete copy[g.id];
+                                          return copy;
+                                        });
+                                      }}
+                                      className="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-500/80 hover:bg-rose-500 text-white transition cursor-pointer"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Repair completion notes */}
                           <input
                             type="text"
                             value={officerNotesMap[g.id] || ''}
@@ -674,27 +741,37 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                               const val = e.target.value;
                               setOfficerNotesMap((prev) => ({ ...prev, [g.id]: val }));
                             }}
-                            placeholder="Field repair completion notes..."
-                            className="w-full bg-[#0D1C2A] border border-[#1D3B52] rounded-lg px-2 py-1 text-white text-[11px] placeholder-[#5A7C93] focus:outline-none focus:border-[#00E5FF]"
+                            placeholder="Enter repair completion notes / materials replaced..."
+                            className="w-full bg-[#0D1C2A] border border-[#1D3B52] focus:border-[#00E5FF] rounded-lg px-2.5 py-1.5 text-white text-[11px] placeholder-[#5A7C93] focus:outline-none"
                           />
+
+                          {/* 2. Strict Transparency Gate: ONLY show the option to send report to admin when photo is attached! */}
                           {userRole === 'admin' ? (
                             <button
                               type="button"
                               onClick={() => handleAdminVerifyResolution(g.id, officerNotesMap[g.id])}
-                              className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                              className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               <span>Verify & Mark Officially Resolved</span>
                             </button>
-                          ) : (
+                          ) : proofPhotoMap[g.id] ? (
                             <button
                               type="button"
                               onClick={() => handleSubmitResolutionAndPhoto(g.id)}
-                              className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-[#0C171C] font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                              className="w-full py-2.5 px-3 rounded-lg bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-400 hover:brightness-110 text-[#07131D] font-bold text-xs shadow-lg shadow-teal-900/30 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2 animate-in fade-in duration-300"
                             >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Submit Repair Audit to Admin</span>
+                              <Send className="w-3.5 h-3.5 text-[#07131D]" />
+                              <span>Send Repair Report & Photo to Admin</span>
                             </button>
+                          ) : (
+                            <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] flex items-start gap-2">
+                              <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                              <div>
+                                <span className="font-semibold block text-amber-200">Work Transparency Gate</span>
+                                <span>Attach a photo of the completed repair work above to unlock the <em>"Send Report to Admin"</em> option. Physical proof is mandatory.</span>
+                              </div>
+                            </div>
                           )}
                         </div>
                       )}
