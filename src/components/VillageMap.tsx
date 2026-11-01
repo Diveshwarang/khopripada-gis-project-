@@ -18,6 +18,7 @@ import {
   ClipboardList,
   ClipboardCheck,
   BarChart3,
+  PieChart,
   Activity,
   CheckCircle2,
   X,
@@ -257,7 +258,8 @@ function buildFacilityPopupHTML(fac: FacilityAsset | any): string {
 }
 
 function buildIssuePopupHTML(issue: CivicIssue | any, userRole: string): string {
-  const isOfficerOrAdmin = userRole === 'officer' || userRole === 'admin';
+  const isOfficer = userRole === 'officer';
+  const isAdmin = userRole === 'admin';
 
   const statusConfig: Record<string, { label: string; bg: string; text: string; step: number }> = {
     reported: { label: 'Step 1: Registered', bg: '#FEF2F2', text: '#DC2626', step: 1 },
@@ -266,9 +268,9 @@ function buildIssuePopupHTML(issue: CivicIssue | any, userRole: string): string 
     assigned_for_inspection: { label: 'Step 2: Assigned', bg: '#FFFBEB', text: '#D97706', step: 2 },
     under_inspection: { label: 'Step 3: Field Inspection', bg: '#EFF6FF', text: '#2563EB', step: 3 },
     pending_inspection_verification: { label: 'Step 3: Field Inspection', bg: '#EFF6FF', text: '#2563EB', step: 3 },
-    resolved: { label: 'Step 4: Repaired', bg: '#F0FDF4', text: '#16A34A', step: 4 },
-    pending_resolution_approval: { label: 'Step 4: Repaired', bg: '#F0FDF4', text: '#16A34A', step: 4 },
-    verified_closed: { label: 'Step 5: Verified & Closed', bg: '#ECFDF5', text: '#059669', step: 5 },
+    pending_resolution_approval: { label: 'Step 4: Pending Admin Audit', bg: '#FFFBEB', text: '#D97706', step: 4 },
+    resolved: { label: 'Step 5: Verified & Resolved', bg: '#F0FDF4', text: '#16A34A', step: 5 },
+    verified_closed: { label: 'Step 5: Verified & Resolved', bg: '#ECFDF5', text: '#059669', step: 5 },
   };
 
   const rawStatus = (issue.status || 'reported').toLowerCase();
@@ -278,8 +280,8 @@ function buildIssuePopupHTML(issue: CivicIssue | any, userRole: string): string 
   let selectVal: IssueStatus = 'reported';
   if (rawStatus === 'assigned' || rawStatus === 'assigned_for_inspection') selectVal = 'assigned';
   else if (rawStatus === 'under_inspection' || rawStatus === 'pending_inspection_verification') selectVal = 'under_inspection';
-  else if (rawStatus === 'resolved' || rawStatus === 'pending_resolution_approval') selectVal = 'resolved';
-  else if (rawStatus === 'verified_closed') selectVal = 'verified_closed';
+  else if (rawStatus === 'pending_resolution_approval') selectVal = 'pending_resolution_approval' as any;
+  else if (rawStatus === 'resolved' || rawStatus === 'verified_closed') selectVal = 'resolved';
 
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; width: 260px; padding: 4px; color: #0F172A; background: #FFFFFF; border-radius: 8px;">
@@ -314,11 +316,11 @@ function buildIssuePopupHTML(issue: CivicIssue | any, userRole: string): string 
       </div>
 
       ${
-        isOfficerOrAdmin
+        isAdmin
           ? `
         <div style="background: #F1F5F9; border-radius: 6px; padding: 6px; margin-top: 6px;">
           <label style="display: block; font-size: 10px; font-weight: 700; color: #475569; margin-bottom: 4px;">
-            Update Fix Status:
+            Panchayat Admin Verification:
           </label>
           <select 
             id="status-select-${issueId}" 
@@ -329,9 +331,53 @@ function buildIssuePopupHTML(issue: CivicIssue | any, userRole: string): string 
             <option value="reported" ${selectVal === 'reported' ? 'selected' : ''}>Step 1: Registered</option>
             <option value="assigned" ${selectVal === 'assigned' ? 'selected' : ''}>Step 2: Assigned to Officer</option>
             <option value="under_inspection" ${selectVal === 'under_inspection' ? 'selected' : ''}>Step 3: Field Inspection</option>
-            <option value="resolved" ${selectVal === 'resolved' ? 'selected' : ''}>Step 4: Work Repaired</option>
-            <option value="verified_closed" ${selectVal === 'verified_closed' ? 'selected' : ''}>Step 5: Verified & Closed</option>
+            <option value="pending_resolution_approval" ${selectVal === 'pending_resolution_approval' ? 'selected' : ''}>Step 4: Pending Resolution Audit</option>
+            <option value="resolved" ${selectVal === 'resolved' ? 'selected' : ''}>Step 5: Verified & Resolved</option>
           </select>
+
+          ${
+            rawStatus === 'pending_resolution_approval'
+              ? `
+            <button 
+              type="button" 
+              data-issue-id="${issueId}" 
+              class="admin-verify-resolution-btn"
+              style="width: 100%; margin-top: 6px; background: #059669; color: #FFFFFF; font-size: 11px; font-weight: 700; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;"
+            >
+              ✓ Verify & Sign-Off Resolution
+            </button>
+            `
+              : ''
+          }
+        </div>
+      `
+          : isOfficer
+          ? `
+        <div style="background: #F1F5F9; border-radius: 6px; padding: 6px; margin-top: 6px;">
+          <label style="display: block; font-size: 10px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+            Field Operations Control:
+          </label>
+          ${
+            rawStatus === 'pending_resolution_approval'
+              ? `
+            <div style="font-size: 10px; color: #D97706; font-weight: 700; text-align: center; background: #FFFBEB; padding: 6px; border-radius: 4px; border: 1px solid #FCD34D;">
+              ⌛ Audit Sent to Admin for Sign-Off
+            </div>
+            `
+              : `
+            <select 
+              id="status-select-${issueId}" 
+              data-issue-id="${issueId}"
+              class="issue-status-dropdown"
+              style="width: 100%; font-size: 11px; padding: 4px 6px; border: 1px solid #CBD5E1; border-radius: 4px; background: #FFFFFF; color: #0F172A; font-weight: 600; cursor: pointer;"
+            >
+              <option value="reported" ${selectVal === 'reported' ? 'selected' : ''}>Step 1: Registered</option>
+              <option value="assigned" ${selectVal === 'assigned' ? 'selected' : ''}>Step 2: Assigned for Inspection</option>
+              <option value="under_inspection" ${selectVal === 'under_inspection' ? 'selected' : ''}>Step 3: Field Inspection</option>
+              <option value="pending_resolution_approval">Step 4: Send Audit to Admin</option>
+            </select>
+            `
+          }
         </div>
       `
           : `
@@ -575,17 +621,55 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     };
   }, [safeFacilities]);
 
-  // Priority breakdown counts for village issues (defensive reads)
+  // Priority and resolution breakdown counts for village issues
   const issueCounts = useMemo(() => {
+    const activeList = issues.filter((i) => {
+      const st = (i?.status || 'reported').toLowerCase();
+      return st !== 'resolved' && st !== 'verified_closed';
+    });
+    const resolvedList = issues.filter((i) => {
+      const st = (i?.status || '').toLowerCase();
+      return st === 'resolved' || st === 'verified_closed';
+    });
+    const pendingAuditList = issues.filter((i) => {
+      const st = (i?.status || '').toLowerCase();
+      return (
+        st === 'pending_resolution_approval' ||
+        st === 'under_inspection' ||
+        st === 'pending_inspection_verification'
+      );
+    });
+
     return {
-      total: safeIssues.length,
-      high: safeIssues.filter(
+      total: activeList.length,
+      active: activeList.length,
+      resolved: resolvedList.length,
+      pendingAudit: pendingAuditList.length,
+      high: activeList.filter(
         (i) => i?.severity === 'high' || i?.severity === 'critical' || i?.severity === 'urgent'
       ).length,
-      medium: safeIssues.filter((i) => i?.severity === 'medium').length,
-      low: safeIssues.filter((i) => i?.severity === 'low').length,
+      medium: activeList.filter((i) => i?.severity === 'medium').length,
+      low: activeList.filter((i) => i?.severity === 'low').length,
     };
-  }, [safeIssues]);
+  }, [issues]);
+
+  const issueResolutionData = useMemo(() => {
+    const total = issues.length || 1;
+    const resolvedCount = issueCounts.resolved;
+    const auditCount = issueCounts.pendingAudit;
+    const activeCount = issueCounts.active;
+
+    const resolvedPct = Math.round((resolvedCount / total) * 100);
+    const auditPct = Math.round((auditCount / total) * 100);
+    const activePct = Math.max(0, 100 - resolvedPct - auditPct);
+
+    return {
+      total: issues.length,
+      resolved: { count: resolvedCount, pct: resolvedPct },
+      pendingAudit: { count: auditCount, pct: auditPct },
+      active: { count: activeCount, pct: activePct },
+    };
+  }, [issues, issueCounts]);
 
   // Category breakdown counts for village facilities (defensive reads)
   const categoryCounts = useMemo(() => {
@@ -1926,7 +2010,14 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
     const currentIssues = (issues && issues.length > 0) ? issues : PREDEFINED_SURVEY_ISSUES;
 
-    currentIssues.forEach((issue) => {
+    // Filter to only render active (unresolved) issues on the map canvas
+    // When an issue is resolved by the Admin, it is automatically removed from active problem pins
+    const activeIssues = currentIssues.filter((iss) => {
+      const st = (iss.status || 'reported').toLowerCase();
+      return st !== 'resolved' && st !== 'verified_closed';
+    });
+
+    activeIssues.forEach((issue) => {
       const lat = Number(issue?.latitude);
       const lng = Number(issue?.longitude);
       if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
@@ -2194,18 +2285,22 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       const visibleGrievances = allGrievances.filter((g) => {
         const isResident = userRoleRef.current === 'user';
         const isOfficer = userRoleRef.current === 'officer';
+        const st = (g.status || '').toLowerCase();
 
-        // Requirement 4A: Resident map ONLY renders pins that have reached 'under_inspection' or 'resolved'
+        // Resolved issues are removed from active map pins, decreasing map issue count
+        if (st === 'resolved' || st === 'verified_closed') {
+          return false;
+        }
+
+        // Requirement 4A: Resident map ONLY renders pins that have reached 'under_inspection'
         if (isResident) {
-          const st = (g.status || '').toLowerCase();
-          if (st !== 'under_inspection' && st !== 'resolved') {
+          if (st !== 'under_inspection') {
             return false;
           }
         }
 
         // Requirement 4C: Officer worklist/map hides Step 1 (pending_initial_approval)
         if (isOfficer) {
-          const st = (g.status || '').toLowerCase();
           if (st === 'pending_initial_approval') {
             return false;
           }
@@ -2854,11 +2949,56 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       }
     };
 
+    const handlePopupClick = async (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const verifyBtn = target.closest('.admin-verify-resolution-btn') as HTMLButtonElement;
+      if (verifyBtn) {
+        const issueId = verifyBtn.getAttribute('data-issue-id');
+        if (!issueId) return;
+
+        verifyBtn.disabled = true;
+        verifyBtn.innerText = 'Verifying...';
+
+        const result = await updateIssueStatus(issueId, 'resolved');
+        if (result.success) {
+          if (propSetIssues) {
+            propSetIssues((prev) =>
+              prev.map((item) =>
+                String(item.id) === issueId || item.issue_id === issueId
+                  ? { ...item, status: 'resolved', updated_at: new Date().toISOString() }
+                  : item
+              )
+            );
+          }
+          setIssuesList((prev) =>
+            prev.map((item) =>
+              String((item as any).id) === issueId || item.issue_id === issueId
+                ? { ...item, status: 'resolved', updated_at: new Date().toISOString() }
+                : item
+            )
+          );
+          allIssuesRef.current = allIssuesRef.current.map((item) =>
+            String((item as any).id) === issueId || item.issue_id === issueId
+              ? { ...item, status: 'resolved' }
+              : item
+          );
+          map.closePopup();
+          showToast('Resolution officially verified & approved! Decreased from active map.');
+        } else {
+          alert('Failed to verify resolution: ' + result.error);
+          verifyBtn.disabled = false;
+          verifyBtn.innerText = '✓ Verify & Sign-Off Resolution';
+        }
+      }
+    };
+
     const container = map.getContainer();
     container.addEventListener('change', handlePopupDomChange);
+    container.addEventListener('click', handlePopupClick);
 
     return () => {
       container.removeEventListener('change', handlePopupDomChange);
+      container.removeEventListener('click', handlePopupClick);
     };
   }, [propSetIssues]);
 
@@ -3161,7 +3301,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         onOpenMobileSheet={(sheet) => setMobileSheet(sheet)}
         mobileSheet={mobileSheet}
         facilityCount={facilitiesList.length}
-        issueCount={issues.length}
+        issueCount={issueCounts.active}
       />
 
       {/* 2. MAIN DASHBOARD VIEWPORT (MAP + SIDEBAR SPLIT) */}
@@ -3702,9 +3842,9 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         >
           <div className="relative">
             <AlertCircle className="w-4 h-4 text-[#EF4444]" />
-            {issues.length > 0 && (
+            {issueCounts.active > 0 && (
               <span className="absolute -top-1 -right-2 px-1 rounded-full bg-[#EF4444] text-white text-[8px] font-mono font-bold leading-none">
-                {issues.length}
+                {issueCounts.active}
               </span>
             )}
           </div>
@@ -3831,7 +3971,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                             Active Problems
                           </div>
                           <div className="text-xl font-bold font-mono text-[#CC6346] dark:text-[#E05A47] mt-0.5">
-                            {issueCounts.total}
+                            {issueCounts.active}
                           </div>
                           <div className="text-[10px] text-[#CC6346] dark:text-[#FCA5A5] font-semibold mt-0.5 truncate">
                             {highGrievances} High • {medGrievances} Med
@@ -3843,11 +3983,11 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                           <div className="text-[9px] tracking-wider uppercase font-semibold text-[#566E67] dark:text-[#94A3B8]">
                             Solved Problems
                           </div>
-                          <div className="text-xl font-bold font-mono text-[#55949F] dark:text-[#38BDF8] mt-0.5">
-                            {operationalCounts.functional}
+                          <div className="text-xl font-bold font-mono text-[#10B981] mt-0.5">
+                            {issueCounts.resolved}
                           </div>
-                          <div className="text-[10px] text-[#55949F] dark:text-[#38BDF8] font-semibold mt-0.5 truncate">
-                            Verified Resolved
+                          <div className="text-[10px] text-[#10B981] font-semibold mt-0.5 truncate">
+                            {issueResolutionData.resolved.pct}% Resolved
                           </div>
                         </div>
                       </div>
@@ -3926,14 +4066,15 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                     </div>
                   </div>
 
-                  {/* C. Facility Condition Health Donut Chart */}
+                  {/* C. Civic Issues Resolution Progress Donut Chart */}
                   <div className="p-3.5 rounded-2xl bg-[#1B2F38] border border-[#334B56] space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#F8FAFC] block uppercase tracking-wider">
-                        Facility Condition Health
+                      <span className="text-xs font-bold text-[#F8FAFC] block uppercase tracking-wider flex items-center gap-1.5">
+                        <PieChart className="w-3.5 h-3.5 text-[#10B981]" />
+                        Civic Issues Resolution Progress
                       </span>
                       <span className="text-[10px] font-mono font-bold text-[#10B981] bg-[#10B981]/15 px-2 py-0.5 rounded-full border border-[#10B981]/40">
-                        Live Audit Status
+                        {issueResolutionData.total} Total Issues
                       </span>
                     </div>
 
@@ -3941,24 +4082,16 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                     <div className="flex items-center justify-center py-1">
                       <div className="relative w-40 h-40 flex items-center justify-center">
                         {(() => {
-                          const total = facilitiesList.length || 1;
-                          const func = operationalCounts.functional;
-                          const part = operationalCounts.partial;
-
-                          const funcPct = Math.round((func / total) * 100);
-                          const partPct = Math.round((part / total) * 100);
-                          const nonFuncPct = Math.max(0, 100 - funcPct - partPct);
-
                           const radius = 54;
                           const circumference = 2 * Math.PI * radius; // ~339.29
 
-                          const funcLen = (funcPct / 100) * circumference;
-                          const partLen = (partPct / 100) * circumference;
-                          const nonFuncLen = (nonFuncPct / 100) * circumference;
+                          const resLen = (issueResolutionData.resolved.pct / 100) * circumference;
+                          const auditLen = (issueResolutionData.pendingAudit.pct / 100) * circumference;
+                          const activeLen = (issueResolutionData.active.pct / 100) * circumference;
 
-                          const funcOffset = 0;
-                          const partOffset = -funcLen;
-                          const nonFuncOffset = -(funcLen + partLen);
+                          const resOffset = 0;
+                          const auditOffset = -resLen;
+                          const activeOffset = -(resLen + auditLen);
 
                           return (
                             <>
@@ -3976,8 +4109,8 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                                   strokeWidth="16"
                                 />
 
-                                {/* Functional Segment (Emerald #10B981) */}
-                                {funcLen > 0 && (
+                                {/* Verified Resolved Segment (Emerald #10B981) */}
+                                {resLen > 0 && (
                                   <circle
                                     cx="80"
                                     cy="80"
@@ -3985,14 +4118,14 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                                     fill="none"
                                     stroke="#10B981"
                                     strokeWidth="16"
-                                    strokeDasharray={`${funcLen} ${circumference}`}
-                                    strokeDashoffset={funcOffset}
+                                    strokeDasharray={`${resLen} ${circumference}`}
+                                    strokeDashoffset={resOffset}
                                     strokeLinecap="butt"
                                   />
                                 )}
 
-                                {/* Degraded / Partial Segment (Amber #F59E0B) */}
-                                {partLen > 0 && (
+                                {/* Under Audit / Inspecting Segment (Amber #F59E0B) */}
+                                {auditLen > 0 && (
                                   <circle
                                     cx="80"
                                     cy="80"
@@ -4000,14 +4133,14 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                                     fill="none"
                                     stroke="#F59E0B"
                                     strokeWidth="16"
-                                    strokeDasharray={`${partLen} ${circumference}`}
-                                    strokeDashoffset={partOffset}
+                                    strokeDasharray={`${auditLen} ${circumference}`}
+                                    strokeDashoffset={auditOffset}
                                     strokeLinecap="butt"
                                   />
                                 )}
 
-                                {/* Broken Segment (Terracotta #E05A47) */}
-                                {nonFuncLen > 0 && (
+                                {/* Active Grievances Segment (Terracotta #E05A47) */}
+                                {activeLen > 0 && (
                                   <circle
                                     cx="80"
                                     cy="80"
@@ -4015,20 +4148,20 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                                     fill="none"
                                     stroke="#E05A47"
                                     strokeWidth="16"
-                                    strokeDasharray={`${nonFuncLen} ${circumference}`}
-                                    strokeDashoffset={nonFuncOffset}
+                                    strokeDasharray={`${activeLen} ${circumference}`}
+                                    strokeDashoffset={activeOffset}
                                     strokeLinecap="butt"
                                   />
                                 )}
                               </svg>
 
-                              {/* Inner center label: 81% HEALTHY in bold #F8FAFC */}
+                              {/* Inner center label: e.g. 75% RESOLVED */}
                               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
-                                <span className="text-base font-bold font-mono text-[#F8FAFC] leading-none">
-                                  {funcPct}% HEALTHY
+                                <span className="text-base font-bold font-mono text-[#10B981] leading-none">
+                                  {issueResolutionData.resolved.pct}%
                                 </span>
                                 <span className="text-[9px] font-semibold text-[#94A3B8] tracking-wider uppercase mt-1">
-                                  ASSET CONDITION
+                                  RESOLVED
                                 </span>
                               </div>
                             </>
@@ -4037,45 +4170,32 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                       </div>
                     </div>
 
-                    {/* Clean legend pills below: Green dot, Amber dot, Red dot */}
-                    {(() => {
-                      const total = facilitiesList.length || 1;
-                      const func = operationalCounts.functional;
-                      const part = operationalCounts.partial;
-                      const nonFunc = operationalCounts.nonFunctional;
+                    {/* Clean legend pills below: Emerald dot, Amber dot, Coral dot */}
+                    <div className="grid grid-cols-3 gap-1.5 pt-1">
+                      {/* Emerald dot: Resolved */}
+                      <div className="p-2 rounded-xl bg-[#0C171C] border border-[#10B981]/40 flex items-center justify-center gap-1.5 text-center min-h-[40px]">
+                        <span className="w-2 h-2 rounded-full bg-[#10B981] shadow-[0_0_6px_#10B981] flex-shrink-0" />
+                        <span className="text-[11px] text-[#F8FAFC] font-medium truncate">
+                          Resolved: <strong className="text-[#10B981] font-mono">{issueResolutionData.resolved.count}</strong> ({issueResolutionData.resolved.pct}%)
+                        </span>
+                      </div>
 
-                      const funcPct = Math.round((func / total) * 100);
-                      const partPct = Math.round((part / total) * 100);
-                      const nonFuncPct = Math.max(0, 100 - funcPct - partPct);
+                      {/* Amber dot: Under Audit */}
+                      <div className="p-2 rounded-xl bg-[#0C171C] border border-[#F59E0B]/40 flex items-center justify-center gap-1.5 text-center min-h-[40px]">
+                        <span className="w-2 h-2 rounded-full bg-[#F59E0B] shadow-[0_0_6px_#F59E0B] flex-shrink-0" />
+                        <span className="text-[11px] text-[#F8FAFC] font-medium truncate">
+                          Audit: <strong className="text-[#F59E0B] font-mono">{issueResolutionData.pendingAudit.count}</strong> ({issueResolutionData.pendingAudit.pct}%)
+                        </span>
+                      </div>
 
-                      return (
-                        <div className="grid grid-cols-3 gap-1.5 pt-1">
-                          {/* Green dot: Functional: 14 (81%) */}
-                          <div className="p-2 rounded-xl bg-[#0C171C] border border-[#334B56] flex items-center justify-center gap-1.5 text-center min-h-[40px]">
-                            <span className="w-2 h-2 rounded-full bg-[#10B981] shadow-[0_0_6px_#10B981] flex-shrink-0" />
-                            <span className="text-[11px] text-[#F8FAFC] font-medium truncate">
-                              Functional: <strong className="text-[#10B981] font-mono">{func}</strong> ({funcPct}%)
-                            </span>
-                          </div>
-
-                          {/* Amber dot: Degraded: 3 (14%) */}
-                          <div className="p-2 rounded-xl bg-[#0C171C] border border-[#334B56] flex items-center justify-center gap-1.5 text-center min-h-[40px]">
-                            <span className="w-2 h-2 rounded-full bg-[#F59E0B] shadow-[0_0_6px_#F59E0B] flex-shrink-0" />
-                            <span className="text-[11px] text-[#F8FAFC] font-medium truncate">
-                              Degraded: <strong className="text-[#F59E0B] font-mono">{part}</strong> ({partPct}%)
-                            </span>
-                          </div>
-
-                          {/* Red dot: Broken: 1 (5%) */}
-                          <div className="p-2 rounded-xl bg-[#0C171C] border border-[#334B56] flex items-center justify-center gap-1.5 text-center min-h-[40px]">
-                            <span className="w-2 h-2 rounded-full bg-[#E05A47] shadow-[0_0_6px_#E05A47] flex-shrink-0" />
-                            <span className="text-[11px] text-[#F8FAFC] font-medium truncate">
-                              Broken: <strong className="text-[#E05A47] font-mono">{nonFunc}</strong> ({nonFuncPct}%)
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })()}
+                      {/* Red dot: Active */}
+                      <div className="p-2 rounded-xl bg-[#0C171C] border border-[#E05A47]/40 flex items-center justify-center gap-1.5 text-center min-h-[40px]">
+                        <span className="w-2 h-2 rounded-full bg-[#E05A47] shadow-[0_0_6px_#E05A47] flex-shrink-0" />
+                        <span className="text-[11px] text-[#F8FAFC] font-medium truncate">
+                          Active: <strong className="text-[#E05A47] font-mono">{issueResolutionData.active.count}</strong> ({issueResolutionData.active.pct}%)
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* D. DBSCAN Failure Clusters & Spatial Density */}
@@ -4769,7 +4889,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-mono text-red-400 bg-red-950/60 border border-red-800/60 px-1.5 py-0.5 rounded">
-                          {issues.length} Active
+                          {issueCounts.active} Active
                         </span>
                         <input
                           type="checkbox"

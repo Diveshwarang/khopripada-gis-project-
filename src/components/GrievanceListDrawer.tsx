@@ -151,13 +151,17 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
 
   // Handle direct status change for Officer and Admin
   const handleStatusChange = async (id: string, newStatus: string) => {
+    let targetStatus = newStatus as IssueStatus;
+    if (userRole === 'officer' && (targetStatus === 'resolved' || targetStatus === 'verified_closed')) {
+      targetStatus = 'pending_resolution_approval';
+    }
     try {
-      const res = await updateIssueStatus(id, newStatus as IssueStatus);
+      const res = await updateIssueStatus(id, targetStatus);
       if (res.success) {
         setGrievances((prev) =>
-          prev.map((g) => (g.id === id || g.issue_id === id ? { ...g, status: newStatus } : g))
+          prev.map((g) => (g.id === id || g.issue_id === id ? { ...g, status: targetStatus } : g))
         );
-        setDrawerToast(`Status updated to "${newStatus.replace(/_/g, ' ')}"`);
+        setDrawerToast(`Status updated to "${targetStatus.replace(/_/g, ' ')}"`);
         setTimeout(() => setDrawerToast(null), 3000);
         if (onGrievanceStatusUpdated) onGrievanceStatusUpdated();
       } else {
@@ -184,21 +188,39 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     }
   };
 
-  // Step 4 (Officer): Submit Resolution & Photo -> updates status to resolved
+  // Step 4 (Officer): Submit Resolution & Photo -> sends audit to admin (pending_resolution_approval)
   const handleSubmitResolutionAndPhoto = async (id: string) => {
     const photo = proofPhotoMap[id];
     const notes = officerNotesMap[id] || 'Field repair completed as per specifications.';
     try {
-      await updateIssueStatus(id, 'resolved', notes);
+      await updateIssueStatus(id, 'pending_resolution_approval', notes);
       await transitionToResolutionApproval(parseInt(id.replace(/\D/g, '') || '0', 10) || 0, photo || '', notes).catch(() => {});
       setGrievances((prev) =>
-        prev.map((g) => (g.id === id || g.issue_id === id ? { ...g, status: 'resolved', officer_notes: notes } : g))
+        prev.map((g) => (g.id === id || g.issue_id === id ? { ...g, status: 'pending_resolution_approval', officer_notes: notes } : g))
       );
-      setDrawerToast('Issue marked Resolved! Changes synced to cloud.');
+      setDrawerToast('Repair audit submitted to Panchayat Admin for verification!');
       setTimeout(() => setDrawerToast(null), 3500);
       if (onGrievanceStatusUpdated) onGrievanceStatusUpdated();
     } catch (err) {
-      console.error('Failed to submit resolution:', err);
+      console.error('Failed to submit resolution audit:', err);
+    }
+  };
+
+  // Step 5 (Admin): Verify and Mark Officially Resolved
+  const handleAdminVerifyResolution = async (id: string, notes?: string) => {
+    try {
+      const auditNotes = notes || 'Repair inspected, verified and officially resolved by Admin.';
+      const res = await updateIssueStatus(id, 'resolved', auditNotes);
+      if (res.success) {
+        setGrievances((prev) =>
+          prev.map((g) => (g.id === id || g.issue_id === id ? { ...g, status: 'resolved', officer_notes: auditNotes } : g))
+        );
+        setDrawerToast('Issue officially verified & marked Resolved by Admin!');
+        setTimeout(() => setDrawerToast(null), 3500);
+        if (onGrievanceStatusUpdated) onGrievanceStatusUpdated();
+      }
+    } catch (err) {
+      console.error('Failed to verify resolution:', err);
     }
   };
 
@@ -266,7 +288,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
         if (statusFilter === 'reported' && st !== 'reported' && st !== 'pending_initial_approval') return false;
         if (statusFilter === 'assigned' && st !== 'assigned' && st !== 'assigned_for_inspection') return false;
         if (statusFilter === 'under_inspection' && st !== 'under_inspection' && st !== 'pending_inspection_verification') return false;
-        if (statusFilter === 'resolved' && st !== 'resolved' && st !== 'pending_resolution_approval' && st !== 'verified_closed') return false;
+        if (statusFilter === 'resolved' && st !== 'resolved' && st !== 'verified_closed') return false;
       }
 
       // 2. Search Query
@@ -292,7 +314,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
       if (st === 'reported' || st === 'pending_initial_approval') counts.reported++;
       else if (st === 'assigned' || st === 'assigned_for_inspection') counts.assigned++;
       else if (st === 'under_inspection' || st === 'pending_inspection_verification') counts.under_inspection++;
-      else if (st === 'resolved' || st === 'pending_resolution_approval' || st === 'verified_closed') counts.resolved++;
+      else if (st === 'resolved' || st === 'verified_closed') counts.resolved++;
     }
     return counts;
   }, [grievances]);
@@ -314,8 +336,11 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     if (st === 'under_inspection' || st === 'pending_inspection_verification') {
       return { label: 'Step 3: Field Inspection', bg: 'bg-blue-950/60 text-blue-300 border-blue-700/60' };
     }
-    if (st === 'resolved' || st === 'pending_resolution_approval') {
-      return { label: 'Step 4: Work Repaired', bg: 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60' };
+    if (st === 'pending_resolution_approval') {
+      return { label: 'Step 4: Audit Sent to Admin', bg: 'bg-amber-950/60 text-amber-300 border-amber-500/80 animate-pulse' };
+    }
+    if (st === 'resolved') {
+      return { label: 'Step 5: Verified & Resolved', bg: 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60' };
     }
     if (st === 'verified_closed') {
       return { label: 'Step 5: Verified & Closed', bg: 'bg-teal-950/60 text-teal-300 border-teal-700/60' };
@@ -592,7 +617,8 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                           value={
                             rawStatus === 'assigned_for_inspection' ? 'assigned' :
                             rawStatus === 'pending_inspection_verification' ? 'under_inspection' :
-                            rawStatus === 'pending_resolution_approval' ? 'resolved' :
+                            rawStatus === 'pending_resolution_approval' ? 'pending_resolution_approval' :
+                            rawStatus === 'verified_closed' ? 'resolved' :
                             rawStatus
                           }
                           onChange={(e) => handleStatusChange(g.id, e.target.value)}
@@ -601,8 +627,15 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                           <option value="reported">Step 1: Registered</option>
                           <option value="assigned">Step 2: Assigned</option>
                           <option value="under_inspection">Step 3: Field Inspection</option>
-                          <option value="resolved">Step 4: Work Repaired</option>
-                          <option value="verified_closed">Step 5: Verified & Closed</option>
+                          <option value="pending_resolution_approval">Step 4: Audit Sent to Admin</option>
+                          {userRole === 'admin' ? (
+                            <>
+                              <option value="resolved">Step 5: Verified & Resolved</option>
+                              <option value="verified_closed">Step 5: Verified & Closed</option>
+                            </>
+                          ) : (
+                            <option value="resolved" disabled>Step 5: Verified & Resolved (Admin Only)</option>
+                          )}
                         </select>
                       </div>
 
@@ -644,12 +677,47 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                           <button
                             type="button"
                             onClick={() => handleSubmitResolutionAndPhoto(g.id)}
-                            className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                            className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-[#0C171C] font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Mark Resolved & Submit Proof</span>
+                            <span>Submit Repair Audit to Admin</span>
                           </button>
                         </div>
+                      )}
+
+                      {/* Step 4: Pending Resolution Approval Queue */}
+                      {rawStatus === 'pending_resolution_approval' && (
+                        userRole === 'admin' ? (
+                          <div className="space-y-1.5">
+                            <div className="text-[10px] text-amber-300 bg-amber-950/40 p-2 rounded-lg border border-amber-600/60 flex items-center gap-2">
+                              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-pulse" />
+                              <div className="flex-1">
+                                <span className="font-semibold block text-amber-200">Repair Audit Awaiting Admin Sign-Off</span>
+                                {g.officer_notes && (
+                                  <span className="text-[10px] text-[#8CB0C9] italic block mt-0.5">
+                                    "{g.officer_notes}"
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleAdminVerifyResolution(g.id, g.officer_notes)}
+                              className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>✓ Verify & Mark Officially Resolved</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-600/60 text-amber-300 text-xs flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+                            <div>
+                              <span className="font-semibold block text-amber-200">Audit Sent to Admin</span>
+                              <span className="text-[10px] text-amber-300/80">Awaiting Panchayat Admin sign-off and verification</span>
+                            </div>
+                          </div>
+                        )
                       )}
                     </div>
                   )}

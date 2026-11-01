@@ -4,11 +4,15 @@ export type UserRole = 'admin' | 'officer' | 'user';
 export type OperationalStatus = 'functional' | 'partially_functional' | 'non_functional' | string;
 
 export type IssueStatus =
-  | 'reported'          // Step 1: Newly submitted by resident
-  | 'assigned'          // Step 2: Assigned to field officer
-  | 'under_inspection'  // Step 3: Officer inspecting on site
-  | 'resolved'          // Step 4: Repair complete, photo uploaded
-  | 'verified_closed';  // Step 5: Sarpanch / Admin verified & closed
+  | 'reported'                      // Step 1: Newly submitted by resident
+  | 'pending_initial_approval'      // Step 1: Awaiting initial review
+  | 'assigned'                      // Step 2: Assigned to field officer
+  | 'assigned_for_inspection'       // Step 2: Assigned for inspection
+  | 'under_inspection'              // Step 3: Officer inspecting on site
+  | 'pending_inspection_verification' // Step 3: Officer requested inspection authorization
+  | 'pending_resolution_approval'   // Step 4: Officer sent audit to admin for sign-off
+  | 'resolved'                      // Step 5: Repair verified & closed by Admin
+  | 'verified_closed';              // Step 5: Sarpanch / Admin verified & closed
 
 export interface FacilityMetadata {
   payment_modes?: string[]; // e.g. ['UPI / QR Code', 'Cash Only']

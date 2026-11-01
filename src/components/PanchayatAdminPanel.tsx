@@ -324,7 +324,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
     return topIssues.reduce((sum, item) => sum + (item.estimated_budget_inr || 45000), 0);
   }, [topIssues]);
 
-  // C. Village Analytics - 1. Issue Categories Breakdown
+  // C. Village Analytics - 1. Issue Categories Breakdown (Active Unresolved Faults)
   const categoryData = useMemo(() => {
     const counts: Record<string, number> = {
       Roads: 0,
@@ -334,7 +334,13 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
       Electricity: 0,
     };
 
-    issues.forEach((iss) => {
+    // Filter to active unresolved issues
+    const activeList = issues.filter((iss) => {
+      const st = (iss.status || '').toLowerCase();
+      return st !== 'resolved' && st !== 'verified_closed';
+    });
+
+    activeList.forEach((iss) => {
       const cat = (iss.category || '').toLowerCase();
       const title = (iss.title || '').toLowerCase();
       if (cat.includes('road') || cat.includes('pothole') || title.includes('road')) {
@@ -350,15 +356,6 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
       }
     });
 
-    // Ensure minimum representative numbers if empty survey loaded
-    if (Object.values(counts).every((v) => v === 0)) {
-      counts.Roads = 6;
-      counts.Water = 4;
-      counts.Drainage = 3;
-      counts.Sanitation = 2;
-      counts.Electricity = 1;
-    }
-
     const maxVal = Math.max(...Object.values(counts), 1);
     return Object.entries(counts).map(([name, count]) => ({
       name,
@@ -367,31 +364,39 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
     }));
   }, [issues]);
 
-  // C. Village Analytics - 2. Facility Conditions Breakdown (Functional, Degraded, Broken)
-  const conditionData = useMemo(() => {
-    let functional = 0;
-    let degraded = 0;
-    let broken = 0;
+  // C. Village Analytics - 2. Issue Resolution & Fix Breakdown
+  const issueResolutionData = useMemo(() => {
+    let resolved = 0;
+    let pendingAudit = 0;
+    let active = 0;
 
-    facilities.forEach((f) => {
-      const st = (f.operational_status || '').toLowerCase();
-      if (st.includes('non') || st.includes('broken') || st.includes('repair')) {
-        broken += 1;
-      } else if (st.includes('part') || st.includes('degrad')) {
-        degraded += 1;
+    issues.forEach((iss) => {
+      const st = (iss.status || '').toLowerCase();
+      if (st === 'resolved' || st === 'verified_closed') {
+        resolved += 1;
+      } else if (
+        st === 'pending_resolution_approval' ||
+        st === 'under_inspection' ||
+        st === 'pending_inspection_verification'
+      ) {
+        pendingAudit += 1;
       } else {
-        functional += 1;
+        active += 1;
       }
     });
 
-    const total = functional + degraded + broken || 1;
+    const total = resolved + pendingAudit + active || 1;
+    const resPct = Math.round((resolved / total) * 100);
+    const auditPct = Math.round((pendingAudit / total) * 100);
+    const activePct = Math.max(0, 100 - resPct - auditPct);
+
     return {
-      functional: { count: functional, pct: Math.round((functional / total) * 100) },
-      degraded: { count: degraded, pct: Math.round((degraded / total) * 100) },
-      broken: { count: broken, pct: Math.round((broken / total) * 100) },
-      total,
+      resolved: { count: resolved, pct: resPct },
+      pendingAudit: { count: pendingAudit, pct: auditPct },
+      active: { count: active, pct: activePct },
+      total: issues.length,
     };
-  }, [facilities]);
+  }, [issues]);
 
   if (!isOpen) return null;
 
@@ -400,9 +405,9 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
   const donutCircumference = 2 * Math.PI * donutRadius;
   const strokeWidth = 14;
 
-  const funcLen = (conditionData.functional.pct / 100) * donutCircumference;
-  const degLen = (conditionData.degraded.pct / 100) * donutCircumference;
-  const broLen = (conditionData.broken.pct / 100) * donutCircumference;
+  const resLen = (issueResolutionData.resolved.pct / 100) * donutCircumference;
+  const auditLen = (issueResolutionData.pendingAudit.pct / 100) * donutCircumference;
+  const activeLen = (issueResolutionData.active.pct / 100) * donutCircumference;
 
   return (
     <div className={`pointer-events-auto text-[#0F172A] dark:text-[#F1F5F9] transition-all flex flex-col ${
@@ -1037,15 +1042,15 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                 </div>
               </div>
 
-              {/* Chart 2: Donut Chart (Facility Conditions) */}
+              {/* Chart 2: Donut Chart (Civic Issues Resolution & Fix Progress) */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-[11px] font-bold text-[#F8FAFC] flex items-center gap-1.5">
-                    <PieChart className="w-3 h-3 text-[#38BDF8]" />
-                    Facility Conditions (Health)
+                    <PieChart className="w-3 h-3 text-[#10B981]" />
+                    Civic Issues Resolution Progress
                   </div>
                   <span className="text-[10px] text-[#94A3B8] font-mono">
-                    {conditionData.total} Assets
+                    {issueResolutionData.total} Total Issues
                   </span>
                 </div>
 
@@ -1062,54 +1067,60 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                         strokeWidth={strokeWidth}
                         fill="transparent"
                       />
-                      {/* Functional (Emerald) */}
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r={donutRadius}
-                        stroke="#10B981"
-                        strokeWidth={strokeWidth}
-                        strokeDasharray={`${funcLen} ${donutCircumference}`}
-                        strokeDashoffset="0"
-                        fill="transparent"
-                        strokeLinecap="round"
-                        className="transition-all duration-700 hover:opacity-80"
-                      />
-                      {/* Degraded (Amber Gold) */}
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r={donutRadius}
-                        stroke="#F59E0B"
-                        strokeWidth={strokeWidth}
-                        strokeDasharray={`${degLen} ${donutCircumference}`}
-                        strokeDashoffset={`-${funcLen}`}
-                        fill="transparent"
-                        strokeLinecap="round"
-                        className="transition-all duration-700 hover:opacity-80"
-                      />
-                      {/* Broken (Terracotta) */}
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r={donutRadius}
-                        stroke="#E05A47"
-                        strokeWidth={strokeWidth}
-                        strokeDasharray={`${broLen} ${donutCircumference}`}
-                        strokeDashoffset={`-${funcLen + degLen}`}
-                        fill="transparent"
-                        strokeLinecap="round"
-                        className="transition-all duration-700 hover:opacity-80"
-                      />
+                      {/* Verified Resolved (Emerald #10B981) */}
+                      {resLen > 0 && (
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r={donutRadius}
+                          stroke="#10B981"
+                          strokeWidth={strokeWidth}
+                          strokeDasharray={`${resLen} ${donutCircumference}`}
+                          strokeDashoffset="0"
+                          fill="transparent"
+                          strokeLinecap="butt"
+                          className="transition-all duration-700 hover:opacity-80"
+                        />
+                      )}
+                      {/* Under Audit / Inspecting (Amber Gold #F59E0B) */}
+                      {auditLen > 0 && (
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r={donutRadius}
+                          stroke="#F59E0B"
+                          strokeWidth={strokeWidth}
+                          strokeDasharray={`${auditLen} ${donutCircumference}`}
+                          strokeDashoffset={`-${resLen}`}
+                          fill="transparent"
+                          strokeLinecap="butt"
+                          className="transition-all duration-700 hover:opacity-80"
+                        />
+                      )}
+                      {/* Active Grievances (Terracotta Red #E05A47) */}
+                      {activeLen > 0 && (
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r={donutRadius}
+                          stroke="#E05A47"
+                          strokeWidth={strokeWidth}
+                          strokeDasharray={`${activeLen} ${donutCircumference}`}
+                          strokeDashoffset={`-${resLen + auditLen}`}
+                          fill="transparent"
+                          strokeLinecap="butt"
+                          className="transition-all duration-700 hover:opacity-80"
+                        />
+                      )}
                     </svg>
 
                     {/* Donut Center Label */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-sm font-mono font-black text-[#6EE7B7]">
-                        {conditionData.functional.pct}%
+                      <span className="text-sm font-mono font-black text-[#10B981]">
+                        {issueResolutionData.resolved.pct}%
                       </span>
                       <span className="text-[8px] font-bold uppercase tracking-wider text-[#94A3B8]">
-                        Healthy
+                        Resolved
                       </span>
                     </div>
                   </div>
@@ -1119,30 +1130,30 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                     <div className="flex items-center justify-between p-1.5 rounded-lg bg-[#1B2F38] border border-[#10B981]/40">
                       <div className="flex items-center gap-1.5">
                         <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]"></span>
-                        <span className="font-semibold text-[#F8FAFC]">Functional</span>
+                        <span className="font-semibold text-[#F8FAFC]">Resolved</span>
                       </div>
                       <span className="font-mono text-[#6EE7B7] font-bold">
-                        {conditionData.functional.count} ({conditionData.functional.pct}%)
+                        {issueResolutionData.resolved.count} ({issueResolutionData.resolved.pct}%)
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between p-1.5 rounded-lg bg-[#1B2F38] border border-[#F59E0B]/40">
                       <div className="flex items-center gap-1.5">
                         <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]"></span>
-                        <span className="font-semibold text-[#F8FAFC]">Degraded</span>
+                        <span className="font-semibold text-[#F8FAFC]">Audit Pending</span>
                       </div>
                       <span className="font-mono text-[#FDE68A] font-bold">
-                        {conditionData.degraded.count} ({conditionData.degraded.pct}%)
+                        {issueResolutionData.pendingAudit.count} ({issueResolutionData.pendingAudit.pct}%)
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between p-1.5 rounded-lg bg-[#1B2F38] border border-[#E05A47]/40">
                       <div className="flex items-center gap-1.5">
                         <span className="w-2.5 h-2.5 rounded-full bg-[#E05A47]"></span>
-                        <span className="font-semibold text-[#F8FAFC]">Broken</span>
+                        <span className="font-semibold text-[#F8FAFC]">Active Issues</span>
                       </div>
                       <span className="font-mono text-[#FCA5A5] font-bold">
-                        {conditionData.broken.count} ({conditionData.broken.pct}%)
+                        {issueResolutionData.active.count} ({issueResolutionData.active.pct}%)
                       </span>
                     </div>
                   </div>
