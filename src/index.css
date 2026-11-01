@@ -316,3 +316,12 @@
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: #00E5FF;
 }
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}

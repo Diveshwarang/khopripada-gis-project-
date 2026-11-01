@@ -42,6 +42,7 @@ import {
   runDBSCANClustering,
   type ClusterPoint,
 } from '../services/dbscanService';
+import { getFacilityDivIcon, getIssueDivIcon } from '../utils/mapIconHelper';
 import {
   db,
   saveFacilityToOfflineDb,
@@ -1909,7 +1910,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     secondary.clearLayers();
     micro.clearLayers();
 
-    // Populate Facilities safely
+    // Populate Facilities safely with rich category icons
     if (showFacilities) {
       (safeFacilities || []).forEach((fac) => {
         const lat = Number(fac?.latitude);
@@ -1927,33 +1928,13 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           if (facilityFilter === 'issues') return;
         }
 
-        const cat = (fac.category || '').toLowerCase();
-        const name = (fac.name || '').toLowerCase();
-
-        const isMajor =
-          cat.includes('health') ||
-          cat.includes('education') ||
-          cat.includes('panchayat') ||
-          name.includes('school') ||
-          name.includes('hospital') ||
-          name.includes('gram panchayat');
-
-        const isSecondary =
-          cat.includes('water') ||
-          cat.includes('mandir') ||
-          cat.includes('temple') ||
-          cat.includes('commerce');
-
-        const marker = L.circleMarker([lat, lng], {
-          radius: isMajor ? 8 : isSecondary ? 6 : 4,
-          fillColor: '#00E5FF',
-          color: '#FFFFFF',
-          weight: 1.5,
-          fillOpacity: 0.85,
-        }).bindPopup(
-          `<div style="font-size:12px; font-family:sans-serif;"><b>${fac.name || 'Facility'}</b><br/>${fac.category || ''}</div>`,
-          { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
-        );
+        const icon = getFacilityDivIcon(fac.category, fac.name);
+        const marker = L.marker([lat, lng], { icon }).bindPopup(`
+          <div style="font-family: Inter, sans-serif; padding: 4px; color: #0F172A;">
+            <div style="font-weight: 700; font-size: 13px;">${fac.name || 'Public Facility'}</div>
+            <div style="font-size: 11px; color: #64748B; margin-top: 2px;">${fac.category || 'Asset'}</div>
+          </div>
+        `, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
 
         marker.on('click', () => {
           setInspectedPoint({
@@ -1963,32 +1944,32 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           });
         });
 
+        const cat = (fac.category || '').toLowerCase();
+        const name = (fac.name || '').toLowerCase();
+        const isMajor = cat.includes('health') || cat.includes('edu') || name.includes('school') || name.includes('panchayat');
+        const isSecondary = cat.includes('water') || cat.includes('temple') || cat.includes('commerce');
+
         if (isMajor) major.addLayer(marker);
         else if (isSecondary) secondary.addLayer(marker);
         else micro.addLayer(marker);
       });
     }
 
-    // Populate Grievances safely
+    // Populate Issues with severity-coded warning badges
     if (showIssues) {
       (issues || []).forEach((issue: any) => {
         const lat = Number(issue?.latitude);
         const lng = Number(issue?.longitude);
         if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return;
 
-        const isCritical = issue.severity === 'high' || (issue.priority_score && issue.priority_score > 70);
-        const isMedium = issue.severity === 'medium';
-
-        const issueMarker = L.circleMarker([lat, lng], {
-          radius: isCritical ? 9 : 6,
-          fillColor: isCritical ? '#EF4444' : isMedium ? '#F59E0B' : '#38BDF8',
-          color: '#FFFFFF',
-          weight: 2,
-          fillOpacity: 0.9,
-        }).bindPopup(
-          `<div style="font-size:12px; font-family:sans-serif;"><b>${issue.title || 'Civic Issue'}</b><br/>Severity: ${issue.severity || 'low'}</div>`,
-          { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
-        );
+        const icon = getIssueDivIcon(issue.severity);
+        const issueMarker = L.marker([lat, lng], { icon }).bindPopup(`
+          <div style="font-family: Inter, sans-serif; padding: 4px; color: #0F172A;">
+            <div style="font-weight: 700; font-size: 13px; color: #DC2626;">${issue.title || 'Civic Grievance'}</div>
+            <div style="font-size: 11px; color: #64748B; margin-top: 2px;">Category: ${issue.category || 'General'}</div>
+            <div style="font-size: 11px; margin-top: 4px;">Severity: <b>${(issue.severity || 'low').toUpperCase()}</b></div>
+          </div>
+        `, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
 
         issueMarker.on('click', () => {
           setInspectedPoint({
@@ -1997,6 +1978,9 @@ export const VillageMap: React.FC<VillageMapProps> = ({
             distKm: parseFloat((mapInstanceRef.current ? mapInstanceRef.current.distance([lat, lng], KHOPRIPADA_CORE) / 1000 : 0).toFixed(2)),
           });
         });
+
+        const isCritical = issue.severity === 'high' || (issue.priority_score && issue.priority_score > 70);
+        const isMedium = issue.severity === 'medium';
 
         if (isCritical) major.addLayer(issueMarker);
         else if (isMedium) secondary.addLayer(issueMarker);
