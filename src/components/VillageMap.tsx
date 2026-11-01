@@ -40,6 +40,11 @@ import {
   type GeolocationResult,
 } from '../services/geolocation';
 import {
+  runDBSCANClustering,
+  type DBSCANClusterResult,
+  type ClusterPoint,
+} from '../services/dbscanService';
+import {
   db,
   seedFacilitiesFromCsv,
   saveFacilityToOfflineDb,
@@ -238,7 +243,7 @@ export const VillageMap = () => {
   };
 
   // Spatial ML: DBSCAN Clusters & Heatmap layers
-  const dbscanLayerRef = useRef<L.LayerGroup | null>(null);
+  const dbscanLayerRef = useRef<L.LayerGroup>(L.layerGroup());
   const [showDbscanClusters, setShowDbscanClusters] = useState<boolean>(true);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(false);
   const handleUpdateIssueStatusRef = useRef<((id: string, st: string) => Promise<void>) | null>(null);
@@ -429,6 +434,21 @@ export const VillageMap = () => {
     });
     return counts;
   }, [safeFacilities]);
+
+  // Dynamically computed DBSCAN clusters and reactive hotspot count
+  const computedClusters = useMemo(() => {
+    const validIssues: ClusterPoint[] = (safeIssues || []).map((issue, idx) => ({
+      id: String(issue.issue_id || (issue as any).id || `issue-${idx}`),
+      latitude: Number(issue.latitude),
+      longitude: Number(issue.longitude),
+      title: issue.title || 'Civic Grievance',
+      category: issue.category,
+      severity: issue.severity,
+    }));
+    return runDBSCANClustering(validIssues, 90, 2);
+  }, [safeIssues]);
+
+  const computedClustersCount = computedClusters.length;
 
   // Mobile Touch Interface States (< 768px viewports)
   const [mobileSheet, setMobileSheet] = useState<'action' | 'analytics' | 'worklist' | 'layers' | 'role' | null>(null);
@@ -1694,113 +1714,72 @@ export const VillageMap = () => {
     }
   }, []);
 
-  // Pre-computed DBSCAN clusters based on survey fault density (epsilon = 85m, minPts = 4)
-  const DBSCAN_CLUSTERS = [
-    {
-      id: 'cluster-alpha',
-      name: 'Hotspot α: Core Inundation & Culvert Choke',
-      coords: [19.3548, 72.8858] as [number, number],
-      radius: 135,
-      count: 9,
-      sev: 'Critical Danger Zone',
-      color: '#ef4444',
-      desc: 'High concentration of drainage overflow & road shoulder erosion affecting 140+ households during monsoon.',
-    },
-    {
-      id: 'cluster-beta',
-      name: 'Hotspot β: Station Transit Corridor Deterioration',
-      coords: [19.3615, 72.8755] as [number, number],
-      radius: 145,
-      count: 6,
-      sev: 'High Danger Zone',
-      color: '#ef4444',
-      desc: 'Severe pavement potholes & waterlogging along Juchandra commuter arterial link.',
-    },
-    {
-      id: 'cluster-gamma',
-      name: 'Hotspot γ: Bapane Gaothan Silt & Debris Blockage',
-      coords: [19.3665, 72.8835] as [number, number],
-      radius: 120,
-      count: 5,
-      sev: 'High Danger Zone',
-      color: '#ef4444',
-      desc: 'Silted stormwater channel creating backwater seepage near civic boundary.',
-    },
-  ];
+  // Mount the DBSCAN layer group once on map initialization
+  useEffect(() => {
+    if (mapInstanceRef.current && !mapInstanceRef.current.hasLayer(dbscanLayerRef.current)) {
+      dbscanLayerRef.current.addTo(mapInstanceRef.current);
+    }
+  }, []);
 
-  // Spatial ML: DBSCAN Spatial Clustering & Density Heatmap Generator
-  const renderDbscanAndHeatmap = useCallback(
-    (issues: CachedIssue[], showDbscan: boolean, showHeat: boolean) => {
-      // 1. Render DBSCAN Layer
-      if (dbscanLayerRef.current) {
-        dbscanLayerRef.current.clearLayers();
-        if (showDbscan) {
-          DBSCAN_CLUSTERS.forEach((cl) => {
-            const circle = L.circle(cl.coords, {
-              radius: cl.radius,
-              color: '#E05A47',
-              weight: 2,
-              dashArray: '6, 6',
-              fillColor: '#E05A47',
-              fillOpacity: 0.18,
-            });
-
-            circle.bindTooltip(
-              `<div class="p-2.5 font-sans text-xs bg-[#132228]/95 border border-[#E05A47]/60 rounded-xl shadow-[0_10px_30px_rgba(12,23,28,0.7)] text-[#F8FAFC]">
-                <div class="flex items-center gap-1.5 mb-1">
-                  <span class="w-2.5 h-2.5 rounded-full bg-[#E05A47] animate-ping"></span>
-                  <strong class="text-[#FCA5A5] text-xs font-bold uppercase tracking-wider">High-Density Failure Zone</strong>
-                </div>
-                <div class="text-[11px] text-[#F8FAFC] font-semibold">${cl.name}</div>
-                <div class="text-[10px] text-[#38BDF8] font-mono font-bold">${cl.count} Correlated Faults • DBSCAN ε=85m</div>
-                <div class="text-[10px] text-[#94A3B8] mt-1 italic max-w-xs leading-relaxed">${cl.desc}</div>
-              </div>`,
-              { sticky: true, className: 'gis-clean-tooltip' }
-            );
-
-            dbscanLayerRef.current?.addLayer(circle);
-          });
-        }
-      }
-
-      // Note: Failure density heatmap is handled by dedicated circle layer effect
-    },
-    []
-  );
-
-  // Hook map pan/zoom boundary updates so density rendering overlay updates dynamically
+  // Re-compute and render DBSCAN clusters whenever issues or layer toggle changes
   useEffect(() => {
     if (!mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
+    dbscanLayerRef.current.clearLayers();
 
-    const handleBoundaryUpdate = () => {
-      if (showHeatmap) {
-        renderDbscanAndHeatmap(allIssuesRef.current, showDbscanClusters, true);
-      }
-    };
+    // Check if DBSCAN layer checkbox is checked in the drawer
+    if (!showDbscanClusters) return;
 
-    map.on('moveend', handleBoundaryUpdate);
-    map.on('zoomend', handleBoundaryUpdate);
+    if (!mapInstanceRef.current.hasLayer(dbscanLayerRef.current)) {
+      dbscanLayerRef.current.addTo(mapInstanceRef.current);
+    }
 
-    return () => {
-      map.off('moveend', handleBoundaryUpdate);
-      map.off('zoomend', handleBoundaryUpdate);
-    };
-  }, [showHeatmap, showDbscanClusters, renderDbscanAndHeatmap]);
+    computedClusters.forEach((cluster, idx) => {
+      // 1. Soft glowing coral outer aura
+      const outerAura = L.circle(cluster.center, {
+        radius: cluster.radiusMeters,
+        fillColor: '#EF4444',
+        color: '#DC2626',
+        weight: 1.5,
+        dashArray: '4, 4',
+        fillOpacity: 0.25,
+      });
+
+      // 2. High-intensity inner core ring
+      const innerRing = L.circle(cluster.center, {
+        radius: Math.max(cluster.radiusMeters * 0.4, 20),
+        fillColor: '#B91C1C',
+        color: '#F87171',
+        weight: 2,
+        fillOpacity: 0.45,
+      });
+
+      // 3. Cluster inspection badge popup
+      const popupContent = `
+        <div style="font-family: monospace; font-size: 11px; padding: 4px; color: #0F172A;">
+          <strong style="color: #DC2626;">DBSCAN FAILURE ZONE #${idx + 1}</strong>
+          <div style="margin-top: 4px;">Points Clustered: <b>${cluster.pointCount}</b></div>
+          <div>Cluster Radius: <b>${Math.round(cluster.radiusMeters)}m</b></div>
+          <div style="margin-top: 4px; color: #64748B;">Automated Intervention Recommendation: Bulk Maintenance Pass</div>
+        </div>
+      `;
+
+      outerAura.bindPopup(popupContent, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
+      innerRing.bindPopup(popupContent, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
+
+      const tooltipContent = `
+        <div style="font-family: monospace; font-size: 10px; font-weight: bold; color: #FCA5A5;">
+          DBSCAN Zone #${idx + 1} • ${cluster.pointCount} Faults (${Math.round(cluster.radiusMeters)}m)
+        </div>
+      `;
+      outerAura.bindTooltip(tooltipContent, { sticky: true, className: 'gis-clean-tooltip' });
+
+      dbscanLayerRef.current.addLayer(outerAura);
+      dbscanLayerRef.current.addLayer(innerRing);
+    });
+  }, [showDbscanClusters, computedClusters]);
 
   const toggleDbscanClusters = (enable: boolean) => {
     setShowDbscanClusters(enable);
-    if (!mapInstanceRef.current || !dbscanLayerRef.current) return;
-    if (enable) {
-      if (!mapInstanceRef.current.hasLayer(dbscanLayerRef.current)) {
-        mapInstanceRef.current.addLayer(dbscanLayerRef.current);
-      }
-      renderDbscanAndHeatmap(allIssuesRef.current, true, showHeatmap);
-    } else {
-      if (mapInstanceRef.current.hasLayer(dbscanLayerRef.current)) {
-        mapInstanceRef.current.removeLayer(dbscanLayerRef.current);
-      }
-    }
   };
 
   // 4. Non-Crashing Native Heatmap Engine
@@ -2151,10 +2130,8 @@ export const VillageMap = () => {
     gpsLocationLayerRef.current = gpsGroup;
 
     // DBSCAN & Heatmap Layers
-    const dbscanGroup = L.layerGroup();
-    dbscanLayerRef.current = dbscanGroup;
-    if (userRoleRef.current === 'admin' && showDbscanClusters) {
-      dbscanGroup.addTo(map);
+    if (!map.hasLayer(dbscanLayerRef.current)) {
+      dbscanLayerRef.current.addTo(map);
     }
 
     if (showHeatmap && !map.hasLayer(heatmapLayerRef.current)) {
@@ -2447,7 +2424,7 @@ export const VillageMap = () => {
     };
   }, [refreshGrievanceMarkers, renderFacilityMarkers, renderIssueMarkers, showDbscanClusters, showHeatmap]);
 
-  // Synchronize layer visibility and marker popups whenever user role or DBSCAN state changes
+  // Synchronize layer visibility and marker popups whenever user role or filter changes
   useEffect(() => {
     userRoleRef.current = userRole;
     if (allFacilitiesRef.current.length > 0) {
@@ -2457,32 +2434,12 @@ export const VillageMap = () => {
       renderIssueMarkers(allIssuesRef.current, facilityFilter);
     }
     refreshGrievanceMarkers();
-    if (userRole === 'admin' || userRole === 'officer') {
-      if (
-        mapInstanceRef.current &&
-        dbscanLayerRef.current &&
-        showDbscanClusters &&
-        !mapInstanceRef.current.hasLayer(dbscanLayerRef.current)
-      ) {
-        mapInstanceRef.current.addLayer(dbscanLayerRef.current);
-      }
-      renderDbscanAndHeatmap(allIssuesRef.current, showDbscanClusters, false);
-    } else {
-      if (
-        mapInstanceRef.current &&
-        dbscanLayerRef.current &&
-        mapInstanceRef.current.hasLayer(dbscanLayerRef.current)
-      ) {
-        mapInstanceRef.current.removeLayer(dbscanLayerRef.current);
-      }
-    }
   }, [
     userRole,
     renderIssueMarkers,
+    renderFacilityMarkers,
+    refreshGrievanceMarkers,
     facilityFilter,
-    showDbscanClusters,
-    showHeatmap,
-    renderDbscanAndHeatmap,
   ]);
 
   // Render GPS Accuracy Circle & Pin
@@ -3051,16 +3008,21 @@ export const VillageMap = () => {
                     {/* Layer Toggles for DBSCAN & Heatmap */}
                     <div className="space-y-1.5">
                       <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/80 border border-[#1D3B52] hover:border-[#EF4444]/50 cursor-pointer transition">
-                        <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] shrink-0 animate-pulse"></span>
-                          DBSCAN Failure Zones (3 Hotspots)
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={showDbscanClusters}
+                            onChange={(e) => toggleDbscanClusters(e.target.checked)}
+                            className="accent-purple-500 rounded cursor-pointer"
+                          />
+                          <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] shrink-0 animate-pulse"></span>
+                            DBSCAN Failure Zones
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-purple-400 bg-purple-950/60 border border-purple-800/60 px-1.5 py-0.5 rounded">
+                          {computedClustersCount} Hotspots
                         </span>
-                        <input
-                          type="checkbox"
-                          checked={showDbscanClusters}
-                          onChange={(e) => toggleDbscanClusters(e.target.checked)}
-                          className="w-4 h-4 rounded text-[#EF4444] focus:ring-0 accent-[#EF4444] cursor-pointer"
-                        />
                       </label>
                       <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/80 border border-[#1D3B52] hover:border-[#F59E0B]/50 cursor-pointer transition">
                         <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
@@ -3082,13 +3044,13 @@ export const VillageMap = () => {
                         <span className="text-[9px] uppercase block text-red-400 font-sans font-bold">
                           Priority
                         </span>
-                        <span className="text-xs font-bold font-mono">15 ACTIVE ISSUES</span>
+                        <span className="text-xs font-bold font-mono">{issueCounts.total} ACTIVE ISSUES</span>
                       </div>
                       <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-800/60 text-amber-300">
                         <span className="text-[9px] uppercase block text-amber-400 font-sans font-bold">
                           Hotspots
                         </span>
-                        <span className="text-xs font-bold font-mono">3 DBSCAN CLUSTERS</span>
+                        <span className="text-xs font-bold font-mono">{computedClustersCount} DBSCAN CLUSTERS</span>
                       </div>
                     </div>
 
