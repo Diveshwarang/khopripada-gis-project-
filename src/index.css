@@ -322,6 +322,17 @@
   border: none !important;
 }
 
+/* Show labels on mobile only at extreme close-up zoom (18+) */
+@media (max-width: 767px) {
+  .poi-label-responsive {
+    display: none !important;
+  }
+  .zoom-micro .poi-label-responsive {
+    display: inline-block !important;
+    font-size: 10px !important;
+  }
+}
+
 @keyframes pulse {
   0%, 100% {
     transform: scale(1);

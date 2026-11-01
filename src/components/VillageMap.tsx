@@ -23,7 +23,6 @@ import {
   ShieldCheck,
   Download,
   LogOut,
-  Map as MapIcon,
   User,
   Shield,
   SlidersHorizontal,
@@ -675,7 +674,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
   // Mobile Touch Interface States (< 768px viewports)
   const [mobileSheet, setMobileSheet] = useState<'action' | 'analytics' | 'worklist' | 'layers' | 'role' | null>(null);
-  const [activeMobileTab, setActiveMobileTab] = useState<'map' | 'filters' | 'heatmap' | 'analytics' | 'worklist' | null>('map');
   const [mobileGrievanceList, setMobileGrievanceList] = useState<OfflineGrievance[]>([]);
   const [mobileAdminQueueStep, setMobileAdminQueueStep] = useState<1 | 2 | 3>(1);
   const [officerNotesMap, setOfficerNotesMap] = useState<Record<string | number, string>>({});
@@ -999,7 +997,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       clearTimeout(t2);
       clearTimeout(t3);
     };
-  }, [sidebarOpen, mobileSheet, isGrievanceDrawerOpen, activeMobileTab]);
+  }, [sidebarOpen, mobileSheet, isGrievanceDrawerOpen]);
 
   // Global Photo Lightbox trigger hook for Leaflet popup HTML
   useEffect(() => {
@@ -1915,39 +1913,79 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
   // Re-compute and render DBSCAN clusters whenever issues or layer toggle changes
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    if (!map) return;
     dbscanLayerRef.current.clearLayers();
 
     // Check if DBSCAN layer checkbox is checked in the drawer
     if (!showDbscanClusters) return;
 
-    if (!mapInstanceRef.current.hasLayer(dbscanLayerRef.current)) {
-      dbscanLayerRef.current.addTo(mapInstanceRef.current);
+    if (!map.getPane('dbscanPane')) {
+      const dbscanPane = map.createPane('dbscanPane');
+      dbscanPane.style.zIndex = '420'; // Above tiles, below markers
+      dbscanPane.style.pointerEvents = 'none'; // Critical: allows clicks to pass through to map
+    }
+
+    if (!map.hasLayer(dbscanLayerRef.current)) {
+      dbscanLayerRef.current.addTo(map);
     }
 
     computedClusters.forEach((cluster, idx) => {
       // 1. Soft glowing coral outer aura
       const outerAura = L.circle(cluster.center, {
+        pane: 'dbscanPane',
         radius: cluster.radiusMeters,
         fillColor: '#EF4444',
         color: '#DC2626',
         weight: 1.5,
         dashArray: '4, 4',
-        fillOpacity: 0.25,
+        fillOpacity: 0.22,
+        interactive: false, // Ensures click penetrates directly to map for issue reporting
       });
 
       // 2. High-intensity inner core ring
-      const innerRing = L.circle(cluster.center, {
+      const innerCore = L.circle(cluster.center, {
+        pane: 'dbscanPane',
         radius: Math.max(cluster.radiusMeters * 0.4, 20),
         fillColor: '#B91C1C',
         color: '#F87171',
-        weight: 2,
+        weight: 1.5,
         fillOpacity: 0.45,
+        interactive: false, // Prevents blocking the grievance creation click
       });
 
-      // 3. Cluster inspection badge popup
+      // 3. Tiny center badge for cluster audit info
+      const centerBadgeIcon = L.divIcon({
+        className: 'dbscan-center-badge',
+        html: `
+          <div style="
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #DC2626;
+            color: #FFFFFF;
+            font-size: 10px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1.5px solid #FFFFFF;
+            box-shadow: 0 0 10px rgba(220,38,38,0.85);
+            cursor: pointer;
+            pointer-events: auto;
+          ">${cluster.pointCount}</div>
+        `,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+      });
+
+      const centerMarker = L.marker(cluster.center, {
+        icon: centerBadgeIcon,
+        interactive: true,
+      });
+
       const popupContent = `
-        <div style="font-family: monospace; font-size: 11px; padding: 4px; color: #0F172A;">
+        <div style="font-family: monospace; font-size: 11px; padding: 4px; color: #0F172A; background: #FFFFFF; border-radius: 8px;">
           <strong style="color: #DC2626;">DBSCAN FAILURE ZONE #${idx + 1}</strong>
           <div style="margin-top: 4px;">Points Clustered: <b>${cluster.pointCount}</b></div>
           <div>Cluster Radius: <b>${Math.round(cluster.radiusMeters)}m</b></div>
@@ -1955,18 +1993,18 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         </div>
       `;
 
-      outerAura.bindPopup(popupContent, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
-      innerRing.bindPopup(popupContent, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
+      centerMarker.bindPopup(popupContent, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
 
       const tooltipContent = `
         <div style="font-family: monospace; font-size: 10px; font-weight: bold; color: #FCA5A5;">
           DBSCAN Zone #${idx + 1} • ${cluster.pointCount} Faults (${Math.round(cluster.radiusMeters)}m)
         </div>
       `;
-      outerAura.bindTooltip(tooltipContent, { sticky: true, className: 'gis-clean-tooltip' });
+      centerMarker.bindTooltip(tooltipContent, { sticky: true, className: 'gis-clean-tooltip' });
 
       dbscanLayerRef.current.addLayer(outerAura);
-      dbscanLayerRef.current.addLayer(innerRing);
+      dbscanLayerRef.current.addLayer(innerCore);
+      dbscanLayerRef.current.addLayer(centerMarker);
     });
   }, [showDbscanClusters, computedClusters]);
 
@@ -2069,6 +2107,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     try {
       const zoom = map.getZoom();
       setCurrentZoom(zoom);
+      map.getContainer().classList.toggle('zoom-micro', zoom >= 18);
       const { tier1, tier2, tier3, tier4, issuesHigh, issuesNormal } = tierGroupsRef.current;
 
       // Zoom < 15: Macro View (Only Tier 1 anchor landmarks & critical issues)
@@ -2451,6 +2490,15 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       heatPane.style.zIndex = '450'; // Explicitly above satellite tile pane (200)
       heatPane.style.pointerEvents = 'none'; // Allow clicking through to underlying map features
     }
+
+    // Ensure the heatmap and DBSCAN zones do not block map clicks
+    if (!map.getPane('dbscanPane')) {
+      const dbscanPane = map.createPane('dbscanPane');
+      dbscanPane.style.zIndex = '420'; // Above tiles, below markers
+      dbscanPane.style.pointerEvents = 'none'; // Critical: allows clicks to pass through to map
+    }
+
+    map.getContainer().classList.toggle('zoom-micro', map.getZoom() >= 18);
 
     // 2.1 Add Zoom Control positioned cleanly
     L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -3262,7 +3310,12 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
         {/* 2.1 RIGHT ANALYTICS & DECISION DRAWER (DESKTOP DOCKED, MOBILE SLIDE-OVER) */}
         {sidebarOpen && (
-          <aside className="order-2 fixed inset-y-0 right-0 z-[1500] w-80 sm:w-96 md:static md:flex md:flex-col md:h-full md:flex-shrink-0 bg-[#081018]/95 backdrop-blur-lg border-l border-[#1D3B52] overflow-y-auto p-4 space-y-4 shadow-2xl text-xs text-[#F1F5F9]">
+          <>
+            <div
+              className="md:hidden fixed inset-0 z-[1400] bg-black/60 backdrop-blur-xs animate-in fade-in"
+              onClick={() => setSidebarOpen(false)}
+            />
+            <aside className="order-2 fixed inset-y-0 right-0 z-[1500] w-80 sm:w-96 max-w-[85vw] md:static md:flex md:flex-col md:h-full md:flex-shrink-0 bg-[#081018]/95 backdrop-blur-lg border-l border-[#1D3B52] overflow-y-auto p-4 space-y-4 shadow-2xl text-xs text-[#F1F5F9] animate-in slide-in-from-right duration-200">
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[#1D3B52] flex-shrink-0">
               <div className="flex items-center gap-2">
@@ -3595,7 +3648,8 @@ export const VillageMap: React.FC<VillageMapProps> = ({
               )}
             </div>
           </aside>
-        )}
+        </>
+      )}
 
         {/* 2.2 MAP CANVAS CONTAINER */}
         <div className="order-1 flex-1 min-w-0 relative h-full flex flex-col">
@@ -3746,90 +3800,72 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         style={{ touchAction: 'pan-x pan-y' }}
       />
 
-      {/* 5.1 SYMMETRICAL TOUCH-FIRST MOBILE BOTTOM DOCK (< 768px) */}
-      <nav
-        className={`md:hidden fixed bottom-0 inset-x-0 z-[2000] h-16 bg-[#081018]/95 backdrop-blur-xl border-t border-[#1D3B52] ${
-          isAdminOrOfficer ? 'grid grid-cols-5' : 'flex items-center justify-around'
-        } items-center px-1 pb-safe select-none shadow-2xl`}
-      >
-        {/* Tab 1: Map icon / MAP */}
+      {/* 5.1 PERSISTENT BOTTOM FLOATING ACTION STRIP ON MOBILE (< 768px) */}
+      <div className="md:hidden fixed bottom-3 left-3 right-3 z-[1100] bg-[#081018]/95 backdrop-blur-md border border-[#1D3B52] rounded-2xl shadow-2xl p-1.5 flex items-center justify-between gap-1 select-none">
+        {/* [ 📍 Locate ] */}
         <button
-          onClick={() => {
-            setMobileSheet(null);
-            setActiveMobileTab('map');
-          }}
-          className={`flex-1 flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer py-1 ${
-            activeMobileTab === 'map' && !mobileSheet ? 'text-[#00E5FF] font-bold' : 'text-[#8CB0C9] hover:text-[#F1F5F9]'
-          }`}
-          title="Map View"
+          onClick={handleLocateMe}
+          disabled={isLocating}
+          className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl hover:bg-[#142C3F] active:scale-95 transition text-[#8CB0C9] hover:text-[#00E5FF] cursor-pointer"
+          title="Locate Me"
         >
-          <MapIcon className="w-4 h-4" />
-          <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">Map</span>
+          <Locate className={`w-4 h-4 text-[#00E5FF] ${isLocating ? 'animate-spin' : ''}`} />
+          <span className="text-[9px] font-semibold tracking-wider mt-0.5">Locate</span>
         </button>
 
-        {/* Tab 2: Filter sliders icon / LAYERS */}
+        {/* [ 🔥 Heatmap ] */}
         <button
-          onClick={() => {
-            setMobileSheet(mobileSheet === 'layers' ? null : 'layers');
-            setActiveMobileTab('filters');
-          }}
-          className={`flex-1 flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer py-1 ${
-            mobileSheet === 'layers' ? 'text-[#00E5FF] font-bold' : 'text-[#8CB0C9] hover:text-[#F1F5F9]'
+          onClick={() => toggleHeatmap(!heatmapActive)}
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl active:scale-95 transition cursor-pointer ${
+            heatmapActive ? 'bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444]/40 font-bold' : 'hover:bg-[#142C3F] text-[#8CB0C9] hover:text-[#F1F5F9]'
           }`}
-          title="Filters & Layers"
+          title="Toggle Heatmap"
         >
-          <SlidersHorizontal className="w-4 h-4" />
-          <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">Layers</span>
+          <Flame className="w-4 h-4 text-[#EF4444]" />
+          <span className="text-[9px] font-semibold tracking-wider mt-0.5">Heatmap</span>
         </button>
 
-        {/* Center Button: Elevated circular button with crisp vector plus sign (+) */}
-        <div className="flex justify-center -mt-5 flex-shrink-0 px-1">
-          <button
-            onClick={() => setMobileSheet(mobileSheet === 'action' ? null : 'action')}
-            className="relative w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#00E5FF] to-cyan-400 shadow-lg active:scale-95 transition-transform cursor-pointer"
-            aria-label="Quick Actions"
-            title="Propose Community Facility or Report Civic Grievance"
-          >
-            <div className="w-full h-full rounded-full bg-[#00E5FF] hover:bg-[#38BDF8] flex items-center justify-center text-[#081018] border border-cyan-300">
-              <Plus className="w-5 h-5 text-[#081018] stroke-[2.5]" />
-            </div>
-          </button>
-        </div>
-
-        {/* Tab 3 (Officer/Admin): Chart pulse icon / ANALYTICS (Hidden on Resident view) */}
-        {isAdminOrOfficer && (
-          <button
-            onClick={() => {
-              setMobileSheet(mobileSheet === 'analytics' ? null : 'analytics');
-              setActiveMobileTab('analytics');
-            }}
-            className={`flex-1 flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer py-1 ${
-              mobileSheet === 'analytics' ? 'text-[#00E5FF] font-bold' : 'text-[#8CB0C9] hover:text-[#F1F5F9]'
-            }`}
-            title="Executive Decision Support & ML Analytics"
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">Analytics</span>
-          </button>
-        )}
-
-        {/* Tab 4: Clipboard check icon / WORKLIST */}
+        {/* [ + Add Facility ] */}
         <button
           onClick={() => {
-            setMobileSheet(mobileSheet === 'worklist' ? null : 'worklist');
-            setActiveMobileTab('worklist');
+            if (isAddFacilityMode) {
+              cleanupAddFacilityMode();
+            } else {
+              setIsAddFacilityMode(true);
+              showToast('Tap anywhere on the village map to plot a community facility pin.');
+            }
           }}
-          className={`flex-1 flex flex-col items-center justify-center text-xs transition active:scale-95 cursor-pointer py-1 ${
-            mobileSheet === 'worklist' ? 'text-[#00E5FF] font-bold' : 'text-[#8CB0C9] hover:text-[#F1F5F9]'
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl active:scale-95 transition cursor-pointer ${
+            isAddFacilityMode ? 'bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40 font-bold' : 'hover:bg-[#142C3F] text-[#8CB0C9] hover:text-[#F1F5F9]'
           }`}
-          title={userRole === 'officer' ? 'Field Worklist' : userRole === 'admin' ? 'Pending Approvals' : 'My Reports'}
+          title="Add Facility"
         >
-          <ClipboardCheck className="w-4 h-4" />
-          <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">
-            {userRole === 'officer' ? 'Worklist' : userRole === 'admin' ? 'Worklist' : 'Issues'}
-          </span>
+          <Plus className="w-4 h-4 text-[#00E5FF]" />
+          <span className="text-[9px] font-semibold tracking-wider mt-0.5">Facility</span>
         </button>
-      </nav>
+
+        {/* [ ⚠️ Report ] */}
+        <button
+          onClick={() => setIsGrievanceModalOpen(true)}
+          className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl bg-red-950/40 border border-red-800/60 text-red-400 hover:text-red-300 active:scale-95 transition cursor-pointer"
+          title="Report Civic Grievance"
+        >
+          <AlertTriangle className="w-4 h-4 text-red-400" />
+          <span className="text-[9px] font-semibold tracking-wider mt-0.5">Report</span>
+        </button>
+
+        {/* [ ☰ Layers ] */}
+        <button
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl active:scale-95 transition cursor-pointer ${
+            sidebarOpen ? 'bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40 font-bold' : 'hover:bg-[#142C3F] text-[#8CB0C9] hover:text-[#F1F5F9]'
+          }`}
+          title="Toggle Layers & Basemaps"
+        >
+          <Layers className="w-4 h-4 text-[#38BDF8]" />
+          <span className="text-[9px] font-semibold tracking-wider mt-0.5">Layers</span>
+        </button>
+      </div>
 
       {/* 5.2 FULL-FEATURED MOBILE SLIDE-UP BOTTOM SHEET (< 768px) */}
       {mobileSheet && (

@@ -122,85 +122,92 @@ export function classifyFacilityTier(category?: string, name?: string): Facility
   return 'tier4_micro'; // Solar streetlights, handpumps, waste bins, individual meters
 }
 
+function getCategoryColor(category?: string): string {
+  const cat = (category || '').toLowerCase();
+  if (cat.includes('water') || cat.includes('tap') || cat.includes('well') || cat.includes('tank') || cat.includes('pump')) {
+    return '#0284C7'; // Cyan Water
+  } else if (cat.includes('health') || cat.includes('anganwadi') || cat.includes('clinic') || cat.includes('hospital')) {
+    return '#059669'; // Emerald Health
+  } else if (cat.includes('edu') || cat.includes('school') || cat.includes('college')) {
+    return '#4F46E5'; // Indigo School
+  } else if (cat.includes('mandir') || cat.includes('temple') || cat.includes('civic') || cat.includes('panchayat')) {
+    return '#8B5CF6'; // Purple Civic
+  } else if (cat.includes('light') || cat.includes('solar') || cat.includes('pole') || cat.includes('lamp')) {
+    return '#D97706'; // Amber Light
+  }
+  return '#0D9488'; // Teal
+}
+
+function getCategorySvgPath(category?: string): string {
+  const cat = (category || '').toLowerCase();
+  if (cat.includes('water') || cat.includes('tap') || cat.includes('well') || cat.includes('tank') || cat.includes('pump')) {
+    return `<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />`;
+  } else if (cat.includes('health') || cat.includes('anganwadi') || cat.includes('clinic') || cat.includes('hospital')) {
+    return `<path d="M19 10.5h-5.5V5h-3v5.5H5v3h5.5V19h3v-5.5H19z" />`;
+  } else if (cat.includes('edu') || cat.includes('school') || cat.includes('college')) {
+    return `<path d="M12 3L1 9l11 6 9-4.91V17h2V9M5 13.18v4L12 21l7-3.82v-4L12 17z" />`;
+  } else if (cat.includes('mandir') || cat.includes('temple') || cat.includes('civic') || cat.includes('panchayat')) {
+    return `<path d="M12 2l7 4v3H5V6zm-5 9h2v8H7zm4 0h2v8h-2zm4 0h2v8h-2zM3 21h18v2H3z" />`;
+  } else if (cat.includes('light') || cat.includes('solar') || cat.includes('pole') || cat.includes('lamp')) {
+    return `<path d="M9 21h6v-2H9zm3-19a7 7 0 0 0-7 7c0 2.4 1.2 4.5 3 5.7V17h8v-2.3c1.8-1.2 3-3.3 3-5.7a7 7 0 0 0-7-7z" />`;
+  }
+  return `<circle cx="12" cy="12" r="6" />`;
+}
+
 export function createPOIDivIcon(
   name: string,
   category: string,
   _tier: FacilityTier,
   showLabel: boolean
 ): L.DivIcon {
-  const cat = (category || '').toLowerCase();
-
-  let bg = '#0284C7';
-  let svgPath = '';
-
-  if (cat.includes('water') || cat.includes('tap') || cat.includes('well') || cat.includes('tank') || cat.includes('pump')) {
-    bg = '#0284C7'; // Cyan Water
-    svgPath = `<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />`;
-  } else if (cat.includes('health') || cat.includes('anganwadi') || cat.includes('clinic') || cat.includes('hospital')) {
-    bg = '#059669'; // Emerald Health
-    svgPath = `<path d="M19 10.5h-5.5V5h-3v5.5H5v3h5.5V19h3v-5.5H19z" />`;
-  } else if (cat.includes('edu') || cat.includes('school') || cat.includes('college')) {
-    bg = '#4F46E5'; // Indigo School
-    svgPath = `<path d="M12 3L1 9l11 6 9-4.91V17h2V9M5 13.18v4L12 21l7-3.82v-4L12 17z" />`;
-  } else if (cat.includes('mandir') || cat.includes('temple') || cat.includes('civic') || cat.includes('panchayat')) {
-    bg = '#8B5CF6'; // Purple Civic
-    svgPath = `<path d="M12 2l7 4v3H5V6zm-5 9h2v8H7zm4 0h2v8h-2zm4 0h2v8h-2zM3 21h18v2H3z" />`;
-  } else if (cat.includes('light') || cat.includes('solar') || cat.includes('pole') || cat.includes('lamp')) {
-    bg = '#D97706'; // Amber Light
-    svgPath = `<path d="M9 21h6v-2H9zm3-19a7 7 0 0 0-7 7c0 2.4 1.2 4.5 3 5.7V17h8v-2.3c1.8-1.2 3-3.3 3-5.7a7 7 0 0 0-7-7z" />`;
-  } else {
-    bg = '#0D9488'; // Teal
-    svgPath = `<circle cx="12" cy="12" r="6" />`;
-  }
-
-  // Google Maps style typography pill
   const cleanName = (name || 'Asset').replace(/_/g, ' ');
-  const displayName = cleanName.length > 20 ? cleanName.substring(0, 18) + '...' : cleanName;
+  const displayName = cleanName.length > 18 ? cleanName.substring(0, 16) + '...' : cleanName;
+
+  // Use responsive CSS class: label hidden on mobile screens, shown on md+ screens
+  const labelHTML = showLabel
+    ? `<span class="poi-label-responsive hidden md:inline-block" style="
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        color: #FFFFFF;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 5px rgba(0,0,0,0.85);
+        white-space: nowrap;
+        background: rgba(13, 28, 42, 0.75);
+        padding: 1px 6px;
+        border-radius: 4px;
+        border: 0.5px solid rgba(255,255,255,0.25);
+        letter-spacing: 0.2px;
+      ">${displayName}</span>`
+    : '';
 
   const html = `
-    <div style="display: inline-flex; align-items: center; gap: 6px; pointer-events: auto; cursor: pointer;">
+    <div class="custom-poi-wrapper" style="display: inline-flex; align-items: center; gap: 5px; pointer-events: auto; cursor: pointer;">
       <div style="
-        background-color: ${bg};
-        width: 22px;
-        height: 22px;
+        background-color: ${getCategoryColor(category)};
+        width: 24px;
+        height: 24px;
         border-radius: 6px;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.5);
         border: 1.5px solid #FFFFFF;
         flex-shrink: 0;
       ">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="#FFFFFF">
-          ${svgPath}
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="#FFFFFF">
+          ${getCategorySvgPath(category)}
         </svg>
       </div>
-      ${
-        showLabel
-          ? `<span style="
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-              font-size: 11px;
-              font-weight: 600;
-              color: #FFFFFF;
-              text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 5px rgba(0,0,0,0.85);
-              white-space: nowrap;
-              letter-spacing: 0.2px;
-              background: rgba(13, 28, 42, 0.7);
-              padding: 1px 5px;
-              border-radius: 4px;
-              border: 0.5px solid rgba(255,255,255,0.25);
-            ">${displayName}</span>`
-          : ''
-      }
+      ${labelHTML}
     </div>
   `;
 
   return L.divIcon({
     html,
     className: 'custom-poi-marker',
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
-    popupAnchor: [0, -12],
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -14],
   });
 }
 
@@ -211,10 +218,25 @@ export function createIssueDivIcon(title: string, severity: string, showLabel: b
   const bg = isHigh ? '#EF4444' : isMedium ? '#F59E0B' : '#0284C7';
 
   const cleanTitle = (title || 'Issue').replace(/_/g, ' ');
-  const displayTitle = cleanTitle.length > 20 ? cleanTitle.substring(0, 18) + '...' : cleanTitle;
+  const displayTitle = cleanTitle.length > 18 ? cleanTitle.substring(0, 16) + '...' : cleanTitle;
+
+  const labelHTML = showLabel
+    ? `<span class="poi-label-responsive hidden md:inline-block" style="
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        color: #FCA5A5;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+        white-space: nowrap;
+        background: rgba(45, 10, 10, 0.85);
+        padding: 1px 6px;
+        border-radius: 4px;
+        border: 0.5px solid rgba(239,68,68,0.5);
+      ">${displayTitle}</span>`
+    : '';
 
   const html = `
-    <div style="display: inline-flex; align-items: center; gap: 6px; pointer-events: auto; cursor: pointer;">
+    <div class="custom-issue-wrapper" style="display: inline-flex; align-items: center; gap: 5px; pointer-events: auto; cursor: pointer;">
       <div style="
         background-color: ${bg};
         width: 24px;
@@ -232,22 +254,7 @@ export function createIssueDivIcon(title: string, severity: string, showLabel: b
           <path d="M12 2L1 21h22L12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z" />
         </svg>
       </div>
-      ${
-        showLabel
-          ? `<span style="
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              font-size: 11px;
-              font-weight: 700;
-              color: #FCA5A5;
-              text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-              white-space: nowrap;
-              background: rgba(45, 10, 10, 0.85);
-              padding: 1px 6px;
-              border-radius: 4px;
-              border: 0.5px solid rgba(239,68,68,0.5);
-            ">${displayTitle}</span>`
-          : ''
-      }
+      ${labelHTML}
     </div>
   `;
 
