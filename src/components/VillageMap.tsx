@@ -360,7 +360,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const boundaryLayerRef = useRef<L.Polygon | null>(null);
   const landmarksLayerRef = useRef<L.LayerGroup | null>(null);
   const facilitiesLayerRef = useRef<L.LayerGroup | null>(null);
-  const issuesLayerRef = useRef<L.LayerGroup | null>(null);
+  const issuesLayerRef = useRef<L.LayerGroup>(L.layerGroup());
   const grievancesLayerRef = useRef<L.LayerGroup | null>(null);
   const gpsLocationLayerRef = useRef<L.LayerGroup | null>(null);
   const inspectMarkerRef = useRef<L.Marker | null>(null);
@@ -375,8 +375,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     tier2: L.LayerGroup;
     tier3: L.LayerGroup;
     tier4: L.LayerGroup;
-    issuesHigh: L.LayerGroup;
-    issuesNormal: L.LayerGroup;
   } | null>(null);
 
   if (!tierGroupsRef.current) {
@@ -385,8 +383,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       tier2: L.layerGroup(),
       tier3: L.layerGroup(),
       tier4: L.layerGroup(),
-      issuesHigh: L.layerGroup(),
-      issuesNormal: L.layerGroup(),
     };
   }
 
@@ -455,7 +451,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
   // Spatial ML: DBSCAN Clusters & Heatmap layers
   const dbscanLayerRef = useRef<L.LayerGroup>(L.layerGroup());
-  const [showDbscanClusters, setShowDbscanClusters] = useState<boolean>(true);
   const [internalHeatmapActive, setInternalHeatmapActive] = useState<boolean>(false);
   const heatmapActive = propHeatmapActive !== undefined ? propHeatmapActive : internalHeatmapActive;
   const setHeatmapActive = propSetHeatmapActive || setInternalHeatmapActive;
@@ -471,8 +466,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const [showBoundary, setShowBoundary] = useState<boolean>(true);
   const [showLandmarks, setShowLandmarks] = useState<boolean>(true);
   const [showFacilities, setShowFacilities] = useState<boolean>(true);
-  const [showIssues, setShowIssues] = useState<boolean>(true);
-  const [showGrievancePins, setShowGrievancePins] = useState<boolean>(true);
+  const [showIssuesLayer, setShowIssuesLayer] = useState<boolean>(true);
   const [facilityFilter, setFacilityFilter] = useState<FacilityCategoryFilter>('all');
   const [facilitiesList, setFacilitiesList] = useState<CachedFacility[]>([]);
   const [issuesList, setIssuesList] = useState<CachedIssue[]>([]);
@@ -1377,9 +1371,12 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     `;
   };
 
-  // Render Status & Severity Coded Issue Markers & Inspection Popups
+  // Render Status & Severity Coded Issue Markers & Inspection Popups (Managed by Issues Layer effect)
   const renderIssueMarkers = useCallback(
     (issues: CachedIssue[], filter: FacilityCategoryFilter = 'all') => {
+      void issues;
+      void filter;
+      return;
       if (!issuesLayerRef.current) return;
       const group = issuesLayerRef.current;
       group.clearLayers();
@@ -1904,113 +1901,70 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     }
   }, []);
 
-  // Mount the DBSCAN layer group once on map initialization
+  // 1. Mount issuesLayerRef to the map once on map initialization
   useEffect(() => {
-    if (mapInstanceRef.current && !mapInstanceRef.current.hasLayer(dbscanLayerRef.current)) {
-      dbscanLayerRef.current.addTo(mapInstanceRef.current);
-    }
-  }, []);
+    const map = mapInstanceRef.current;
+    if (!map) return;
 
-  // Re-compute and render DBSCAN clusters whenever issues or layer toggle changes
+    if (!map.hasLayer(issuesLayerRef.current)) {
+      issuesLayerRef.current.addTo(map);
+    }
+  }, [mapInstanceRef.current]);
+
+  // 2. Populate and toggle the Issues layer reactively
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    issuesLayerRef.current.clearLayers();
+
+    // Only render if the issues layer toggle is active
+    if (!showIssuesLayer) return;
+
+    const validIssues = (issues || []).filter((issue) => {
+      const lat = Number(issue?.latitude);
+      const lng = Number(issue?.longitude);
+      return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+    });
+
+    validIssues.forEach((issue) => {
+      const lat = Number(issue.latitude);
+      const lng = Number(issue.longitude);
+
+      // Create an identifiable warning pin using getIssueDivIcon or a clean SVG badge
+      const icon = createIssueDivIcon(issue.title, issue.severity, true);
+
+      const marker = L.marker([lat, lng], {
+        icon,
+        zIndexOffset: 500, // Render issues prominently above standard base features
+      }).bindPopup(buildIssuePopupHTML(issue, userRole), {
+        className: 'gis-dark-popup',
+        autoPanPadding: [15, 80],
+      });
+
+      marker.on('click', () => {
+        setInspectedPoint({
+          lat,
+          lng,
+          distKm: parseFloat(
+            (mapInstanceRef.current ? mapInstanceRef.current.distance([lat, lng], KHOPRIPADA_CORE) / 1000 : 0).toFixed(2)
+          ),
+        });
+      });
+
+      issuesLayerRef.current.addLayer(marker);
+    });
+  }, [showIssuesLayer, issues, userRole]);
+
+  // 3. DBSCAN cluster circles removed completely from map canvas per architecture requirements
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
     dbscanLayerRef.current.clearLayers();
-
-    // Check if DBSCAN layer checkbox is checked in the drawer
-    if (!showDbscanClusters) return;
-
-    if (!map.getPane('dbscanPane')) {
-      const dbscanPane = map.createPane('dbscanPane');
-      dbscanPane.style.zIndex = '420'; // Above tiles, below markers
-      dbscanPane.style.pointerEvents = 'none'; // Critical: allows clicks to pass through to map
+    if (map.hasLayer(dbscanLayerRef.current)) {
+      map.removeLayer(dbscanLayerRef.current);
     }
-
-    if (!map.hasLayer(dbscanLayerRef.current)) {
-      dbscanLayerRef.current.addTo(map);
-    }
-
-    computedClusters.forEach((cluster, idx) => {
-      // 1. Soft glowing coral outer aura
-      const outerAura = L.circle(cluster.center, {
-        pane: 'dbscanPane',
-        radius: cluster.radiusMeters,
-        fillColor: '#EF4444',
-        color: '#DC2626',
-        weight: 1.5,
-        dashArray: '4, 4',
-        fillOpacity: 0.22,
-        interactive: false, // Ensures click penetrates directly to map for issue reporting
-      });
-
-      // 2. High-intensity inner core ring
-      const innerCore = L.circle(cluster.center, {
-        pane: 'dbscanPane',
-        radius: Math.max(cluster.radiusMeters * 0.4, 20),
-        fillColor: '#B91C1C',
-        color: '#F87171',
-        weight: 1.5,
-        fillOpacity: 0.45,
-        interactive: false, // Prevents blocking the grievance creation click
-      });
-
-      // 3. Tiny center badge for cluster audit info
-      const centerBadgeIcon = L.divIcon({
-        className: 'dbscan-center-badge',
-        html: `
-          <div style="
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: #DC2626;
-            color: #FFFFFF;
-            font-size: 10px;
-            font-weight: 800;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1.5px solid #FFFFFF;
-            box-shadow: 0 0 10px rgba(220,38,38,0.85);
-            cursor: pointer;
-            pointer-events: auto;
-          ">${cluster.pointCount}</div>
-        `,
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-      });
-
-      const centerMarker = L.marker(cluster.center, {
-        icon: centerBadgeIcon,
-        interactive: true,
-      });
-
-      const popupContent = `
-        <div style="font-family: monospace; font-size: 11px; padding: 4px; color: #0F172A; background: #FFFFFF; border-radius: 8px;">
-          <strong style="color: #DC2626;">DBSCAN FAILURE ZONE #${idx + 1}</strong>
-          <div style="margin-top: 4px;">Points Clustered: <b>${cluster.pointCount}</b></div>
-          <div>Cluster Radius: <b>${Math.round(cluster.radiusMeters)}m</b></div>
-          <div style="margin-top: 4px; color: #64748B;">Automated Intervention Recommendation: Bulk Maintenance Pass</div>
-        </div>
-      `;
-
-      centerMarker.bindPopup(popupContent, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
-
-      const tooltipContent = `
-        <div style="font-family: monospace; font-size: 10px; font-weight: bold; color: #FCA5A5;">
-          DBSCAN Zone #${idx + 1} • ${cluster.pointCount} Faults (${Math.round(cluster.radiusMeters)}m)
-        </div>
-      `;
-      centerMarker.bindTooltip(tooltipContent, { sticky: true, className: 'gis-clean-tooltip' });
-
-      dbscanLayerRef.current.addLayer(outerAura);
-      dbscanLayerRef.current.addLayer(innerCore);
-      dbscanLayerRef.current.addLayer(centerMarker);
-    });
-  }, [showDbscanClusters, computedClusters]);
-
-  const toggleDbscanClusters = (enable: boolean) => {
-    setShowDbscanClusters(enable);
-  };
+  }, []);
 
   // 4. Non-Crashing Native Heatmap Engine
   useEffect(() => {
@@ -2108,27 +2062,21 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       const zoom = map.getZoom();
       setCurrentZoom(zoom);
       map.getContainer().classList.toggle('zoom-micro', zoom >= 18);
-      const { tier1, tier2, tier3, tier4, issuesHigh, issuesNormal } = tierGroupsRef.current;
+      const { tier1, tier2, tier3, tier4 } = tierGroupsRef.current;
 
-      // Zoom < 15: Macro View (Only Tier 1 anchor landmarks & critical issues)
+      // Zoom < 15: Macro View (Only Tier 1 anchor landmarks)
       if (zoom < 15) {
         if (!map.hasLayer(tier1)) map.addLayer(tier1);
         if (map.hasLayer(tier2)) map.removeLayer(tier2);
         if (map.hasLayer(tier3)) map.removeLayer(tier3);
         if (map.hasLayer(tier4)) map.removeLayer(tier4);
-
-        if (!map.hasLayer(issuesHigh)) map.addLayer(issuesHigh);
-        if (map.hasLayer(issuesNormal)) map.removeLayer(issuesNormal);
       }
-      // Zoom 15 - 16: Meso View (Anchors + Civic Facilities + High/Medium Issues)
+      // Zoom 15 - 16: Meso View (Anchors + Civic Facilities)
       else if (zoom >= 15 && zoom < 17) {
         if (!map.hasLayer(tier1)) map.addLayer(tier1);
         if (!map.hasLayer(tier2)) map.addLayer(tier2);
         if (map.hasLayer(tier3)) map.removeLayer(tier3);
         if (map.hasLayer(tier4)) map.removeLayer(tier4);
-
-        if (!map.hasLayer(issuesHigh)) map.addLayer(issuesHigh);
-        if (!map.hasLayer(issuesNormal)) map.addLayer(issuesNormal);
       }
       // Zoom 17: Local View (Add local utilities, water taps, shops)
       else if (zoom === 17) {
@@ -2136,9 +2084,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         if (!map.hasLayer(tier2)) map.addLayer(tier2);
         if (!map.hasLayer(tier3)) map.addLayer(tier3);
         if (map.hasLayer(tier4)) map.removeLayer(tier4);
-
-        if (!map.hasLayer(issuesHigh)) map.addLayer(issuesHigh);
-        if (!map.hasLayer(issuesNormal)) map.addLayer(issuesNormal);
       }
       // Zoom 18+: Granular Micro-Twin View (Reveal streetlights, meters, all details)
       else {
@@ -2146,9 +2091,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         if (!map.hasLayer(tier2)) map.addLayer(tier2);
         if (!map.hasLayer(tier3)) map.addLayer(tier3);
         if (!map.hasLayer(tier4)) map.addLayer(tier4);
-
-        if (!map.hasLayer(issuesHigh)) map.addLayer(issuesHigh);
-        if (!map.hasLayer(issuesNormal)) map.addLayer(issuesNormal);
       }
     } catch (err) {
       console.warn('LOD layer transition caught safely:', err);
@@ -2158,14 +2100,12 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   // Populate LOD Layers when Facilities or Issues update
   useEffect(() => {
     if (!tierGroupsRef.current) return;
-    const { tier1, tier2, tier3, tier4, issuesHigh, issuesNormal } = tierGroupsRef.current;
+    const { tier1, tier2, tier3, tier4 } = tierGroupsRef.current;
 
     tier1.clearLayers();
     tier2.clearLayers();
     tier3.clearLayers();
     tier4.clearLayers();
-    issuesHigh.clearLayers();
-    issuesNormal.clearLayers();
 
     const currentZoom = mapInstanceRef.current ? mapInstanceRef.current.getZoom() : 16;
     const showTextLabels = currentZoom >= 16; // Show inline name only when zoom >= 16
@@ -2213,39 +2153,10 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       });
     }
 
-    // Populate Issues
-    if (showIssues) {
-      (issues || []).forEach((issue: any) => {
-        const lat = Number(issue?.latitude);
-        const lng = Number(issue?.longitude);
-        if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return;
-
-        const isHigh = issue.severity === 'high' || issue.severity === 'critical' || (issue.priority_score && issue.priority_score > 70);
-        const hasLabel = currentZoom >= 16;
-
-        const icon = createIssueDivIcon(issue.title, issue.severity, hasLabel);
-        const marker = L.marker([lat, lng], { icon }).bindPopup(
-          buildIssuePopupHTML(issue, userRole),
-          { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
-        );
-
-        marker.on('click', () => {
-          setInspectedPoint({
-            lat,
-            lng,
-            distKm: parseFloat((mapInstanceRef.current ? mapInstanceRef.current.distance([lat, lng], KHOPRIPADA_CORE) / 1000 : 0).toFixed(2)),
-          });
-        });
-
-        if (isHigh) issuesHigh.addLayer(marker);
-        else issuesNormal.addLayer(marker);
-      });
-    }
-
     if (mapInstanceRef.current) {
       syncLODLayers(mapInstanceRef.current);
     }
-  }, [safeFacilities, issues, facilityFilter, showFacilities, showIssues, syncLODLayers, currentZoom, userRole]);
+  }, [safeFacilities, facilityFilter, showFacilities, syncLODLayers, currentZoom]);
 
   // Export Handlers for Client-Side Audit & Reporting Engine
   const handleDownloadPanchayatPdf = useCallback(() => {
@@ -2545,8 +2456,9 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     const facilitiesGroup = L.layerGroup();
     facilitiesLayerRef.current = facilitiesGroup;
 
-    const issuesGroup = L.layerGroup();
-    issuesLayerRef.current = issuesGroup;
+    if (!map.hasLayer(issuesLayerRef.current)) {
+      issuesLayerRef.current.addTo(map);
+    }
 
     const grievancesGroup = L.layerGroup();
     grievancesLayerRef.current = grievancesGroup;
@@ -2558,19 +2470,13 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     if (tierGroupsRef.current) {
       map.addLayer(tierGroupsRef.current.tier1);
       map.addLayer(tierGroupsRef.current.tier2);
-      map.addLayer(tierGroupsRef.current.issuesHigh);
-      map.addLayer(tierGroupsRef.current.issuesNormal);
     }
 
     // Bind zoom listener
     const onZoom = () => syncLODLayers(map);
     map.on('zoomend', onZoom);
 
-    // DBSCAN & Heatmap Layers
-    if (!map.hasLayer(dbscanLayerRef.current)) {
-      dbscanLayerRef.current.addTo(map);
-    }
-
+    // Heatmap Layer (DBSCAN circles removed completely)
     if (!map.hasLayer(heatmapGroupRef.current)) {
       heatmapGroupRef.current.addTo(map);
     }
@@ -3183,17 +3089,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     setShowFacilities((prev) => !prev);
   };
 
-  // Toggle Issues Layer
-  const toggleIssues = () => {
-    setShowIssues((prev) => !prev);
-  };
-
-  // Toggle Grievances Layer
-  const toggleGrievancePins = () => {
-    setShowGrievancePins((prev) => !prev);
-    setShowIssues((prev) => !prev);
-  };
-
 
 
   // Fly to Grievance from Drawer
@@ -3485,29 +3380,22 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                       className="w-4 h-4 rounded text-[#00E5FF] focus:ring-0 accent-[#00E5FF] cursor-pointer"
                     />
                   </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/60 border border-[#1D3B52] hover:border-[#00E5FF]/40 cursor-pointer transition">
-                    <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-400 shrink-0"></span>
-                      Surveyed Issues ({issueCounts.total})
+                  <label className="flex items-center justify-between text-xs text-slate-300 hover:text-white cursor-pointer py-1 p-2 rounded-lg bg-[#081018]/60 border border-[#1D3B52] hover:border-[#00E5FF]/40 transition">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={showIssuesLayer}
+                        onChange={(e) => setShowIssuesLayer(e.target.checked)}
+                        className="accent-red-500 rounded cursor-pointer w-4 h-4"
+                      />
+                      <span className="font-medium text-[#F1F5F9] flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"></span>
+                        Reported Grievances & Issues
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono text-red-400 bg-red-950/60 border border-red-800/60 px-1.5 py-0.5 rounded">
+                      {issues.length} Active
                     </span>
-                    <input
-                      type="checkbox"
-                      checked={showIssues}
-                      onChange={toggleIssues}
-                      className="w-4 h-4 rounded text-[#00E5FF] focus:ring-0 accent-[#00E5FF] cursor-pointer"
-                    />
-                  </label>
-                  <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/60 border border-[#1D3B52] hover:border-[#00E5FF]/40 cursor-pointer transition">
-                    <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0"></span>
-                      Reported Grievances (IndexedDB)
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={showGrievancePins}
-                      onChange={toggleGrievancePins}
-                      className="w-4 h-4 rounded text-[#00E5FF] focus:ring-0 accent-[#00E5FF] cursor-pointer"
-                    />
                   </label>
                   <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/60 border border-[#1D3B52] hover:border-[#00E5FF]/40 cursor-pointer transition">
                     <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
@@ -3546,25 +3434,8 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                       </span>
                     </div>
 
-                    {/* Layer Toggles for DBSCAN & Heatmap */}
+                    {/* Layer Toggles for Heatmap */}
                     <div className="space-y-1.5">
-                      <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/80 border border-[#1D3B52] hover:border-[#EF4444]/50 cursor-pointer transition">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={showDbscanClusters}
-                            onChange={(e) => toggleDbscanClusters(e.target.checked)}
-                            className="accent-purple-500 rounded cursor-pointer"
-                          />
-                          <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] shrink-0 animate-pulse"></span>
-                            DBSCAN Failure Zones
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-mono text-purple-400 bg-purple-950/60 border border-purple-800/60 px-1.5 py-0.5 rounded">
-                          {computedClustersCount} Hotspots
-                        </span>
-                      </label>
                       <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/80 border border-[#1D3B52] hover:border-[#F59E0B]/50 cursor-pointer transition">
                         <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] shrink-0"></span>
@@ -4898,14 +4769,19 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                     <label className="flex items-center justify-between p-2.5 min-h-[48px] rounded-xl bg-white dark:bg-[#0C171C] border border-[#CBD5E1] dark:border-[#334B56] cursor-pointer">
                       <span className="text-xs text-[#0F172A] dark:text-[#F8FAFC] flex items-center gap-2 font-medium">
                         <AlertTriangle className="w-4 h-4 text-[#E05A47]" />
-                        Surveyed Issues ({issueCounts.total})
+                        Reported Grievances & Issues
                       </span>
-                      <input
-                        type="checkbox"
-                        checked={showIssues}
-                        onChange={toggleIssues}
-                        className="w-5 h-5 rounded text-[#E05A47] accent-[#E05A47] cursor-pointer"
-                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-red-400 bg-red-950/60 border border-red-800/60 px-1.5 py-0.5 rounded">
+                          {issues.length} Active
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={showIssuesLayer}
+                          onChange={(e) => setShowIssuesLayer(e.target.checked)}
+                          className="w-5 h-5 rounded text-[#E05A47] accent-[#E05A47] cursor-pointer"
+                        />
+                      </div>
                     </label>
 
                     <label className="flex items-center justify-between p-2.5 min-h-[48px] rounded-xl bg-white dark:bg-[#0C171C] border border-[#CBD5E1] dark:border-[#334B56] cursor-pointer">
