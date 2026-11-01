@@ -106,8 +106,10 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
           assigned_officer: (r as any).assigned_officer || null,
           assigned_to: (r as any).assigned_to || null,
           officer_notes: (r as any).officer_notes || '',
-          photoBase64: r.photoBase64,
-          resolution_photo_url: r.resolution_photo_url,
+          photoBase64: r.photoBase64 || (r as any).photo_url,
+          resolution_photo_url: (r.resolution_photo_url && r.resolution_photo_url !== r.photoBase64 && r.resolution_photo_url !== (r as any).photo_url)
+            ? r.resolution_photo_url
+            : undefined,
           approval_status: r.approval_status || 'approved',
         });
       }
@@ -132,8 +134,10 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
           assigned_officer: item.assigned_officer || (item as any).assigned_to || null,
           assigned_to: (item as any).assigned_to || item.assigned_officer || null,
           officer_notes: item.resolution_notes || (item as any).officer_notes || '',
-          photoBase64: item.photoBase64,
-          resolution_photo_url: item.proof_image_url || item.photo_url || (item as any).resolution_photo_url,
+          photoBase64: item.photoBase64 || item.photo_url || (item as any).proof_image_url || undefined,
+          resolution_photo_url: (item.resolution_photo_url && item.resolution_photo_url !== item.photo_url && item.resolution_photo_url !== item.photoBase64 && item.resolution_photo_url !== (item as any).proof_image_url)
+            ? item.resolution_photo_url
+            : undefined,
           approval_status: (item as any).approval_status || 'approved',
           created_at: item.created_at,
         });

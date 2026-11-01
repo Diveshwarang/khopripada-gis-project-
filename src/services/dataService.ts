@@ -35,7 +35,9 @@ export const normalizeIssue = (raw: any): CivicIssue => {
     submitted_by: raw.submitted_by || 'Resident',
     photo_url: raw.photo_url || raw.photoBase64 || '',
     photoBase64: raw.photoBase64 || raw.photo_url || '',
-    resolution_photo_url: raw.resolution_photo_url || '',
+    resolution_photo_url: (raw.resolution_photo_url && raw.resolution_photo_url !== raw.photo_url && raw.resolution_photo_url !== raw.photoBase64)
+      ? raw.resolution_photo_url
+      : '',
     officer_notes: raw.officer_notes || '',
     assigned_to: raw.assigned_to || '',
     verified_by: raw.verified_by || '',

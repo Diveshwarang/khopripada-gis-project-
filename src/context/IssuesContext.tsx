@@ -28,10 +28,12 @@ function normalizeRealtimeIssue(row: any): CivicIssue {
     assigned_to: row.assigned_to || row.assigned_officer || null,
     resolution_notes: row.resolution_notes || row.officer_notes || '',
     officer_notes: row.officer_notes || row.resolution_notes || '',
-    proof_image_url: row.proof_image_url || row.photo_url || row.photoBase64 || '',
-    photo_url: row.photo_url || row.proof_image_url || row.photoBase64 || '',
-    photoBase64: row.photoBase64 || '',
-    resolution_photo_url: row.resolution_photo_url || '',
+    proof_image_url: row.proof_image_url || '',
+    photo_url: row.photo_url || row.photoBase64 || row.proof_image_url || '',
+    photoBase64: row.photoBase64 || row.photo_url || '',
+    resolution_photo_url: (row.resolution_photo_url && row.resolution_photo_url !== row.photo_url && row.resolution_photo_url !== row.photoBase64 && row.resolution_photo_url !== row.proof_image_url)
+      ? row.resolution_photo_url
+      : '',
     created_at: row.created_at || new Date().toISOString(),
     updated_at: row.updated_at || new Date().toISOString(),
   };

@@ -888,8 +888,12 @@ export async function generateSingleIssueAuditPDF(
   let currentY = margin;
 
   // Resolve photos asynchronously
-  const reportedPhoto = await resolveImageDataUrl(issue.photoBase64 || issue.photo_url);
-  const resolutionPhoto = await resolveImageDataUrl(issue.resolution_photo_url || issue.proof_image_url);
+  const reportedPhoto = await resolveImageDataUrl(issue.photoBase64 || issue.photo_url || (issue as any).proof_image_url);
+  const rawResolution = await resolveImageDataUrl(issue.resolution_photo_url);
+  // STRICT SEPARATION: Ensure resolution photo is distinct from the initial reported defect photo
+  const resolutionPhoto = (rawResolution && rawResolution !== reportedPhoto && rawResolution !== issue.photo_url && rawResolution !== issue.photoBase64)
+    ? rawResolution
+    : null;
 
   const formattedDate = new Date().toLocaleDateString('en-IN', {
     day: '2-digit',

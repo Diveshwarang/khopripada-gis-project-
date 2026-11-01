@@ -1760,7 +1760,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
             : `<span class="px-2 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] font-bold text-[10px]">● Pending Approval</span>`;
 
         // Resolution proof markup
-        const resolutionProofMarkup = iss.resolution_photo_url
+        const resolutionProofMarkup = (iss.resolution_photo_url && iss.resolution_photo_url !== rawPhoto)
           ? `
             <div class="mb-2 p-2 rounded-xl bg-[#0C171C] border border-[#10B981]/50 shadow-inner">
               <div class="text-[9px] uppercase font-bold text-[#10B981] mb-1 flex items-center justify-between">
@@ -2424,7 +2424,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
             : `<span class="px-2 py-0.5 rounded-full bg-[#E05A47]/20 border border-[#E05A47]/60 text-[#FCA5A5] font-bold text-[10px]">● Pending Approval</span>`;
 
         // Resolution proof section
-        const resolutionProofHtml = g.resolution_photo_url
+        const resolutionProofHtml = (g.resolution_photo_url && g.resolution_photo_url !== photoSrc)
           ? `
             <div class="mb-2 p-2 rounded-xl bg-[#0C171C] border border-[#10B981]/50 shadow-inner">
               <div class="text-[9px] uppercase font-bold text-[#10B981] mb-1 flex items-center justify-between">

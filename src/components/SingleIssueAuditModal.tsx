@@ -52,8 +52,12 @@ export const SingleIssueAuditModal: React.FC<SingleIssueAuditModalProps> = ({
     ? { label: 'Step 3: Under Active Field Inspection', bg: 'bg-blue-100 text-blue-800 border-blue-300' }
     : { label: 'Step 1: Registered Civic Complaint', bg: 'bg-rose-100 text-rose-800 border-rose-300' };
 
-  const reportedPhoto = issue.photoBase64 || issue.photo_url || null;
-  const resolutionPhoto = issue.resolution_photo_url || issue.proof_image_url || null;
+  const reportedPhoto = issue.photoBase64 || issue.photo_url || (issue as any).proof_image_url || null;
+  const rawResolution = issue.resolution_photo_url || null;
+  // STRICT SEPARATION: Ensure resolution photo is distinct from the initial reported defect photo
+  const resolutionPhoto = (rawResolution && rawResolution !== reportedPhoto && rawResolution !== issue.photo_url && rawResolution !== issue.photoBase64)
+    ? rawResolution
+    : null;
 
   const formattedDate = new Date().toLocaleDateString('en-IN', {
     day: '2-digit',
