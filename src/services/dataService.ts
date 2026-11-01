@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { db, seedFacilitiesFromCsv } from './offlineDb';
+import { db, seedFacilitiesFromCsv, getUserAddedFacilities, saveUserAddedFacilityToStorage } from './offlineDb';
 import { fetchAllIssues } from './issueService';
 import type { CivicIssue, Facility } from '../types';
 import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
@@ -220,8 +220,11 @@ export const upsertIssue = async (issueData: Partial<CivicIssue>): Promise<Civic
 /**
  * Fetch all Facilities:
  * Queries Supabase first. If offline, falls back to Dexie / CSV cache.
+ * Guarantees community-proposed and user-added facilities are always preserved and merged.
  */
 export const fetchFacilities = async (): Promise<Facility[]> => {
+  const localUserFacilities = getUserAddedFacilities().map(normalizeFacility);
+
   try {
     const { data, error } = await supabase
       .from('facilities')
@@ -230,7 +233,9 @@ export const fetchFacilities = async (): Promise<Facility[]> => {
 
     if (!error && Array.isArray(data) && data.length > 0) {
       const canonical = data.map(normalizeFacility);
+      const facMap = new Map<string, Facility>();
       for (const item of canonical) {
+        facMap.set(item.facility_id, item);
         db.cached_facilities.put({
           facility_id: item.facility_id,
           name: item.name,
@@ -247,19 +252,31 @@ export const fetchFacilities = async (): Promise<Facility[]> => {
           upi_available: item.upi_available,
         }).catch(() => {});
       }
-      return canonical;
+      for (const item of localUserFacilities) {
+        facMap.set(item.facility_id, item);
+      }
+      return Array.from(facMap.values());
     }
   } catch (err) {
     console.warn('Supabase fetchFacilities unavailable, falling back to local storage:', err);
   }
 
   const cached = await db.cached_facilities.toArray();
+  const facMap = new Map<string, Facility>();
   if (cached.length > 0) {
-    return cached.map(normalizeFacility);
+    for (const item of cached.map(normalizeFacility)) {
+      facMap.set(item.facility_id, item);
+    }
+  } else {
+    const seeded = await seedFacilitiesFromCsv(false);
+    for (const item of seeded.map(normalizeFacility)) {
+      facMap.set(item.facility_id, item);
+    }
   }
-
-  const seeded = await seedFacilitiesFromCsv(false);
-  return seeded.map(normalizeFacility);
+  for (const item of localUserFacilities) {
+    facMap.set(item.facility_id, item);
+  }
+  return Array.from(facMap.values());
 };
 
 /**
@@ -267,6 +284,9 @@ export const fetchFacilities = async (): Promise<Facility[]> => {
  */
 export const upsertFacility = async (facilityData: Partial<Facility>): Promise<Facility> => {
   const normalized = normalizeFacility(facilityData);
+
+  // Dual persistent storage: Save to localStorage immediately
+  saveUserAddedFacilityToStorage(normalized as any);
 
   try {
     await db.cached_facilities.put({
@@ -453,10 +473,31 @@ export const subscribeToPanchayatSync = (
   // 2. Cross-Tab BroadcastChannel listener (provides instant cross-window sync)
   const handleBroadcast = (e: MessageEvent) => {
     if (!e.data) return;
-    if (e.data.type === 'ISSUE_UPDATED' && e.data.issue) {
-      onIssueChange('UPDATE', e.data.issue);
+    if (e.data.type === 'ISSUE_CREATED') {
+      const issueObj = e.data.issue ? normalizeIssue(e.data.issue) : null;
+      if (issueObj) onIssueChange('INSERT', issueObj);
+    } else if (e.data.type === 'ISSUE_UPDATED') {
+      if (e.data.issue) {
+        onIssueChange('UPDATE', normalizeIssue(e.data.issue));
+      } else if (e.data.issueId) {
+        onIssueChange('UPDATE', normalizeIssue({
+          id: e.data.issueId,
+          issue_id: e.data.issueId,
+          status: e.data.status,
+          assigned_officer: e.data.assignedOfficer,
+          assigned_to: e.data.assignedOfficer,
+          resolution_notes: e.data.notes,
+          officer_notes: e.data.notes,
+          resolution_photo_url: e.data.resolutionPhotoUrl,
+        }));
+      }
+    } else if (e.data.type === 'ISSUE_DELETED') {
+      const delId = e.data.issueId || e.data.issue?.id;
+      if (delId) {
+        onIssueChange('DELETE', { id: delId, issue_id: delId } as any);
+      }
     } else if (e.data.type === 'FACILITY_UPDATED' && e.data.facility) {
-      onFacilityChange('UPDATE', e.data.facility);
+      onFacilityChange('UPDATE', normalizeFacility(e.data.facility));
     }
   };
 

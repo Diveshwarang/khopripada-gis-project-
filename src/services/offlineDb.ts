@@ -207,6 +207,29 @@ export const parseFacilitiesCsv = (csvText: string): CachedFacility[] => {
   return facilities;
 };
 
+const USER_FACILITIES_STORAGE_KEY = 'panchayat_user_facilities';
+
+export function getUserAddedFacilities(): CachedFacility[] {
+  try {
+    const raw = localStorage.getItem(USER_FACILITIES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveUserAddedFacilityToStorage(facility: CachedFacility): void {
+  try {
+    const current = getUserAddedFacilities();
+    const idStr = String(facility.facility_id);
+    const filtered = current.filter((f) => String(f.facility_id) !== idStr);
+    filtered.unshift(facility);
+    localStorage.setItem(USER_FACILITIES_STORAGE_KEY, JSON.stringify(filtered));
+  } catch (e) {
+    console.warn('Failed to save user facility to localStorage:', e);
+  }
+}
+
 /**
  * Seed cached facilities from CSV if not already present,
  * automatically migrating and purging any legacy mock data.
@@ -244,10 +267,19 @@ export const seedFacilitiesFromCsv = async (
     if (facilities.length > 0) {
       // Preserve any user-created facilities that are not in the CSV
       const existingAll = await db.cached_facilities.toArray();
+      const localUserFacilities = getUserAddedFacilities();
       const csvIds = new Set(facilities.map((f) => f.facility_id));
-      const userAdded = existingAll.filter(
-        (f) => !csvIds.has(f.facility_id) && !f.facility_id.includes('-')
-      );
+
+      const userAddedMap = new Map<string, CachedFacility>();
+      for (const f of localUserFacilities) {
+        userAddedMap.set(f.facility_id, f);
+      }
+      for (const f of existingAll) {
+        if (!csvIds.has(f.facility_id) && !f.facility_id.includes('-')) {
+          userAddedMap.set(f.facility_id, f);
+        }
+      }
+      const userAdded = Array.from(userAddedMap.values());
 
       await db.cached_facilities.clear();
       await db.cached_facilities.bulkPut([...facilities, ...userAdded]);
@@ -264,9 +296,10 @@ export const seedFacilitiesFromCsv = async (
 };
 
 /**
- * Save or update a new facility directly into IndexedDB
+ * Save or update a new facility directly into IndexedDB and localStorage
  */
 export const saveFacilityToOfflineDb = async (facility: CachedFacility): Promise<void> => {
+  saveUserAddedFacilityToStorage(facility);
   await db.cached_facilities.put(facility);
 };
 

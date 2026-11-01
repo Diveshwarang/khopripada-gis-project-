@@ -29,6 +29,7 @@ import { compressImageToBase64 } from '../utils/imageUtils';
 import type { UserRole, CivicIssue, IssueStatus } from '../types';
 import {
   updateIssueStatus,
+  deleteIssue,
   saveResolutionPhotoToCache,
   getResolutionPhotoFromCache,
 } from '../services/issueService';
@@ -269,11 +270,11 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
   const handleDelete = async (id?: string) => {
     if (!id) return;
     try {
-      const numId = parseInt(id.replace(/\D/g, '') || '0', 10);
-      if (numId) {
-        await db.offline_grievances.delete(numId).catch(() => {});
+      await deleteIssue(id);
+      setGrievances((prev) => prev.filter((g) => g.id !== id && g.issue_id !== id));
+      if (onGrievanceStatusUpdated) {
+        onGrievanceStatusUpdated();
       }
-      setGrievances((prev) => prev.filter((g) => g.id !== id));
     } catch (err) {
       console.error('Failed to delete grievance:', err);
     }

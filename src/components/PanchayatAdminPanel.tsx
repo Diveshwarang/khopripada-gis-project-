@@ -34,6 +34,7 @@ import {
   transitionToResolved,
   upsertFacility,
 } from '../services/dataService';
+import { deleteIssue } from '../services/issueService';
 import { assignAndAdvanceIssue, updateIssueStatus } from '../services/issueService';
 
 export interface PendingSubmissionItem {
@@ -283,8 +284,9 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
         await rejectFacility(item.id as string);
       } else {
         await rejectGrievance(item.id as number);
+        await deleteIssue(String(item.id));
       }
-      setActionSuccessMsg(`Rejected submission "${item.title}".`);
+      setActionSuccessMsg(`Rejected & deleted fake submission "${item.title}".`);
       setTimeout(() => setActionSuccessMsg(null), 3000);
       await loadAllGrievances();
       if (onRejectSubmission) {

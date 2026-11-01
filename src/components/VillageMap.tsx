@@ -63,6 +63,7 @@ import {
 import type { CivicIssue, FacilityAsset, IssueStatus } from '../types';
 import {
   updateIssueStatus,
+  deleteIssue,
   saveResolutionPhotoToCache,
   getResolutionPhotoFromCache,
 } from '../services/issueService';
@@ -355,6 +356,15 @@ function buildIssuePopupHTML(issue: CivicIssue | any, userRole: string): string 
             `
               : ''
           }
+
+          <button 
+            type="button" 
+            data-issue-id="${issueId}" 
+            class="admin-delete-issue-btn"
+            style="width: 100%; margin-top: 6px; background: #FEF2F2; color: #DC2626; font-size: 11px; font-weight: 700; padding: 6px 10px; border: 1px solid #FECACA; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;"
+          >
+            🗑️ Delete Fake Request (Admin)
+          </button>
         </div>
       `
           : isOfficer
@@ -914,7 +924,29 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const handleMobileVerifyResolution = async (item: { id: string | number; title: string }) => {
     try {
       await transitionToResolved(item.id, 'Sarpanch Admin');
-      showToast(`"${item.title}" verified & marked Officially Resolved. Marker turned GREEN.`);
+      const targetId = String(item.id);
+      if (propSetIssues) {
+        propSetIssues((prev) =>
+          prev.map((i) =>
+            String(i.id) === targetId || i.issue_id === targetId
+              ? { ...i, status: 'resolved', updated_at: new Date().toISOString() }
+              : i
+          )
+        );
+      }
+      setIssuesList((prev) =>
+        prev.map((i) =>
+          String((i as any).id) === targetId || i.issue_id === targetId
+            ? { ...i, status: 'resolved', updated_at: new Date().toISOString() }
+            : i
+        )
+      );
+      allIssuesRef.current = allIssuesRef.current.map((i) =>
+        String((i as any).id) === targetId || i.issue_id === targetId
+          ? { ...i, status: 'resolved' }
+          : i
+      );
+      showToast(`"${item.title}" verified & marked Officially Resolved. Decreased from active map.`);
       refreshGrievanceMarkers();
       await refreshMobileWorklist();
     } catch (err) {
@@ -1199,11 +1231,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
       const filtered = safeList.filter((fac) => {
         if (!fac) return false;
-        // Strict approval filter: user and officer ONLY see approved facilities
-        const isApproved = fac.approval_status === 'approved' || fac.approval_status === undefined;
-        if ((userRoleRef.current === 'user' || userRoleRef.current === 'officer') && !isApproved) {
-          return false;
-        }
+        // Never render rejected facilities
         if (fac.approval_status === 'rejected') {
           return false;
         }
@@ -1283,7 +1311,11 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         let statusLabel = 'Functional';
         let statusBadge = 'bg-[#38BDF8]/20 text-[#7DD3FC] border border-[#38BDF8]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
 
-        if (status.includes('partial')) {
+        if (fac.approval_status === 'pending_approval') {
+          statusColor = '#F59E0B';
+          statusLabel = 'Community Proposed / In Verification';
+          statusBadge = 'bg-[#F59E0B]/20 text-[#FDE68A] border border-[#F59E0B]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
+        } else if (status.includes('partial')) {
           statusColor = '#F59E0B'; // Partially Functional Warm Gold
           statusLabel = 'Partially Functional';
           statusBadge = 'bg-[#F59E0B]/20 text-[#FDE68A] border border-[#F59E0B]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
@@ -2364,27 +2396,11 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     try {
       const allGrievances = await db.offline_grievances.toArray();
       const visibleGrievances = allGrievances.filter((g) => {
-        const isResident = userRoleRef.current === 'user';
-        const isOfficer = userRoleRef.current === 'officer';
         const st = (g.status || '').toLowerCase();
 
         // Resolved issues are removed from active map pins, decreasing map issue count
         if (st === 'resolved' || st === 'verified_closed') {
           return false;
-        }
-
-        // Requirement 4A: Resident map ONLY renders pins that have reached 'under_inspection'
-        if (isResident) {
-          if (st !== 'under_inspection') {
-            return false;
-          }
-        }
-
-        // Requirement 4C: Officer worklist/map hides Step 1 (pending_initial_approval)
-        if (isOfficer) {
-          if (st === 'pending_initial_approval') {
-            return false;
-          }
         }
 
         if (g.approval_status === 'rejected') {
@@ -2528,6 +2544,27 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                 Copy Coords
               </button>
             </div>
+
+            ${
+              userRoleRef.current === 'admin'
+                ? `
+              <button 
+                type="button" 
+                data-issue-id="${g.id}" 
+                class="admin-delete-issue-btn w-full mt-2 px-2.5 py-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-900 border border-rose-700 text-rose-300 font-sans font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+              >
+                🗑️ Delete Fake Request (Admin)
+              </button>
+            `
+                : ''
+            }
+            <button 
+              type="button" 
+              data-issue-id="${g.id}" 
+              class="print-single-issue-audit-btn w-full mt-1.5 px-2.5 py-1.5 rounded-lg bg-[#0C171C] hover:bg-[#1B2F38] border border-[#38BDF8] text-[#38BDF8] font-sans font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+            >
+              📄 Official Audit Sheet (Print / PDF)
+            </button>
           </div>
         `,
           { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
@@ -3055,6 +3092,36 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         return;
       }
 
+      const deleteBtn = target.closest('.admin-delete-issue-btn') as HTMLButtonElement;
+      if (deleteBtn) {
+        const issueId = deleteBtn.getAttribute('data-issue-id');
+        if (!issueId) return;
+
+        if (window.confirm('Are you sure you want to permanently delete this fake request from the map?')) {
+          deleteBtn.disabled = true;
+          deleteBtn.innerText = 'Deleting...';
+
+          await deleteIssue(issueId);
+
+          if (propSetIssues) {
+            propSetIssues((prev) =>
+              prev.filter((item) => String(item.id) !== issueId && item.issue_id !== issueId)
+            );
+          }
+          setIssuesList((prev) =>
+            prev.filter((item) => String((item as any).id) !== issueId && item.issue_id !== issueId)
+          );
+          allIssuesRef.current = allIssuesRef.current.filter(
+            (item) => String((item as any).id) !== issueId && item.issue_id !== issueId
+          );
+
+          refreshGrievanceMarkers();
+          map.closePopup();
+          showToast('Fake request deleted permanently from map.');
+        }
+        return;
+      }
+
       const verifyBtn = target.closest('.admin-verify-resolution-btn') as HTMLButtonElement;
       if (verifyBtn) {
         const issueId = verifyBtn.getAttribute('data-issue-id');
@@ -3086,6 +3153,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
               ? { ...item, status: 'resolved' }
               : item
           );
+          refreshGrievanceMarkers();
           map.closePopup();
           showToast('Resolution officially verified & approved! Decreased from active map.');
         } else {

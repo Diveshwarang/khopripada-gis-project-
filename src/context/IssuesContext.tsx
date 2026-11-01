@@ -5,7 +5,6 @@ import {
   saveResolutionPhotoToCache,
   getResolutionPhotoFromCache,
 } from '../services/issueService';
-import { db } from '../services/offlineDb';
 import type { CivicIssue } from '../types';
 import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
 
@@ -57,30 +56,12 @@ export function useIssuesSync() {
 
   const reloadIssues = useCallback(async () => {
     try {
-      const cloudIssues = await fetchAllIssues();
-      if (cloudIssues && cloudIssues.length > 0) {
-        console.log(`[Cloud Sync] Loaded ${cloudIssues.length} live issues from Supabase`);
-        setIssues(cloudIssues);
-      } else if (!navigator.onLine) {
-        // Fallback to local Dexie only when genuinely offline
-        const offlineRecords = await db.offline_grievances.reverse().toArray().catch(() => []);
-        console.log(`[Offline Fallback] Loaded ${offlineRecords.length} offline issues`);
-        if (offlineRecords && offlineRecords.length > 0) {
-          setIssues(offlineRecords.map(normalizeRealtimeIssue));
-        } else {
-          setIssues(PREDEFINED_SURVEY_ISSUES);
-        }
-      } else {
-        setIssues(PREDEFINED_SURVEY_ISSUES);
-      }
+      const all = await fetchAllIssues();
+      console.log(`[Unified Issues Sync] Loaded ${all.length} master issues across cloud & local storage`);
+      setIssues(all);
     } catch (err) {
-      console.warn('[Sync Warning] Supabase fetch error, checking offline cache:', err);
-      const offlineRecords = await db.offline_grievances.reverse().toArray().catch(() => []);
-      if (offlineRecords && offlineRecords.length > 0) {
-        setIssues(offlineRecords.map(normalizeRealtimeIssue));
-      } else {
-        setIssues(PREDEFINED_SURVEY_ISSUES);
-      }
+      console.warn('[Sync Warning] Issue fetch error, loading baseline:', err);
+      setIssues(PREDEFINED_SURVEY_ISSUES);
     } finally {
       setLoading(false);
     }
@@ -178,6 +159,15 @@ export function useIssuesSync() {
             if (prev.some((item) => String(item.id) === String(newRow.id) || (newRow.issue_id && item.issue_id === newRow.issue_id))) return prev;
             return [newRow, ...prev];
           });
+        } else if (event.data?.type === 'ISSUE_DELETED') {
+          const deletedId = String(event.data.issueId || event.data.issue?.id || '');
+          setIssues((prev) =>
+            prev.filter(
+              (item) =>
+                String(item.id) !== deletedId &&
+                item.issue_id !== deletedId
+            )
+          );
         }
       };
     }
