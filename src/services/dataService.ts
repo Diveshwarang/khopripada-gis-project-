@@ -101,11 +101,11 @@ export const fetchIssues = async (): Promise<CivicIssue[]> => {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (!error && Array.isArray(data) && data.length > 0) {
-      console.log(`[Issues Sync] Loaded ${data.length} total issues from DB`);
-      const canonical = data.map(normalizeIssue);
+    const supabaseList = (!error && Array.isArray(data)) ? data.map(normalizeIssue) : [];
+
+    if (supabaseList.length > 0) {
       // Asynchronously backup to local Dexie for offline support
-      for (const item of canonical) {
+      for (const item of supabaseList) {
         db.offline_grievances.put({
           id: typeof item.id === 'number' ? item.id : parseInt(String(item.id).replace(/\D/g, '') || '0', 10) || undefined,
           title: item.title,
@@ -123,22 +123,57 @@ export const fetchIssues = async (): Promise<CivicIssue[]> => {
           status: item.status,
         }).catch(() => {});
       }
-      return canonical;
     }
+
+    // Load offline grievances from local Dexie
+    const offlineRecords = await db.offline_grievances.reverse().toArray().catch(() => []);
+    const offlineList = (offlineRecords || []).map(normalizeIssue);
+
+    // Load historical baseline issues from Dexie (cached_issues) or CSV (unified_issues.csv)
+    let cached = await db.cached_issues.toArray().catch(() => []);
+    if (!cached || cached.length === 0) {
+      cached = await seedIssuesFromCsv(true, '/data/unified_issues.csv').catch(() => []);
+    }
+    const cachedList = (cached || []).map(normalizeIssue);
+
+    // Merge into unified dictionary so NO historical or latest issue is ever dropped
+    const mergedMap = new Map<string, CivicIssue>();
+    for (const item of cachedList) {
+      const key = String(item.issue_id || item.id);
+      if (key) mergedMap.set(key, item);
+    }
+    for (const item of offlineList) {
+      const key = String(item.issue_id || item.id);
+      if (key) mergedMap.set(key, item);
+    }
+    for (const item of supabaseList) {
+      const key = String(item.issue_id || item.id);
+      if (key) mergedMap.set(key, item);
+    }
+
+    const allIssues = Array.from(mergedMap.values());
+    console.log(`[Issues Sync] Loaded ${allIssues.length} total issues from DB`);
+    return allIssues;
   } catch (err) {
     console.warn('Supabase fetchIssues unavailable, falling back to local storage:', err);
-  }
-
-  // Fallback to local Dexie storage & seeded historical baseline
-  const offlineRecords = await db.offline_grievances.reverse().toArray();
-  const seeded = await seedIssuesFromCsv(false);
-  const combined = [...offlineRecords.map(normalizeIssue)];
-  for (const s of seeded.map(normalizeIssue)) {
-    if (!combined.some(c => (c.issue_id && c.issue_id === s.issue_id) || (c.id && c.id === s.id))) {
-      combined.push(s);
+    const offlineRecords = await db.offline_grievances.reverse().toArray().catch(() => []);
+    let cached = await db.cached_issues.toArray().catch(() => []);
+    if (!cached || cached.length === 0) {
+      cached = await seedIssuesFromCsv(false, '/data/unified_issues.csv').catch(() => []);
     }
+    const mergedMap = new Map<string, CivicIssue>();
+    for (const s of (cached || []).map(normalizeIssue)) {
+      const key = String(s.issue_id || s.id);
+      if (key) mergedMap.set(key, s);
+    }
+    for (const o of (offlineRecords || []).map(normalizeIssue)) {
+      const key = String(o.issue_id || o.id);
+      if (key) mergedMap.set(key, o);
+    }
+    const allFallback = Array.from(mergedMap.values());
+    console.log(`[Issues Sync] Loaded ${allFallback.length} total issues from DB`);
+    return allFallback;
   }
-  return combined;
 };
 
 /**

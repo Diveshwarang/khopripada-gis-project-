@@ -60,6 +60,7 @@ import type { CivicIssue } from '../types';
 import {
   fetchIssues,
   fetchFacilities,
+  normalizeIssue,
   subscribeToPanchayatSync,
   transitionToAssignedForInspection,
   transitionToInspectionVerification,
@@ -168,12 +169,14 @@ export interface VillageMapProps {
   heatmapActive?: boolean;
   setHeatmapActive?: React.Dispatch<React.SetStateAction<boolean>>;
   issues?: CivicIssue[];
+  setIssues?: React.Dispatch<React.SetStateAction<CivicIssue[]>>;
 }
 
 export const VillageMap: React.FC<VillageMapProps> = ({
   heatmapActive: propHeatmapActive,
   setHeatmapActive: propSetHeatmapActive,
   issues: propIssues,
+  setIssues: propSetIssues,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -283,10 +286,18 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   // Defensive safe arrays & unified issues list
   const safeIssues = useMemo(() => (Array.isArray(issuesList) ? issuesList.filter(Boolean) : []), [issuesList]);
   const issues = useMemo(() => {
-    if (propIssues && Array.isArray(propIssues) && propIssues.length > 0) {
-      return propIssues;
+    const merged = new Map<string, CivicIssue>();
+    for (const item of safeIssues) {
+      const key = String(item.issue_id || (item as any).id);
+      if (key) merged.set(key, item as any);
     }
-    return safeIssues;
+    if (propIssues && Array.isArray(propIssues)) {
+      for (const item of propIssues) {
+        const key = String(item.issue_id || item.id);
+        if (key) merged.set(key, item);
+      }
+    }
+    return Array.from(merged.values());
   }, [propIssues, safeIssues]);
   const safeFacilities = useMemo(() => (Array.isArray(facilitiesList) ? facilitiesList.filter(Boolean) : []), [facilitiesList]);
 
@@ -1703,6 +1714,11 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         if (refreshGrievanceMarkersRef.current) {
           refreshGrievanceMarkersRef.current();
         }
+        if (propSetIssues) {
+          propSetIssues((prev) =>
+            prev.map((iss) => (iss.issue_id === issueId || String(iss.id) === issueId ? { ...iss, status: newStatus as any } : iss))
+          );
+        }
         await upsertIssue({ issue_id: issueId, status: newStatus as any });
         showToast(`Issue ${issueId} status updated to "${newStatus.replace(/_/g, ' ')}"!`);
       } catch (err) {
@@ -2276,6 +2292,9 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         setIssuesList(issues as any);
         renderIssueMarkers(issues as any, facilityFilter);
         refreshGrievanceMarkers();
+        if (propSetIssues) {
+          propSetIssues(issues as any);
+        }
 
         // Auto-focus and fit bounds
         if (window.innerWidth < 768) {
@@ -2327,6 +2346,9 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           allIssuesRef.current = updated;
           renderIssueMarkers(updated, facilityFilter);
           refreshGrievanceMarkers();
+          if (propSetIssues) {
+            propSetIssues(updated);
+          }
           return updated;
         });
       },
@@ -4752,8 +4774,25 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         isOpen={isGrievanceModalOpen}
         onClose={() => setIsGrievanceModalOpen(false)}
         initialCoords={inspectedPoint ? [inspectedPoint.lat, inspectedPoint.lng] : KHOPRIPADA_CORE}
-        onGrievanceSaved={() => {
+        onGrievanceSaved={(savedGrievance) => {
           refreshGrievanceMarkers();
+          if (savedGrievance) {
+            const canonical = normalizeIssue(savedGrievance);
+            setIssuesList((prev) => {
+              const key = String(canonical.issue_id || canonical.id);
+              const filtered = prev.filter((i) => String(i.issue_id || (i as any).id) !== key);
+              const updated = [canonical as any, ...filtered];
+              allIssuesRef.current = updated;
+              return updated;
+            });
+            if (propSetIssues) {
+              propSetIssues((prev) => {
+                const key = String(canonical.issue_id || canonical.id);
+                const filtered = prev.filter((i) => String(i.issue_id || (i as any).id) !== key);
+                return [canonical, ...filtered];
+              });
+            }
+          }
         }}
         userRole={userRole}
       />

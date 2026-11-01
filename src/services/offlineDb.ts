@@ -270,7 +270,7 @@ export const saveFacilityToOfflineDb = async (facility: CachedFacility): Promise
   await db.cached_facilities.put(facility);
 };
 
-const ISSUES_DATA_VERSION = 'v2_field_kobo_media';
+const ISSUES_DATA_VERSION = 'v3_unified_historical_corridor';
 
 /**
  * Parses issues CSV text into array of CachedIssue objects using PapaParse
@@ -345,17 +345,20 @@ export const parseIssuesCsv = (csvText: string): CachedIssue[] => {
  */
 export const seedIssuesFromCsv = async (
   forceRefresh = false,
-  csvPath = '/data/issues.csv'
+  csvPath = '/data/unified_issues.csv'
 ): Promise<CachedIssue[]> => {
   try {
     const currentVersion = localStorage.getItem('issues_seeded_version');
     const existingCount = await db.cached_issues.count();
 
-    if (!forceRefresh && currentVersion === ISSUES_DATA_VERSION && existingCount > 0) {
+    if (!forceRefresh && currentVersion === ISSUES_DATA_VERSION && existingCount > 10) {
       return await db.cached_issues.toArray();
     }
 
-    const response = await fetch(csvPath);
+    let response = await fetch(csvPath);
+    if (!response.ok && csvPath !== '/data/issues.csv') {
+      response = await fetch('/data/issues.csv');
+    }
     if (!response.ok) {
       console.warn(`Could not fetch ${csvPath}:`, response.statusText);
       return await db.cached_issues.toArray();

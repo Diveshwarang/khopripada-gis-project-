@@ -7,7 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 
 function DashboardGateway() {
   const { session, isLoading } = useAuth();
-  const { issues } = useIssues();
+  const { issues, setIssues } = useIssues();
   const [heatmapActive, setHeatmapActive] = useState<boolean>(false);
 
   if (isLoading) {
@@ -34,6 +34,7 @@ function DashboardGateway() {
           heatmapActive={heatmapActive}
           setHeatmapActive={setHeatmapActive}
           issues={issues}
+          setIssues={setIssues}
         />
       </ErrorBoundary>
     </main>
