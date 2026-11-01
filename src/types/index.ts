@@ -3,6 +3,27 @@ export type UserRole = 'admin' | 'officer' | 'user';
 
 export type OperationalStatus = 'functional' | 'partially_functional' | 'non_functional' | string;
 
+export type IssueStatus =
+  | 'reported'          // Step 1: Newly submitted by resident
+  | 'assigned'          // Step 2: Assigned to field officer
+  | 'under_inspection'  // Step 3: Officer inspecting on site
+  | 'resolved'          // Step 4: Repair complete, photo uploaded
+  | 'verified_closed';  // Step 5: Sarpanch / Admin verified & closed
+
+export interface FacilityAsset {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  condition?: 'functional' | 'partial' | 'degraded';
+  scheme_name?: string; // e.g., Jal Jeevan Mission, ZP Gram Nidhi
+  ward_no?: string | number;
+  beneficiaries_served?: number;
+  latitude: number;
+  longitude: number;
+  operational_status?: string;
+}
+
 export interface BaseEntity {
   approval_status: ApprovalStatus;
   submitted_by?: string;
@@ -33,7 +54,7 @@ export interface CivicIssue {
   title: string;
   category: 'water' | 'electricity' | 'roads' | 'sanitation' | 'health' | 'other' | string;
   severity: 'low' | 'medium' | 'high' | 'critical' | string;
-  status: IssueVerificationStatus | string;
+  status: IssueStatus | IssueVerificationStatus | string;
   latitude: number;
   longitude: number;
   description?: string;
@@ -41,6 +62,9 @@ export interface CivicIssue {
   reporter_name?: string;
   reported_by?: string;
   submitted_by?: string;
+  assigned_officer?: string;
+  resolution_notes?: string;
+  proof_image_url?: string;
   photo_url?: string;
   photoBase64?: string;
   resolution_photo_url?: string;

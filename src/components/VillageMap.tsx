@@ -57,7 +57,8 @@ import {
   type CachedIssue,
   type OfflineGrievance,
 } from '../services/offlineDb';
-import type { CivicIssue } from '../types';
+import type { CivicIssue, FacilityAsset, IssueStatus } from '../types';
+import { updateIssueStatus } from '../services/issueService';
 import {
   fetchIssues,
   fetchFacilities,
@@ -165,6 +166,140 @@ const VILLAGE_BOUNDARY_COORDS: [number, number][] = [
 
 type BasemapType = 'satellite' | 'osm' | 'esri';
 export type FacilityCategoryFilter = 'all' | 'water' | 'education' | 'commerce' | 'health' | 'civic' | 'issues';
+
+function buildFacilityPopupHTML(fac: FacilityAsset | any): string {
+  const cond =
+    fac.condition ||
+    (fac.operational_status === 'non_functional'
+      ? 'degraded'
+      : fac.operational_status === 'partially_functional'
+      ? 'partial'
+      : 'functional');
+
+  const conditionColor =
+    cond === 'functional'
+      ? '#10B981'
+      : cond === 'partial'
+      ? '#F59E0B'
+      : '#EF4444';
+
+  const conditionLabel = (cond || 'functional').toUpperCase();
+
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; width: 240px; padding: 4px; color: #0F172A; background: #FFFFFF; border-radius: 8px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #0284C7; background: #E0F2FE; padding: 2px 6px; border-radius: 4px;">
+          ${fac.category || 'Public Amenity'}
+        </span>
+        <span style="font-size: 10px; font-weight: 700; color: ${conditionColor}; background: ${conditionColor}15; padding: 2px 6px; border-radius: 4px; border: 1px solid ${conditionColor}40;">
+          ${conditionLabel}
+        </span>
+      </div>
+
+      <div style="font-size: 14px; font-weight: 700; color: #0F172A; line-height: 1.25; margin-bottom: 4px;">
+        ${fac.name}
+      </div>
+
+      <p style="font-size: 11px; color: #475569; margin: 0 0 8px 0; line-height: 1.4;">
+        ${fac.description || fac.notes || 'Public village asset logged under Bapane Gram Panchayat GIS registry.'}
+      </p>
+
+      <div style="font-size: 10px; color: #64748B; border-top: 1px solid #E2E8F0; padding-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+        <div>Scheme: <b style="color: #1E293B;">${fac.scheme_name || 'ZP Gram Nidhi'}</b></div>
+        <div>Ward: <b style="color: #1E293B;">${fac.ward_no ? 'Ward ' + fac.ward_no : 'General'}</b></div>
+        ${fac.beneficiaries_served ? `<div style="grid-column: span 2;">Coverage: <b style="color: #1E293B;">~${fac.beneficiaries_served} villagers</b></div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function buildIssuePopupHTML(issue: CivicIssue | any, userRole: string): string {
+  const isOfficerOrAdmin = userRole === 'officer' || userRole === 'admin';
+
+  const statusConfig: Record<string, { label: string; bg: string; text: string; step: number }> = {
+    reported: { label: 'Step 1: Registered', bg: '#FEF2F2', text: '#DC2626', step: 1 },
+    pending_initial_approval: { label: 'Step 1: Registered', bg: '#FEF2F2', text: '#DC2626', step: 1 },
+    assigned: { label: 'Step 2: Assigned', bg: '#FFFBEB', text: '#D97706', step: 2 },
+    assigned_for_inspection: { label: 'Step 2: Assigned', bg: '#FFFBEB', text: '#D97706', step: 2 },
+    under_inspection: { label: 'Step 3: Field Inspection', bg: '#EFF6FF', text: '#2563EB', step: 3 },
+    pending_inspection_verification: { label: 'Step 3: Field Inspection', bg: '#EFF6FF', text: '#2563EB', step: 3 },
+    resolved: { label: 'Step 4: Repaired', bg: '#F0FDF4', text: '#16A34A', step: 4 },
+    pending_resolution_approval: { label: 'Step 4: Repaired', bg: '#F0FDF4', text: '#16A34A', step: 4 },
+    verified_closed: { label: 'Step 5: Verified & Closed', bg: '#ECFDF5', text: '#059669', step: 5 },
+  };
+
+  const rawStatus = (issue.status || 'reported').toLowerCase();
+  const currentStatus = statusConfig[rawStatus] || statusConfig.reported;
+  const issueId = String(issue.id || issue.issue_id || '');
+
+  let selectVal: IssueStatus = 'reported';
+  if (rawStatus === 'assigned' || rawStatus === 'assigned_for_inspection') selectVal = 'assigned';
+  else if (rawStatus === 'under_inspection' || rawStatus === 'pending_inspection_verification') selectVal = 'under_inspection';
+  else if (rawStatus === 'resolved' || rawStatus === 'pending_resolution_approval') selectVal = 'resolved';
+  else if (rawStatus === 'verified_closed') selectVal = 'verified_closed';
+
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; width: 260px; padding: 4px; color: #0F172A; background: #FFFFFF; border-radius: 8px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #DC2626; background: #FEF2F2; padding: 2px 6px; border-radius: 4px;">
+          ${issue.category || 'Grievance'}
+        </span>
+        <span style="font-size: 10px; font-weight: 700; color: ${currentStatus.text}; background: ${currentStatus.bg}; padding: 2px 6px; border-radius: 4px; border: 1px solid ${currentStatus.text}40;">
+          ${currentStatus.label}
+        </span>
+      </div>
+
+      <div style="font-size: 14px; font-weight: 700; color: #0F172A; line-height: 1.25; margin-bottom: 4px;">
+        ${issue.title}
+      </div>
+
+      <p style="font-size: 11px; color: #475569; margin: 0 0 8px 0; line-height: 1.4;">
+        ${issue.description || 'No additional field notes provided for this issue.'}
+      </p>
+
+      ${
+        issue.resolution_notes || issue.officer_notes
+          ? `<div style="background: #F8FAFC; border-left: 2px solid #0284C7; padding: 4px 8px; font-size: 10px; color: #334155; margin-bottom: 8px;">
+               <b>Officer Note:</b> ${issue.resolution_notes || issue.officer_notes}
+             </div>`
+          : ''
+      }
+
+      <div style="font-size: 10px; color: #64748B; border-top: 1px solid #E2E8F0; padding-top: 6px; margin-bottom: 8px;">
+        <div>Severity: <b style="color: #0F172A; text-transform: capitalize;">${issue.severity || 'Medium'}</b></div>
+        <div>Reported: <b style="color: #0F172A;">${issue.created_at ? new Date(issue.created_at).toLocaleDateString() : 'Active'}</b></div>
+      </div>
+
+      ${
+        isOfficerOrAdmin
+          ? `
+        <div style="background: #F1F5F9; border-radius: 6px; padding: 6px; margin-top: 6px;">
+          <label style="display: block; font-size: 10px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+            Update Fix Status:
+          </label>
+          <select 
+            id="status-select-${issueId}" 
+            data-issue-id="${issueId}"
+            class="issue-status-dropdown"
+            style="width: 100%; font-size: 11px; padding: 4px 6px; border: 1px solid #CBD5E1; border-radius: 4px; background: #FFFFFF; color: #0F172A; font-weight: 600; cursor: pointer;"
+          >
+            <option value="reported" ${selectVal === 'reported' ? 'selected' : ''}>Step 1: Registered</option>
+            <option value="assigned" ${selectVal === 'assigned' ? 'selected' : ''}>Step 2: Assigned to Officer</option>
+            <option value="under_inspection" ${selectVal === 'under_inspection' ? 'selected' : ''}>Step 3: Field Inspection</option>
+            <option value="resolved" ${selectVal === 'resolved' ? 'selected' : ''}>Step 4: Work Repaired</option>
+            <option value="verified_closed" ${selectVal === 'verified_closed' ? 'selected' : ''}>Step 5: Verified & Closed</option>
+          </select>
+        </div>
+      `
+          : `
+        <div style="font-size: 10px; color: #059669; font-weight: 600; text-align: center; background: #ECFDF5; padding: 4px; border-radius: 4px;">
+          Live Tracking Active: Monitored by Bapane Gram Panchayat
+        </div>
+      `
+      }
+    </div>
+  `;
+}
 
 export interface VillageMapProps {
   heatmapActive?: boolean;
@@ -1678,7 +1813,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       try {
         await db.cached_issues.update(issueId, { status: newStatus });
         allIssuesRef.current = allIssuesRef.current.map((iss) =>
-          iss.issue_id === issueId ? { ...iss, status: newStatus } : iss
+          iss.issue_id === issueId || String((iss as any).id) === issueId ? { ...iss, status: newStatus } : iss
         );
         setIssuesList([...allIssuesRef.current]);
         renderIssueMarkers(allIssuesRef.current, facilityFilter);
@@ -1690,13 +1825,19 @@ export const VillageMap: React.FC<VillageMapProps> = ({
             prev.map((iss) => (iss.issue_id === issueId || String(iss.id) === issueId ? { ...iss, status: newStatus as any } : iss))
           );
         }
-        await upsertIssue({ issue_id: issueId, status: newStatus as any });
-        showToast(`Issue ${issueId} status updated to "${newStatus.replace(/_/g, ' ')}"!`);
+        const res = await updateIssueStatus(issueId, newStatus as IssueStatus);
+        if (!res.success) {
+          await upsertIssue({ issue_id: issueId, status: newStatus as any });
+        }
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.closePopup();
+        }
+        showToast(`Issue status updated to "${newStatus.replace(/_/g, ' ')}"!`);
       } catch (err) {
         console.error('Failed to update issue status in DB:', err);
       }
     },
-    [facilityFilter, renderIssueMarkers, showToast]
+    [facilityFilter, renderIssueMarkers, showToast, propSetIssues]
   );
   handleUpdateIssueStatusRef.current = handleUpdateIssueStatus;
 
@@ -1971,12 +2112,10 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         const hasLabel = tier === 'tier1_anchor' || tier === 'tier2_civic' ? showTextLabels : currentZoom >= 17;
 
         const icon = createPOIDivIcon(fac.name, fac.category, tier, hasLabel);
-        const marker = L.marker([lat, lng], { icon }).bindPopup(`
-          <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; padding: 4px;">
-            <div style="font-weight: 700; color: #0F172A;">${fac.name}</div>
-            <div style="color: #64748B; font-size: 11px; margin-top: 2px;">${fac.category}</div>
-          </div>
-        `, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
+        const marker = L.marker([lat, lng], { icon }).bindPopup(
+          buildFacilityPopupHTML(fac as any),
+          { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
+        );
 
         marker.on('click', () => {
           setInspectedPoint({
@@ -2004,13 +2143,10 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         const hasLabel = currentZoom >= 16;
 
         const icon = createIssueDivIcon(issue.title, issue.severity, hasLabel);
-        const marker = L.marker([lat, lng], { icon }).bindPopup(`
-          <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; padding: 4px;">
-            <div style="font-weight: 700; color: #DC2626;">${issue.title}</div>
-            <div style="font-size: 11px; color: #64748B;">Category: ${issue.category || 'General'}</div>
-            <div style="font-size: 11px; margin-top: 4px;">Severity: <b>${(issue.severity || 'low').toUpperCase()}</b></div>
-          </div>
-        `, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
+        const marker = L.marker([lat, lng], { icon }).bindPopup(
+          buildIssuePopupHTML(issue, userRole),
+          { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
+        );
 
         marker.on('click', () => {
           setInspectedPoint({
@@ -2028,7 +2164,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     if (mapInstanceRef.current) {
       syncLODLayers(mapInstanceRef.current);
     }
-  }, [safeFacilities, issues, facilityFilter, showFacilities, showIssues, syncLODLayers, currentZoom]);
+  }, [safeFacilities, issues, facilityFilter, showFacilities, showIssues, syncLODLayers, currentZoom, userRole]);
 
   // Export Handlers for Client-Side Audit & Reporting Engine
   const handleDownloadPanchayatPdf = useCallback(() => {
@@ -2598,7 +2734,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     const handlePopupOpen = (e: L.PopupEvent) => {
       const contentNode = e.popup.getElement();
       if (!contentNode) return;
-      const selects = contentNode.querySelectorAll<HTMLSelectElement>('.issue-status-select');
+      const selects = contentNode.querySelectorAll<HTMLSelectElement>('.issue-status-select, .issue-status-dropdown');
       selects.forEach((select) => {
         select.onchange = async () => {
           const issueId = select.getAttribute('data-issue-id');
@@ -2609,6 +2745,64 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         };
       });
     };
+
+    const handlePopupDomChange = async (e: Event) => {
+      const target = e.target as HTMLSelectElement;
+      if (
+        target &&
+        (target.classList.contains('issue-status-dropdown') ||
+          target.classList.contains('issue-status-select'))
+      ) {
+        const issueId = target.getAttribute('data-issue-id');
+        const newStatus = target.value as IssueStatus;
+
+        if (!issueId) return;
+
+        target.disabled = true;
+        const originalBg = target.style.backgroundColor;
+        target.style.backgroundColor = '#E2E8F0';
+
+        const result = await updateIssueStatus(issueId, newStatus);
+
+        if (result.success) {
+          if (propSetIssues) {
+            propSetIssues((prev) =>
+              prev.map((item) =>
+                String(item.id) === issueId || item.issue_id === issueId
+                  ? { ...item, status: newStatus, updated_at: new Date().toISOString() }
+                  : item
+              )
+            );
+          }
+          setIssuesList((prev) =>
+            prev.map((item) =>
+              String((item as any).id) === issueId || item.issue_id === issueId
+                ? { ...item, status: newStatus, updated_at: new Date().toISOString() }
+                : item
+            )
+          );
+          allIssuesRef.current = allIssuesRef.current.map((item) =>
+            String((item as any).id) === issueId || item.issue_id === issueId
+              ? { ...item, status: newStatus }
+              : item
+          );
+          try {
+            await db.cached_issues.update(issueId, { status: newStatus });
+          } catch {
+            // ignore
+          }
+          map.closePopup();
+          showToast(`Status updated to "${newStatus.replace(/_/g, ' ')}"!`);
+        } else {
+          alert('Failed to update status: ' + result.error);
+          target.disabled = false;
+          target.style.backgroundColor = originalBg;
+        }
+      }
+    };
+
+    const mapDomContainer = map.getContainer();
+    mapDomContainer.addEventListener('change', handlePopupDomChange);
 
     map.on('moveend', updateMeta);
     map.on('zoomend', updateMeta);
@@ -2629,6 +2823,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     }, 150);
 
     return () => {
+      mapDomContainer.removeEventListener('change', handlePopupDomChange);
       unsubscribeSync();
       map.off('zoomend', onZoom);
       map.off('moveend', updateMeta);
@@ -2659,6 +2854,70 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     refreshGrievanceMarkers,
     facilityFilter,
   ]);
+
+  // Wire DOM Change Listener for Real-Time Status Mutation
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const handlePopupDomChange = async (e: Event) => {
+      const target = e.target as HTMLSelectElement;
+      if (target && target.classList.contains('issue-status-dropdown')) {
+        const issueId = target.getAttribute('data-issue-id');
+        const newStatus = target.value as IssueStatus;
+
+        if (!issueId) return;
+
+        target.disabled = true;
+        const originalBg = target.style.backgroundColor;
+        target.style.backgroundColor = '#E2E8F0';
+
+        const result = await updateIssueStatus(issueId, newStatus);
+
+        if (result.success) {
+          // Optimistically update local issues state
+          if (propSetIssues) {
+            propSetIssues((prev) =>
+              prev.map((item) =>
+                String(item.id) === issueId || item.issue_id === issueId
+                  ? { ...item, status: newStatus, updated_at: new Date().toISOString() }
+                  : item
+              )
+            );
+          }
+          setIssuesList((prev) =>
+            prev.map((item) =>
+              String((item as any).id) === issueId || item.issue_id === issueId
+                ? { ...item, status: newStatus, updated_at: new Date().toISOString() }
+                : item
+            )
+          );
+          allIssuesRef.current = allIssuesRef.current.map((item) =>
+            String((item as any).id) === issueId || item.issue_id === issueId
+              ? { ...item, status: newStatus }
+              : item
+          );
+          try {
+            await db.cached_issues.update(issueId, { status: newStatus });
+          } catch {
+            // ignore
+          }
+          map.closePopup();
+        } else {
+          alert('Failed to update status: ' + result.error);
+          target.disabled = false;
+          target.style.backgroundColor = originalBg;
+        }
+      }
+    };
+
+    const container = map.getContainer();
+    container.addEventListener('change', handlePopupDomChange);
+
+    return () => {
+      container.removeEventListener('change', handlePopupDomChange);
+    };
+  }, [propSetIssues]);
 
   // Render GPS Accuracy Circle & Pin
   const renderGpsFix = (coords: [number, number], accuracy: number, isSimulated = false) => {
