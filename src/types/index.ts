@@ -73,14 +73,14 @@ export interface CivicIssue {
   reporter_name?: string;
   reported_by?: string;
   submitted_by?: string;
-  assigned_officer?: string;
+  assigned_officer?: string | null;
   resolution_notes?: string;
   proof_image_url?: string;
   photo_url?: string;
   photoBase64?: string;
   resolution_photo_url?: string;
   officer_notes?: string;
-  assigned_to?: string;
+  assigned_to?: string | null;
   verified_by?: string;
   approval_status?: ApprovalStatus;
   priority_score?: number;

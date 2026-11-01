@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { db, seedFacilitiesFromCsv } from './offlineDb';
 import { fetchAllIssues } from './issueService';
 import type { CivicIssue, Facility } from '../types';
+import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
 import {
   queueOfflineGrievance,
   queueOfflineFacility,
@@ -104,13 +105,15 @@ export const fetchIssues = async (): Promise<CivicIssue[]> => {
     }
     if (!navigator.onLine) {
       const offlineRecords = await db.offline_grievances.reverse().toArray().catch(() => []);
-      return (offlineRecords || []).map(normalizeIssue);
+      const mapped = (offlineRecords || []).map(normalizeIssue);
+      return mapped.length > 0 ? mapped : PREDEFINED_SURVEY_ISSUES;
     }
-    return cloudIssues;
+    return PREDEFINED_SURVEY_ISSUES;
   } catch (err) {
     console.warn('Supabase fetchIssues unavailable, falling back to local storage:', err);
     const offlineRecords = await db.offline_grievances.reverse().toArray().catch(() => []);
-    return (offlineRecords || []).map(normalizeIssue);
+    const mapped = (offlineRecords || []).map(normalizeIssue);
+    return mapped.length > 0 ? mapped : PREDEFINED_SURVEY_ISSUES;
   }
 };
 

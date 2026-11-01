@@ -59,6 +59,7 @@ import {
 } from '../services/offlineDb';
 import type { CivicIssue, FacilityAsset, IssueStatus } from '../types';
 import { updateIssueStatus } from '../services/issueService';
+import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
 import {
   fetchIssues,
   fetchFacilities,
@@ -485,7 +486,8 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         if (key) merged.set(key, item);
       }
     }
-    return Array.from(merged.values());
+    const result = Array.from(merged.values());
+    return result.length > 0 ? result : PREDEFINED_SURVEY_ISSUES;
   }, [propIssues, safeIssues]);
   const safeFacilities = useMemo(() => (Array.isArray(facilitiesList) ? facilitiesList.filter(Boolean) : []), [facilitiesList]);
 
@@ -1921,7 +1923,9 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     // Only render if the issues layer toggle is active
     if (!showIssuesLayer) return;
 
-    (issues || []).forEach((issue) => {
+    const currentIssues = (issues && issues.length > 0) ? issues : PREDEFINED_SURVEY_ISSUES;
+
+    currentIssues.forEach((issue) => {
       const lat = Number(issue?.latitude);
       const lng = Number(issue?.longitude);
       if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;

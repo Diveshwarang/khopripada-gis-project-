@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { fetchAllIssues } from '../services/issueService';
 import { db } from '../services/offlineDb';
 import type { CivicIssue } from '../types';
+import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
 
 /**
  * Normalizes incoming raw database rows (e.g. from real-time events) into typed CivicIssue
@@ -42,7 +43,7 @@ function normalizeRealtimeIssue(row: any): CivicIssue {
  * so that any submission from mobile immediately broadcasts to the laptop.
  */
 export function useIssuesSync() {
-  const [issues, setIssues] = useState<CivicIssue[]>([]);
+  const [issues, setIssues] = useState<CivicIssue[]>(PREDEFINED_SURVEY_ISSUES);
   const [loading, setLoading] = useState<boolean>(true);
 
   const reloadIssues = useCallback(async () => {
@@ -55,14 +56,22 @@ export function useIssuesSync() {
         // Fallback to local Dexie only when genuinely offline
         const offlineRecords = await db.offline_grievances.reverse().toArray().catch(() => []);
         console.log(`[Offline Fallback] Loaded ${offlineRecords.length} offline issues`);
-        setIssues((offlineRecords || []).map(normalizeRealtimeIssue));
+        if (offlineRecords && offlineRecords.length > 0) {
+          setIssues(offlineRecords.map(normalizeRealtimeIssue));
+        } else {
+          setIssues(PREDEFINED_SURVEY_ISSUES);
+        }
       } else {
-        setIssues([]);
+        setIssues(PREDEFINED_SURVEY_ISSUES);
       }
     } catch (err) {
       console.warn('[Sync Warning] Supabase fetch error, checking offline cache:', err);
       const offlineRecords = await db.offline_grievances.reverse().toArray().catch(() => []);
-      setIssues((offlineRecords || []).map(normalizeRealtimeIssue));
+      if (offlineRecords && offlineRecords.length > 0) {
+        setIssues(offlineRecords.map(normalizeRealtimeIssue));
+      } else {
+        setIssues(PREDEFINED_SURVEY_ISSUES);
+      }
     } finally {
       setLoading(false);
     }

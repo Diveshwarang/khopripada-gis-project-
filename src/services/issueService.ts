@@ -1,11 +1,13 @@
 import { supabase } from '../supabaseClient';
 import type { CivicIssue, IssueStatus, IssueVerificationStatus } from '../types';
+import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
 
 export type AnyIssueStatus = IssueStatus | IssueVerificationStatus | string;
 
 /**
  * Fetch all issues directly from Supabase Cloud.
  * Guarantees phone, laptop, admin, and officer all see the exact same master dataset.
+ * If Supabase is empty or unreachable, automatically seeds and falls back to PREDEFINED_SURVEY_ISSUES.
  */
 export async function fetchAllIssues(): Promise<CivicIssue[]> {
   try {
@@ -15,38 +17,90 @@ export async function fetchAllIssues(): Promise<CivicIssue[]> {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('[Supabase Query Error]:', error);
-      return [];
+      console.warn('[Supabase Query Warning, falling back to survey baseline]:', error);
+      return PREDEFINED_SURVEY_ISSUES;
     }
 
-    return (data || []).map((row: any) => ({
-      id: String(row.id || row.issue_id || ''),
-      issue_id: String(row.issue_id || row.id || ''),
-      title: row.title || 'Civic Grievance',
-      description: row.description || row.notes || '',
-      notes: row.notes || row.description || '',
-      category: row.category || 'General',
-      severity: row.severity || 'low',
-      status: (row.status || 'reported') as IssueStatus,
-      latitude: Number(row.latitude),
-      longitude: Number(row.longitude),
-      reported_by: row.reported_by || row.reporter_name || row.submitted_by || 'Resident',
-      reporter_name: row.reporter_name || row.reported_by || 'Resident',
-      submitted_by: row.submitted_by || row.reported_by || 'Resident',
-      assigned_officer: row.assigned_officer || row.assigned_to || null,
-      assigned_to: row.assigned_to || row.assigned_officer || null,
-      resolution_notes: row.resolution_notes || row.officer_notes || '',
-      officer_notes: row.officer_notes || row.resolution_notes || '',
-      proof_image_url: row.proof_image_url || row.photo_url || row.photoBase64 || '',
-      photo_url: row.photo_url || row.proof_image_url || row.photoBase64 || '',
-      photoBase64: row.photoBase64 || '',
-      resolution_photo_url: row.resolution_photo_url || '',
-      created_at: row.created_at || new Date().toISOString(),
-      updated_at: row.updated_at || new Date().toISOString(),
-    }));
+    if (data && data.length > 0) {
+      return data.map((row: any) => ({
+        id: String(row.id || row.issue_id || ''),
+        issue_id: String(row.issue_id || row.id || ''),
+        title: row.title || 'Civic Grievance',
+        description: row.description || row.notes || '',
+        notes: row.notes || row.description || '',
+        category: row.category || 'General',
+        severity: row.severity || 'low',
+        status: (row.status || 'reported') as IssueStatus,
+        latitude: Number(row.latitude),
+        longitude: Number(row.longitude),
+        reported_by: row.reported_by || row.reporter_name || row.submitted_by || 'Resident',
+        reporter_name: row.reporter_name || row.reported_by || 'Resident',
+        submitted_by: row.submitted_by || row.reported_by || 'Resident',
+        assigned_officer: row.assigned_officer || row.assigned_to || null,
+        assigned_to: row.assigned_to || row.assigned_officer || null,
+        resolution_notes: row.resolution_notes || row.officer_notes || '',
+        officer_notes: row.officer_notes || row.resolution_notes || '',
+        proof_image_url: row.proof_image_url || row.photo_url || row.photoBase64 || '',
+        photo_url: row.photo_url || row.proof_image_url || row.photoBase64 || '',
+        photoBase64: row.photoBase64 || '',
+        resolution_photo_url: row.resolution_photo_url || '',
+        created_at: row.created_at || new Date().toISOString(),
+        updated_at: row.updated_at || new Date().toISOString(),
+      }));
+    }
+
+    // Table is empty: attempt cloud auto-seed
+    console.log('[Supabase Sync] Issues table is empty. Auto-seeding survey baseline...');
+    try {
+      const seedPayload = PREDEFINED_SURVEY_ISSUES.map(({ id: _id, ...rest }) => ({
+        ...rest,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('issues')
+        .insert(seedPayload)
+        .select();
+
+      if (!insertError && inserted && inserted.length > 0) {
+        console.log(`[Supabase Sync] Successfully auto-seeded ${inserted.length} baseline issues to cloud.`);
+        return inserted.map((row: any) => ({
+          id: String(row.id || row.issue_id || ''),
+          issue_id: String(row.issue_id || row.id || ''),
+          title: row.title || 'Civic Grievance',
+          description: row.description || row.notes || '',
+          notes: row.notes || row.description || '',
+          category: row.category || 'General',
+          severity: row.severity || 'low',
+          status: (row.status || 'reported') as IssueStatus,
+          latitude: Number(row.latitude),
+          longitude: Number(row.longitude),
+          reported_by: row.reported_by || row.reporter_name || row.submitted_by || 'Resident',
+          reporter_name: row.reporter_name || row.reported_by || 'Resident',
+          submitted_by: row.submitted_by || row.reported_by || 'Resident',
+          assigned_officer: row.assigned_officer || row.assigned_to || null,
+          assigned_to: row.assigned_to || row.assigned_officer || null,
+          resolution_notes: row.resolution_notes || row.officer_notes || '',
+          officer_notes: row.officer_notes || row.resolution_notes || '',
+          proof_image_url: row.proof_image_url || row.photo_url || row.photoBase64 || '',
+          photo_url: row.photo_url || row.proof_image_url || row.photoBase64 || '',
+          photoBase64: row.photoBase64 || '',
+          resolution_photo_url: row.resolution_photo_url || '',
+          created_at: row.created_at || new Date().toISOString(),
+          updated_at: row.updated_at || new Date().toISOString(),
+        }));
+      } else if (insertError) {
+        console.warn('[Supabase Sync] Auto-seed insert error (e.g. RLS):', insertError);
+      }
+    } catch (seedErr) {
+      console.warn('[Supabase Sync] Auto-seed exception:', seedErr);
+    }
+
+    return PREDEFINED_SURVEY_ISSUES;
   } catch (err) {
-    console.error('[Network Error fetching issues]:', err);
-    return [];
+    console.error('[Network Error fetching issues, falling back to survey baseline]:', err);
+    return PREDEFINED_SURVEY_ISSUES;
   }
 }
 
