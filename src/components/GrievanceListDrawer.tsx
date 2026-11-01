@@ -27,7 +27,11 @@ import {
 } from '../services/dataService';
 import { compressImageToBase64 } from '../utils/imageUtils';
 import type { UserRole, CivicIssue, IssueStatus } from '../types';
-import { updateIssueStatus } from '../services/issueService';
+import {
+  updateIssueStatus,
+  saveResolutionPhotoToCache,
+  getResolutionPhotoFromCache,
+} from '../services/issueService';
 import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
 
 export interface DrawerGrievanceItem {
@@ -241,11 +245,17 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     if (!file || activePhotoUploadId === null) return;
     try {
       const compressed = await compressImageToBase64(file, 800, 800, 0.75);
-      setProofPhotoMap((prev) => ({ ...prev, [activePhotoUploadId]: compressed }));
-      const numId = parseInt(activePhotoUploadId.replace(/\D/g, '') || '0', 10);
+      const targetId = activePhotoUploadId;
+      setProofPhotoMap((prev) => ({ ...prev, [targetId]: compressed }));
+      saveResolutionPhotoToCache(targetId, compressed);
+      setGrievances((prev) =>
+        prev.map((g) => (g.id === targetId || g.issue_id === targetId ? { ...g, resolution_photo_url: compressed } : g))
+      );
+      const numId = parseInt(targetId.replace(/\D/g, '') || '0', 10);
       if (numId) {
         await db.offline_grievances.update(numId, { resolution_photo_url: compressed }).catch(() => {});
       }
+      await db.cached_issues.update(targetId, { resolution_photo_url: compressed }).catch(() => {});
     } catch (err) {
       console.error('Failed to attach proof photo:', err);
     } finally {
@@ -821,7 +831,21 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                   <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-[#1D3B52]/40 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => onOpenSingleIssueAudit && onOpenSingleIssueAudit(g)}
+                      onClick={() => {
+                        if (onOpenSingleIssueAudit) {
+                          const activePhoto =
+                            proofPhotoMap[g.id] ||
+                            g.resolution_photo_url ||
+                            getResolutionPhotoFromCache(g.id) ||
+                            (g.issue_id ? getResolutionPhotoFromCache(g.issue_id) : null);
+                          const activeNotes = officerNotesMap[g.id] || g.officer_notes;
+                          onOpenSingleIssueAudit({
+                            ...g,
+                            resolution_photo_url: activePhoto,
+                            officer_notes: activeNotes,
+                          });
+                        }
+                      }}
                       className="px-2.5 py-1 rounded-lg bg-[#081018] border border-[#38BDF8]/40 hover:border-[#38BDF8] text-[#38BDF8] hover:text-white text-[10px] font-semibold flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm"
                       title="Download or Print Official Audit Certificate for Sarpanch Sign-off"
                     >

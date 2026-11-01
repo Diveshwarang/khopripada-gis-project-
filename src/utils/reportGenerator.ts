@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { CachedFacility, CachedIssue, OfflineGrievance } from '../services/offlineDb';
+import { getResolutionPhotoFromCache } from '../services/issueService';
 
 export interface UserSessionInfo {
   name?: string;
@@ -888,8 +889,15 @@ export async function generateSingleIssueAuditPDF(
   let currentY = margin;
 
   // Resolve photos asynchronously
-  const reportedPhoto = await resolveImageDataUrl(issue.photoBase64 || issue.photo_url || (issue as any).proof_image_url);
-  const rawResolution = await resolveImageDataUrl(issue.resolution_photo_url);
+  const cachedResolutionPhoto =
+    getResolutionPhotoFromCache(issue?.id) ||
+    (issue?.issue_id ? getResolutionPhotoFromCache(issue.issue_id) : null);
+  const reportedPhoto = await resolveImageDataUrl(
+    issue.photoBase64 || issue.photo_url || (issue as any).proof_image_url
+  );
+  const rawResolution = await resolveImageDataUrl(
+    issue.resolution_photo_url || cachedResolutionPhoto
+  );
   // STRICT SEPARATION: Ensure resolution photo is distinct from the initial reported defect photo
   const resolutionPhoto = (rawResolution && rawResolution !== reportedPhoto && rawResolution !== issue.photo_url && rawResolution !== issue.photoBase64)
     ? rawResolution

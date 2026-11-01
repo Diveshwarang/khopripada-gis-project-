@@ -61,7 +61,11 @@ import {
   type OfflineGrievance,
 } from '../services/offlineDb';
 import type { CivicIssue, FacilityAsset, IssueStatus } from '../types';
-import { updateIssueStatus } from '../services/issueService';
+import {
+  updateIssueStatus,
+  saveResolutionPhotoToCache,
+  getResolutionPhotoFromCache,
+} from '../services/issueService';
 import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
 import {
   fetchIssues,
@@ -936,7 +940,30 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     if (!file) return;
     try {
       const compressed = await compressImageToBase64(file, 800, 800, 0.75);
+      const idStr = String(itemId);
       setOfficerPhotoMap((prev) => ({ ...prev, [itemId]: compressed }));
+      saveResolutionPhotoToCache(idStr, compressed);
+      setIssuesList((prev) =>
+        prev.map((i) =>
+          String((i as any).id) === idStr || i.issue_id === idStr
+            ? { ...i, resolution_photo_url: compressed }
+            : i
+        )
+      );
+      if (propSetIssues) {
+        propSetIssues((prev) =>
+          prev.map((i) =>
+            String(i.id) === idStr || i.issue_id === idStr
+              ? { ...i, resolution_photo_url: compressed }
+              : i
+          )
+        );
+      }
+      allIssuesRef.current = allIssuesRef.current.map((i) =>
+        String((i as any).id) === idStr || i.issue_id === idStr
+          ? { ...i, resolution_photo_url: compressed }
+          : i
+      );
       showToast('Repair proof photo attached.');
     } catch (err) {
       console.error('Failed to compress repair photo:', err);
@@ -3017,7 +3044,11 @@ export const VillageMap: React.FC<VillageMapProps> = ({
             (i) => String((i as any).id) === issueId || i.issue_id === issueId
           ) || (issues && issues.find((i) => String(i.id) === issueId || i.issue_id === issueId));
           if (found) {
-            setSelectedAuditIssue(found);
+            const cachedPhoto = getResolutionPhotoFromCache(issueId) || officerPhotoMap[issueId];
+            setSelectedAuditIssue({
+              ...found,
+              resolution_photo_url: found.resolution_photo_url || cachedPhoto,
+            });
             setIsSingleAuditModalOpen(true);
           }
         }
@@ -4124,7 +4155,12 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                             <div className="flex items-center gap-1.5 shrink-0">
                               <button
                                 onClick={() => {
-                                  setSelectedAuditIssue(issue);
+                                  const issueId = String((issue as any).id || issue.issue_id || '');
+                                  const cachedPhoto = getResolutionPhotoFromCache(issueId) || officerPhotoMap[issueId];
+                                  setSelectedAuditIssue({
+                                    ...issue,
+                                    resolution_photo_url: issue.resolution_photo_url || cachedPhoto,
+                                  });
                                   setIsSingleAuditModalOpen(true);
                                 }}
                                 className="px-2 py-2 min-h-[40px] rounded-lg bg-[#0C171C] hover:bg-[#233B46] border border-[#38BDF8]/40 text-[#38BDF8] hover:text-[#F8FAFC] text-[10px] font-semibold flex items-center justify-center gap-1 active:scale-95 transition cursor-pointer"
@@ -4843,6 +4879,25 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                                 <Locate className="w-4 h-4" />
                                 <span>Fly to Location on Map</span>
                               </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const issueId = String(g.id || (g as any).issue_id || '');
+                                  const cachedPhoto = officerPhotoMap[g.id!] || getResolutionPhotoFromCache(issueId) || g.resolution_photo_url;
+                                  setSelectedAuditIssue({
+                                    ...g,
+                                    resolution_photo_url: cachedPhoto,
+                                    officer_notes: officerNotesMap[g.id!] || g.officer_notes,
+                                  });
+                                  setIsSingleAuditModalOpen(true);
+                                }}
+                                className="w-full py-2 min-h-[40px] rounded-xl bg-[#081018] hover:bg-[#132228] border border-[#38BDF8]/40 text-[#38BDF8] hover:text-[#F8FAFC] text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm"
+                                title="View & Download Official Form 12-B Audit Certificate"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>Official Form 12-B Audit Certificate (Print/PDF)</span>
+                              </button>
                             </div>
                           );
                         })
@@ -5369,7 +5424,12 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         onGrievanceStatusUpdated={refreshGrievanceMarkers}
         issues={issues}
         onOpenSingleIssueAudit={(iss) => {
-          setSelectedAuditIssue(iss);
+          const issueId = String((iss as any).id || iss.issue_id || '');
+          const cachedPhoto = getResolutionPhotoFromCache(issueId) || officerPhotoMap[issueId];
+          setSelectedAuditIssue({
+            ...iss,
+            resolution_photo_url: iss.resolution_photo_url || cachedPhoto,
+          });
           setIsSingleAuditModalOpen(true);
         }}
       />

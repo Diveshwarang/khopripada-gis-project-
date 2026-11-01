@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { generateSingleIssueAuditPDF, type UserSessionInfo } from '../utils/reportGenerator';
 import type { CivicIssue } from '../types';
+import { getResolutionPhotoFromCache } from '../services/issueService';
 
 interface SingleIssueAuditModalProps {
   isOpen: boolean;
@@ -52,8 +53,9 @@ export const SingleIssueAuditModal: React.FC<SingleIssueAuditModalProps> = ({
     ? { label: 'Step 3: Under Active Field Inspection', bg: 'bg-blue-100 text-blue-800 border-blue-300' }
     : { label: 'Step 1: Registered Civic Complaint', bg: 'bg-rose-100 text-rose-800 border-rose-300' };
 
+  const cachedPhoto = getResolutionPhotoFromCache(issue.id) || (issue.issue_id ? getResolutionPhotoFromCache(issue.issue_id) : null);
   const reportedPhoto = issue.photoBase64 || issue.photo_url || (issue as any).proof_image_url || null;
-  const rawResolution = issue.resolution_photo_url || null;
+  const rawResolution = issue.resolution_photo_url || cachedPhoto || null;
   // STRICT SEPARATION: Ensure resolution photo is distinct from the initial reported defect photo
   const resolutionPhoto = (rawResolution && rawResolution !== reportedPhoto && rawResolution !== issue.photo_url && rawResolution !== issue.photoBase64)
     ? rawResolution
@@ -68,7 +70,10 @@ export const SingleIssueAuditModal: React.FC<SingleIssueAuditModalProps> = ({
   const handleDownloadPdf = async () => {
     try {
       setIsDownloading(true);
-      await generateSingleIssueAuditPDF(issue, currentUser);
+      await generateSingleIssueAuditPDF({
+        ...issue,
+        resolution_photo_url: resolutionPhoto || rawResolution || issue.resolution_photo_url,
+      }, currentUser);
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 3500);
     } catch (err) {

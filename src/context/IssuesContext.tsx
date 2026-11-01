@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { fetchAllIssues } from '../services/issueService';
+import {
+  fetchAllIssues,
+  saveResolutionPhotoToCache,
+  getResolutionPhotoFromCache,
+} from '../services/issueService';
 import { db } from '../services/offlineDb';
 import type { CivicIssue } from '../types';
 import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
@@ -10,6 +14,11 @@ import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
  */
 function normalizeRealtimeIssue(row: any): CivicIssue {
   const idStr = String(row.id || row.issue_id || '');
+  const cachedPhoto = getResolutionPhotoFromCache(idStr) || (row.issue_id ? getResolutionPhotoFromCache(row.issue_id) : null);
+  const resPhoto = (row.resolution_photo_url && row.resolution_photo_url !== row.photo_url && row.resolution_photo_url !== row.photoBase64)
+    ? row.resolution_photo_url
+    : (cachedPhoto || '');
+
   return {
     id: idStr,
     issue_id: String(row.issue_id || row.id || ''),
@@ -31,9 +40,7 @@ function normalizeRealtimeIssue(row: any): CivicIssue {
     proof_image_url: row.proof_image_url || '',
     photo_url: row.photo_url || row.photoBase64 || row.proof_image_url || '',
     photoBase64: row.photoBase64 || row.photo_url || '',
-    resolution_photo_url: (row.resolution_photo_url && row.resolution_photo_url !== row.photo_url && row.resolution_photo_url !== row.photoBase64 && row.resolution_photo_url !== row.proof_image_url)
-      ? row.resolution_photo_url
-      : '',
+    resolution_photo_url: resPhoto,
     created_at: row.created_at || new Date().toISOString(),
     updated_at: row.updated_at || new Date().toISOString(),
   };
@@ -146,6 +153,9 @@ export function useIssuesSync() {
       syncChannel.onmessage = (event) => {
         if (event.data?.type === 'ISSUE_UPDATED') {
           const { issueId, status, notes, assignedOfficer, resolutionPhotoUrl } = event.data;
+          if (resolutionPhotoUrl) {
+            saveResolutionPhotoToCache(issueId, resolutionPhotoUrl);
+          }
           setIssues((prev) =>
             prev.map((item) =>
               String(item.id) === String(issueId) || item.issue_id === String(issueId)
