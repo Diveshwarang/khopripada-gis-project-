@@ -268,8 +268,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => onToggleHeatmap(!showHeatmap)}
             className={`font-semibold px-3 py-1 rounded-full text-xs flex items-center gap-1.5 transition cursor-pointer ${
               showHeatmap
-                ? 'bg-[#F59E0B]/30 text-[#F59E0B] border border-[#F59E0B] shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                : 'bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/50 hover:bg-[#F59E0B]/30'
+                ? 'bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/60 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                : 'bg-[#081018]/60 text-[#8CB0C9] border border-[#1D3B52] hover:border-[#F59E0B]/50 hover:text-[#F59E0B]'
             }`}
             title="Toggle Failure Density Heatmap"
           >

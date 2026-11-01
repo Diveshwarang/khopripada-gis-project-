@@ -163,7 +163,15 @@ const VILLAGE_BOUNDARY_COORDS: [number, number][] = [
 type BasemapType = 'esri' | 'osm' | 'dark' | 'opentopo' | 'satellite';
 export type FacilityCategoryFilter = 'all' | 'water' | 'education' | 'commerce' | 'health' | 'civic' | 'issues';
 
-export const VillageMap = () => {
+export interface VillageMapProps {
+  heatmapActive?: boolean;
+  setHeatmapActive?: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+export const VillageMap: React.FC<VillageMapProps> = ({
+  heatmapActive: propHeatmapActive,
+  setHeatmapActive: propSetHeatmapActive,
+}) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const boundaryLayerRef = useRef<L.Polygon | null>(null);
@@ -178,7 +186,8 @@ export const VillageMap = () => {
   const darkLayerRef = useRef<L.TileLayer | null>(null);
   const opentopoLayerRef = useRef<L.TileLayer | null>(null);
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
-  const heatmapLayerRef = useRef<L.LayerGroup>(L.layerGroup());
+  const heatmapGroupRef = useRef<L.LayerGroup>(L.layerGroup());
+  const heatmapLayerRef = heatmapGroupRef;
   const allFacilitiesRef = useRef<CachedFacility[]>([]);
   const allIssuesRef = useRef<CachedIssue[]>([]);
 
@@ -245,7 +254,11 @@ export const VillageMap = () => {
   // Spatial ML: DBSCAN Clusters & Heatmap layers
   const dbscanLayerRef = useRef<L.LayerGroup>(L.layerGroup());
   const [showDbscanClusters, setShowDbscanClusters] = useState<boolean>(true);
-  const [showHeatmap, setShowHeatmap] = useState<boolean>(false);
+  const [internalHeatmapActive, setInternalHeatmapActive] = useState<boolean>(false);
+  const heatmapActive = propHeatmapActive !== undefined ? propHeatmapActive : internalHeatmapActive;
+  const setHeatmapActive = propSetHeatmapActive || setInternalHeatmapActive;
+  const showHeatmap = heatmapActive;
+  const setShowHeatmap = setHeatmapActive;
   const handleUpdateIssueStatusRef = useRef<((id: string, st: string) => Promise<void>) | null>(null);
   const refreshGrievanceMarkersRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -1788,45 +1801,92 @@ export const VillageMap = () => {
     if (!map) return;
 
     try {
-      heatmapLayerRef.current.clearLayers();
+      // Ensure isolated high z-index pane exists
+      if (!map.getPane('heatmapPane')) {
+        const heatPane = map.createPane('heatmapPane');
+        heatPane.style.zIndex = '450';
+        heatPane.style.pointerEvents = 'none';
+      }
 
-      if (showHeatmap && safeIssues.length > 0) {
-        safeIssues.forEach((issue) => {
-          if (!issue?.latitude || !issue?.longitude) return;
+      if (!map.hasLayer(heatmapGroupRef.current)) {
+        heatmapGroupRef.current.addTo(map);
+      }
 
-          // Core hotspot circle
-          L.circleMarker([issue.latitude, issue.longitude], {
-            radius: issue.severity === 'high' || issue.severity === 'critical' ? 32 : 22,
-            fillColor: '#EF4444',
-            color: 'transparent',
-            fillOpacity: 0.35,
-          }).addTo(heatmapLayerRef.current);
+      heatmapGroupRef.current.clearLayers();
 
-          // Ambient density aura
-          L.circleMarker([issue.latitude, issue.longitude], {
-            radius: issue.severity === 'high' || issue.severity === 'critical' ? 64 : 44,
-            fillColor: '#EF4444',
-            color: 'transparent',
-            fillOpacity: 0.15,
-          }).addTo(heatmapLayerRef.current);
+      if (!heatmapActive) return;
+
+      // Filter valid issue coordinates
+      const validIssues = (safeIssues || []).filter(
+        (issue) =>
+          issue &&
+          typeof Number(issue.latitude) === 'number' &&
+          typeof Number(issue.longitude) === 'number' &&
+          !isNaN(Number(issue.latitude)) &&
+          !isNaN(Number(issue.longitude)) &&
+          Number(issue.latitude) !== 0 &&
+          Number(issue.longitude) !== 0
+      );
+
+      console.log(`[Heatmap Engine] Rendering ${validIssues.length} active issue hotspots`);
+
+      validIssues.forEach((issue) => {
+        const lat = Number(issue.latitude);
+        const lng = Number(issue.longitude);
+        const isCritical =
+          issue.severity === 'high' ||
+          issue.severity === 'critical' ||
+          issue.severity === 'urgent' ||
+          ((issue as any).priority_score && (issue as any).priority_score > 70);
+
+        // Core high-intensity epicenter
+        const coreCircle = L.circle([lat, lng], {
+          pane: 'heatmapPane',
+          radius: isCritical ? 45 : 30, // meters
+          fillColor: '#EF4444',
+          color: '#DC2626',
+          weight: 1,
+          fillOpacity: 0.65,
         });
 
-        if (!map.hasLayer(heatmapLayerRef.current)) {
-          heatmapLayerRef.current.addTo(map);
-        }
-      } else {
-        if (map.hasLayer(heatmapLayerRef.current)) {
-          map.removeLayer(heatmapLayerRef.current);
-        }
-      }
+        // Mid-range dispersion ring
+        const midAura = L.circle([lat, lng], {
+          pane: 'heatmapPane',
+          radius: isCritical ? 90 : 60, // meters
+          fillColor: '#F59E0B',
+          color: 'transparent',
+          weight: 0,
+          fillOpacity: 0.35,
+        });
+
+        // Outer soft ambient glow
+        const outerGlow = L.circle([lat, lng], {
+          pane: 'heatmapPane',
+          radius: isCritical ? 140 : 95, // meters
+          fillColor: '#38BDF8',
+          color: 'transparent',
+          weight: 0,
+          fillOpacity: 0.15,
+        });
+
+        heatmapGroupRef.current.addLayer(outerGlow);
+        heatmapGroupRef.current.addLayer(midAura);
+        heatmapGroupRef.current.addLayer(coreCircle);
+      });
+
+      // Invalidate map size to force immediate render update
+      map.invalidateSize();
     } catch (err) {
       console.warn('Heatmap layer rendered safely with fallback:', err);
     }
-  }, [showHeatmap, safeIssues]);
+  }, [heatmapActive, safeIssues]);
 
-  const toggleHeatmap = (enable: boolean) => {
-    setShowHeatmap(enable);
-  };
+  const toggleHeatmap = useCallback(
+    (enable?: boolean) => {
+      setHeatmapActive((prev) => (enable !== undefined ? enable : !prev));
+    },
+    [setHeatmapActive]
+  );
 
   // Export Handlers for Client-Side Audit & Reporting Engine
   const handleDownloadPanchayatPdf = useCallback(() => {
@@ -2075,6 +2135,13 @@ export const VillageMap = () => {
 
     mapInstanceRef.current = map;
 
+    // Create custom map pane with explicit stacking order
+    if (!map.getPane('heatmapPane')) {
+      const heatPane = map.createPane('heatmapPane');
+      heatPane.style.zIndex = '450'; // Explicitly above satellite tile pane (200)
+      heatPane.style.pointerEvents = 'none'; // Allow clicking through to underlying map features
+    }
+
     // 2.1 Add Zoom Control positioned cleanly
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -2134,8 +2201,8 @@ export const VillageMap = () => {
       dbscanLayerRef.current.addTo(map);
     }
 
-    if (showHeatmap && !map.hasLayer(heatmapLayerRef.current)) {
-      heatmapLayerRef.current.addTo(map);
+    if (!map.hasLayer(heatmapGroupRef.current)) {
+      heatmapGroupRef.current.addTo(map);
     }
 
 
@@ -2422,7 +2489,7 @@ export const VillageMap = () => {
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [refreshGrievanceMarkers, renderFacilityMarkers, renderIssueMarkers, showDbscanClusters, showHeatmap]);
+  }, [refreshGrievanceMarkers, renderFacilityMarkers, renderIssueMarkers]);
 
   // Synchronize layer visibility and marker popups whenever user role or filter changes
   useEffect(() => {
