@@ -48,6 +48,7 @@ export interface CivicIssue {
   assigned_to?: string;
   verified_by?: string;
   approval_status?: ApprovalStatus;
+  priority_score?: number;
   ai_priority_score?: number;
   ai_rank?: number;
   estimated_budget_inr?: number;

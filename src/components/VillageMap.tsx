@@ -56,6 +56,7 @@ import {
   type CachedIssue,
   type OfflineGrievance,
 } from '../services/offlineDb';
+import type { CivicIssue } from '../types';
 import {
   fetchIssues,
   fetchFacilities,
@@ -166,11 +167,13 @@ export type FacilityCategoryFilter = 'all' | 'water' | 'education' | 'commerce' 
 export interface VillageMapProps {
   heatmapActive?: boolean;
   setHeatmapActive?: React.Dispatch<React.SetStateAction<boolean>>;
+  issues?: CivicIssue[];
 }
 
 export const VillageMap: React.FC<VillageMapProps> = ({
   heatmapActive: propHeatmapActive,
   setHeatmapActive: propSetHeatmapActive,
+  issues: propIssues,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -277,8 +280,14 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const [issuesList, setIssuesList] = useState<CachedIssue[]>([]);
   const [activeDataset, setActiveDataset] = useState<'survey' | 'unified'>('survey');
 
-  // Defensive safe arrays
+  // Defensive safe arrays & unified issues list
   const safeIssues = useMemo(() => (Array.isArray(issuesList) ? issuesList.filter(Boolean) : []), [issuesList]);
+  const issues = useMemo(() => {
+    if (propIssues && Array.isArray(propIssues) && propIssues.length > 0) {
+      return propIssues;
+    }
+    return safeIssues;
+  }, [propIssues, safeIssues]);
   const safeFacilities = useMemo(() => (Array.isArray(facilitiesList) ? facilitiesList.filter(Boolean) : []), [facilitiesList]);
 
   // Inspection and Point Selection
@@ -450,7 +459,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
   // Dynamically computed DBSCAN clusters and reactive hotspot count
   const computedClusters = useMemo(() => {
-    const validIssues: ClusterPoint[] = (safeIssues || []).map((issue, idx) => ({
+    const validIssues: ClusterPoint[] = (issues || []).map((issue, idx) => ({
       id: String(issue.issue_id || (issue as any).id || `issue-${idx}`),
       latitude: Number(issue.latitude),
       longitude: Number(issue.longitude),
@@ -459,7 +468,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       severity: issue.severity,
     }));
     return runDBSCANClustering(validIssues, 90, 2);
-  }, [safeIssues]);
+  }, [issues]);
 
   const computedClustersCount = computedClusters.length;
 
@@ -1812,24 +1821,21 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         heatmapGroupRef.current.addTo(map);
       }
 
+      // 1. Clear previous layers ONCE at the start of the effect
       heatmapGroupRef.current.clearLayers();
 
       if (!heatmapActive) return;
 
-      // Filter valid issue coordinates
-      const validIssues = (safeIssues || []).filter(
-        (issue) =>
-          issue &&
-          typeof Number(issue.latitude) === 'number' &&
-          typeof Number(issue.longitude) === 'number' &&
-          !isNaN(Number(issue.latitude)) &&
-          !isNaN(Number(issue.longitude)) &&
-          Number(issue.latitude) !== 0 &&
-          Number(issue.longitude) !== 0
-      );
+      // 2. Validate all historical issues (do NOT filter out old or resolved issues from the heatmap)
+      const validIssues = (issues || []).filter((issue) => {
+        const lat = Number(issue?.latitude);
+        const lng = Number(issue?.longitude);
+        return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+      });
 
-      console.log(`[Heatmap Engine] Rendering ${validIssues.length} active issue hotspots`);
+      console.log(`[Heatmap Engine] Plotting full density for ${validIssues.length} issues (historical + latest)`);
 
+      // 3. Iterate through EVERY issue in the database
       validIssues.forEach((issue) => {
         const lat = Number(issue.latitude);
         const lng = Number(issue.longitude);
@@ -1839,47 +1845,46 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           issue.severity === 'urgent' ||
           ((issue as any).priority_score && (issue as any).priority_score > 70);
 
-        // Core high-intensity epicenter
-        const coreCircle = L.circle([lat, lng], {
+        // Inner Core Hotspot
+        const core = L.circle([lat, lng], {
           pane: 'heatmapPane',
-          radius: isCritical ? 45 : 30, // meters
+          radius: isCritical ? 45 : 30,
           fillColor: '#EF4444',
           color: '#DC2626',
           weight: 1,
           fillOpacity: 0.65,
         });
 
-        // Mid-range dispersion ring
-        const midAura = L.circle([lat, lng], {
+        // Middle Aura
+        const mid = L.circle([lat, lng], {
           pane: 'heatmapPane',
-          radius: isCritical ? 90 : 60, // meters
+          radius: isCritical ? 90 : 60,
           fillColor: '#F59E0B',
           color: 'transparent',
           weight: 0,
           fillOpacity: 0.35,
         });
 
-        // Outer soft ambient glow
-        const outerGlow = L.circle([lat, lng], {
+        // Outer Glow
+        const outer = L.circle([lat, lng], {
           pane: 'heatmapPane',
-          radius: isCritical ? 140 : 95, // meters
+          radius: isCritical ? 140 : 95,
           fillColor: '#38BDF8',
           color: 'transparent',
           weight: 0,
           fillOpacity: 0.15,
         });
 
-        heatmapGroupRef.current.addLayer(outerGlow);
-        heatmapGroupRef.current.addLayer(midAura);
-        heatmapGroupRef.current.addLayer(coreCircle);
+        heatmapGroupRef.current.addLayer(outer);
+        heatmapGroupRef.current.addLayer(mid);
+        heatmapGroupRef.current.addLayer(core);
       });
 
-      // Invalidate map size to force immediate render update
       map.invalidateSize();
     } catch (err) {
       console.warn('Heatmap layer rendered safely with fallback:', err);
     }
-  }, [heatmapActive, safeIssues]);
+  }, [heatmapActive, issues]);
 
   const toggleHeatmap = useCallback(
     (enable?: boolean) => {

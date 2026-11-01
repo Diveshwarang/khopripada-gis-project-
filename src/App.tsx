@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { IssuesProvider, useIssues } from './context/IssuesContext';
 import { VillageMap } from './components/VillageMap';
 import { LoginPage } from './components/LoginPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 function DashboardGateway() {
   const { session, isLoading } = useAuth();
+  const { issues } = useIssues();
   const [heatmapActive, setHeatmapActive] = useState<boolean>(false);
 
   if (isLoading) {
@@ -28,7 +30,11 @@ function DashboardGateway() {
   return (
     <main className="w-screen h-screen overflow-hidden bg-[#F8FAFC] text-slate-800 relative overscroll-none select-none">
       <ErrorBoundary>
-        <VillageMap heatmapActive={heatmapActive} setHeatmapActive={setHeatmapActive} />
+        <VillageMap
+          heatmapActive={heatmapActive}
+          setHeatmapActive={setHeatmapActive}
+          issues={issues}
+        />
       </ErrorBoundary>
     </main>
   );
@@ -37,7 +43,9 @@ function DashboardGateway() {
 export function App() {
   return (
     <AuthProvider>
-      <DashboardGateway />
+      <IssuesProvider>
+        <DashboardGateway />
+      </IssuesProvider>
     </AuthProvider>
   );
 }

@@ -102,6 +102,7 @@ export const fetchIssues = async (): Promise<CivicIssue[]> => {
       .order('created_at', { ascending: false });
 
     if (!error && Array.isArray(data) && data.length > 0) {
+      console.log(`[Issues Sync] Loaded ${data.length} total issues from DB`);
       const canonical = data.map(normalizeIssue);
       // Asynchronously backup to local Dexie for offline support
       for (const item of canonical) {
@@ -128,15 +129,16 @@ export const fetchIssues = async (): Promise<CivicIssue[]> => {
     console.warn('Supabase fetchIssues unavailable, falling back to local storage:', err);
   }
 
-  // Fallback to local Dexie storage
+  // Fallback to local Dexie storage & seeded historical baseline
   const offlineRecords = await db.offline_grievances.reverse().toArray();
-  if (offlineRecords.length > 0) {
-    return offlineRecords.map(normalizeIssue);
-  }
-
-  // Fallback to seeded issues from CSV
   const seeded = await seedIssuesFromCsv(false);
-  return seeded.map(normalizeIssue);
+  const combined = [...offlineRecords.map(normalizeIssue)];
+  for (const s of seeded.map(normalizeIssue)) {
+    if (!combined.some(c => (c.issue_id && c.issue_id === s.issue_id) || (c.id && c.id === s.id))) {
+      combined.push(s);
+    }
+  }
+  return combined;
 };
 
 /**
