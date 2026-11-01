@@ -1,163 +1,155 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../supabaseClient';
+import { fetchAllIssues } from '../services/issueService';
+import { db } from '../services/offlineDb';
 import type { CivicIssue } from '../types';
-import { normalizeIssue, fetchIssues } from '../services/dataService';
-import { db, seedIssuesFromCsv } from '../services/offlineDb';
+
+/**
+ * Normalizes incoming raw database rows (e.g. from real-time events) into typed CivicIssue
+ */
+function normalizeRealtimeIssue(row: any): CivicIssue {
+  const idStr = String(row.id || row.issue_id || '');
+  return {
+    id: idStr,
+    issue_id: String(row.issue_id || row.id || ''),
+    title: row.title || 'Civic Grievance',
+    description: row.description || row.notes || '',
+    notes: row.notes || row.description || '',
+    category: row.category || 'General',
+    severity: row.severity || 'low',
+    status: (row.status || 'reported'),
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+    reported_by: row.reported_by || row.reporter_name || row.submitted_by || 'Resident',
+    reporter_name: row.reporter_name || row.reported_by || 'Resident',
+    submitted_by: row.submitted_by || row.reported_by || 'Resident',
+    assigned_officer: row.assigned_officer || row.assigned_to || null,
+    assigned_to: row.assigned_to || row.assigned_officer || null,
+    resolution_notes: row.resolution_notes || row.officer_notes || '',
+    officer_notes: row.officer_notes || row.resolution_notes || '',
+    proof_image_url: row.proof_image_url || row.photo_url || row.photoBase64 || '',
+    photo_url: row.photo_url || row.proof_image_url || row.photoBase64 || '',
+    photoBase64: row.photoBase64 || '',
+    resolution_photo_url: row.resolution_photo_url || '',
+    created_at: row.created_at || new Date().toISOString(),
+    updated_at: row.updated_at || new Date().toISOString(),
+  };
+}
+
+/**
+ * Live multi-device real-time synchronization hook.
+ * Directly listens to Supabase Postgres real-time events (INSERT, UPDATE, DELETE)
+ * so that any submission from mobile immediately broadcasts to the laptop.
+ */
+export function useIssuesSync() {
+  const [issues, setIssues] = useState<CivicIssue[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const reloadIssues = useCallback(async () => {
+    try {
+      const cloudIssues = await fetchAllIssues();
+      if (cloudIssues && cloudIssues.length > 0) {
+        console.log(`[Cloud Sync] Loaded ${cloudIssues.length} live issues from Supabase`);
+        setIssues(cloudIssues);
+      } else if (!navigator.onLine) {
+        // Fallback to local Dexie only when genuinely offline
+        const offlineRecords = await db.offline_grievances.reverse().toArray().catch(() => []);
+        console.log(`[Offline Fallback] Loaded ${offlineRecords.length} offline issues`);
+        setIssues((offlineRecords || []).map(normalizeRealtimeIssue));
+      } else {
+        setIssues([]);
+      }
+    } catch (err) {
+      console.warn('[Sync Warning] Supabase fetch error, checking offline cache:', err);
+      const offlineRecords = await db.offline_grievances.reverse().toArray().catch(() => []);
+      setIssues((offlineRecords || []).map(normalizeRealtimeIssue));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // 1. Initial load from Supabase cloud
+    reloadIssues();
+
+    // 2. Real-time multi-device subscription channel
+    const channel = supabase
+      .channel('public:issues')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'issues' },
+        (payload) => {
+          console.log('[Realtime Event Received]:', payload.eventType, payload);
+
+          if (payload.eventType === 'INSERT') {
+            const newRow = normalizeRealtimeIssue(payload.new);
+            setIssues((prev) => {
+              if (prev.some((item) => String(item.id) === String(newRow.id))) return prev;
+              return [newRow, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedRow = normalizeRealtimeIssue(payload.new);
+            setIssues((prev) =>
+              prev.map((item) =>
+                String(item.id) === String(updatedRow.id) ? { ...item, ...updatedRow } : item
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = String((payload.old as any).id || (payload.old as any).issue_id || '');
+            setIssues((prev) => prev.filter((item) => String(item.id) !== deletedId));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Supabase Realtime Status]:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [reloadIssues]);
+
+  return { issues, setIssues, reloadIssues, loading };
+}
 
 interface IssuesContextType {
   issues: CivicIssue[];
   setIssues: React.Dispatch<React.SetStateAction<CivicIssue[]>>;
   addIssue: (issue: CivicIssue) => void;
   fetchAllIssues: () => Promise<void>;
+  reloadIssues: () => Promise<void>;
   isLoading: boolean;
+  loading: boolean;
 }
 
 const IssuesContext = createContext<IssuesContextType | undefined>(undefined);
 
 export const IssuesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [issues, setIssues] = useState<CivicIssue[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const { issues, setIssues, reloadIssues, loading } = useIssuesSync();
 
-  // Helper to add or update an issue in state immediately
-  const addIssue = useCallback((newIssue: CivicIssue) => {
-    setIssues((prev) => {
-      const key = String(newIssue.issue_id || newIssue.id);
-      const filtered = prev.filter((item) => String(item.issue_id || item.id) !== key);
-      return [newIssue, ...filtered];
-    });
-  }, []);
-
-  // 1. Initial data fetch: Query Supabase AND merge all historical + offline issues
-  const fetchAllIssues = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      // 1. Fetch remote Supabase issues
-      const { data, error } = await supabase
-        .from('issues')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.warn('Error fetching all issues from Supabase:', error);
-      }
-
-      const supabaseList = (!error && Array.isArray(data)) ? data.map(normalizeIssue) : [];
-
-      // 2. Fetch offline grievances from Dexie
-      const offlineGrievances = await db.offline_grievances.reverse().toArray().catch(() => []);
-      const offlineList = (offlineGrievances || []).map(normalizeIssue);
-
-      // 3. Fetch historical baseline issues from Dexie (cached_issues) or CSV (unified_issues.csv)
-      let cachedIssues = await db.cached_issues.toArray().catch(() => []);
-      if (!cachedIssues || cachedIssues.length === 0) {
-        cachedIssues = await seedIssuesFromCsv(true, '/data/unified_issues.csv').catch(() => []);
-      }
-      if (!cachedIssues || cachedIssues.length === 0) {
-        cachedIssues = await seedIssuesFromCsv(true, '/data/issues.csv').catch(() => []);
-      }
-      const cachedList = (cachedIssues || []).map(normalizeIssue);
-
-      // 4. Merge ALL sources into one unified list:
-      // Historical baseline (204 issues) + Offline user grievances + Remote Supabase issues
-      const mergedMap = new Map<string, CivicIssue>();
-
-      // Baseline historical issues
-      for (const item of cachedList) {
-        const key = String(item.issue_id || item.id);
-        if (key) mergedMap.set(key, item);
-      }
-
-      // Offline user grievances (may overlay or append)
-      for (const item of offlineList) {
-        const key = String(item.issue_id || item.id);
-        if (key) mergedMap.set(key, item);
-      }
-
-      // Remote Supabase issues
-      for (const item of supabaseList) {
-        const key = String(item.issue_id || item.id);
-        if (key) mergedMap.set(key, item);
-      }
-
-      const allMerged = Array.from(mergedMap.values());
-      console.log(`[Issues Sync] Loaded ${allMerged.length} total issues from DB`);
-      setIssues(allMerged);
-    } catch (err) {
-      console.error('Error in fetchAllIssues:', err);
-      const fallback = await fetchIssues();
-      setIssues(fallback);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // 2. Real-Time Sync & Subscriptions
-  useEffect(() => {
-    fetchAllIssues();
-
-    // Supabase Real-Time listener for INSERT and UPDATE
-    const channel = supabase
-      .channel('issues_realtime')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'issues' },
-        (payload) => {
-          setIssues((prev) => {
-            const newIssue = normalizeIssue(payload.new);
-            const key = String(newIssue.issue_id || newIssue.id);
-            const filtered = prev.filter((item) => String(item.issue_id || item.id) !== key);
-            return [newIssue, ...filtered];
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'issues' },
-        (payload) => {
-          setIssues((prev) => {
-            const updated = normalizeIssue(payload.new);
-            const key = String(updated.issue_id || updated.id);
-            return prev.map((item) =>
-              String(item.issue_id || item.id) === key ? { ...item, ...updated } : item
-            );
-          });
-        }
-      )
-      .subscribe();
-
-    // Cross-tab broadcast listener for immediate local synchronization
-    const syncChannel =
-      typeof window !== 'undefined' && 'BroadcastChannel' in window
-        ? new BroadcastChannel('panchayat-sync')
-        : null;
-
-    const handleBroadcast = (e: MessageEvent) => {
-      if (!e.data) return;
-      if (e.data.type === 'ISSUE_UPDATED' && e.data.issue) {
-        const target = normalizeIssue(e.data.issue);
-        setIssues((prev) => {
-          const key = String(target.issue_id || target.id);
-          const filtered = prev.filter((item) => String(item.issue_id || item.id) !== key);
-          return [target, ...filtered];
-        });
-      }
-    };
-
-    if (syncChannel) {
-      syncChannel.addEventListener('message', handleBroadcast);
-    }
-
-    return () => {
-      supabase.removeChannel(channel);
-      if (syncChannel) {
-        syncChannel.removeEventListener('message', handleBroadcast);
-        syncChannel.close();
-      }
-    };
-  }, [fetchAllIssues]);
+  const addIssue = useCallback(
+    (newIssue: CivicIssue) => {
+      setIssues((prev) => {
+        const key = String(newIssue.issue_id || newIssue.id);
+        const filtered = prev.filter((item) => String(item.issue_id || item.id) !== key);
+        return [newIssue, ...filtered];
+      });
+    },
+    [setIssues]
+  );
 
   return (
-    <IssuesContext.Provider value={{ issues, setIssues, addIssue, fetchAllIssues, isLoading }}>
+    <IssuesContext.Provider
+      value={{
+        issues,
+        setIssues,
+        addIssue,
+        fetchAllIssues: reloadIssues,
+        reloadIssues,
+        isLoading: loading,
+        loading,
+      }}
+    >
       {children}
     </IssuesContext.Provider>
   );

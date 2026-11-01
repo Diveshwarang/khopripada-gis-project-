@@ -12,7 +12,7 @@ import {
 import { db, type OfflineGrievance } from '../services/offlineDb';
 import { compressImageToBase64 } from '../utils/imageUtils';
 import type { UserRole } from '../types';
-import { upsertIssue } from '../services/dataService';
+import { createGrievance } from '../services/issueService';
 
 interface GrievanceModalProps {
   isOpen: boolean;
@@ -119,25 +119,27 @@ export const GrievanceModal: React.FC<GrievanceModalProps> = ({
         status: initialStatus,
       };
 
-      const id = await db.offline_grievances.add(newGrievance);
-      newGrievance.id = id;
-
-      // Realtime cross-device sync via Supabase dataService
-      await upsertIssue({
-        id,
+      // 1. Submit directly to Supabase cloud
+      const cloudResult = await createGrievance({
         title: newGrievance.title,
+        description: newGrievance.description,
         category: newGrievance.category,
         severity: newGrievance.severity,
         latitude: newGrievance.latitude,
         longitude: newGrievance.longitude,
-        description: newGrievance.description,
-        reporter_name: newGrievance.reporterName,
+        reported_by: newGrievance.reporterName,
+        photo_url: newGrievance.photoBase64,
         photoBase64: newGrievance.photoBase64,
-        approval_status: newGrievance.approval_status,
-        submitted_by: newGrievance.submitted_by,
         status: newGrievance.status,
       });
 
+      // 2. Backup to local Dexie for offline support
+      const cloudId = cloudResult.data?.id ? String(cloudResult.data.id) : undefined;
+      const numId = cloudId ? parseInt(cloudId.replace(/\D/g, '') || '0', 10) || Date.now() : Date.now();
+      newGrievance.id = numId;
+      await db.offline_grievances.put(newGrievance).catch(() => {});
+
+      // 3. Notify local map
       onGrievanceSaved(newGrievance);
 
       if (isResident) {

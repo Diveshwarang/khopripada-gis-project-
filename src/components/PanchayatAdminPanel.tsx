@@ -35,6 +35,7 @@ import {
   transitionToResolved,
   upsertFacility,
 } from '../services/dataService';
+import { assignAndAdvanceIssue, updateIssueStatus } from '../services/issueService';
 
 export interface PendingSubmissionItem {
   id: string | number;
@@ -101,7 +102,44 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
     loadAllGrievances();
   }, [loadAllGrievances]);
 
-  // Step 1: New Resident Submissions (pending_initial_approval or pending_approval)
+  // Unified grievance source: Cloud issues passed as props + local offline grievances (as fallback)
+  const unifiedGrievances = useMemo(() => {
+    const map = new Map<string, any>();
+    // First add local offline grievances
+    for (const g of allGrievances) {
+      const key = String(g.id || (g as any).issue_id || '');
+      if (key) map.set(key, g);
+    }
+    // Overlay cloud issues passed as props (single source of truth)
+    for (const iss of (issues || [])) {
+      const key = String(iss.issue_id || (iss as any).id || '');
+      if (key) {
+        map.set(key, {
+          id: key,
+          issue_id: key,
+          title: iss.title,
+          category: iss.category,
+          severity: iss.severity,
+          latitude: iss.latitude,
+          longitude: iss.longitude,
+          description: (iss as any).description || iss.notes || '',
+          reporterName: (iss as any).reported_by || (iss as any).reporter_name || (iss as any).submitted_by || 'Resident',
+          submitted_by: (iss as any).submitted_by || (iss as any).reported_by || 'Resident',
+          assigned_officer: (iss as any).assigned_officer || (iss as any).assigned_to,
+          assigned_to: (iss as any).assigned_to || (iss as any).assigned_officer,
+          status: iss.status,
+          approval_status: (iss as any).approval_status || 'approved',
+          photoBase64: (iss as any).photoBase64,
+          photo_url: (iss as any).proof_image_url || (iss as any).photo_url,
+          resolution_photo_url: (iss as any).resolution_photo_url,
+          officer_notes: (iss as any).resolution_notes || (iss as any).officer_notes,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [allGrievances, issues]);
+
+  // Step 1: New Resident Submissions (reported or pending_initial_approval)
   const step1Items: PendingSubmissionItem[] = useMemo(() => {
     const facilityItems: PendingSubmissionItem[] = facilities
       .filter((f) => f.approval_status === 'pending_approval')
@@ -118,28 +156,42 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
         rawFacility: f,
       }));
 
-    const grievanceItems: PendingSubmissionItem[] = allGrievances
-      .filter((g) => g.status === 'pending_initial_approval' || (g.approval_status === 'pending_approval' && !g.status))
+    const grievanceItems: PendingSubmissionItem[] = unifiedGrievances
+      .filter((g) => {
+        const st = (g.status || '').toLowerCase();
+        return (
+          st === 'reported' ||
+          st === 'pending_initial_approval' ||
+          (g.approval_status === 'pending_approval' && !g.status)
+        );
+      })
       .map((g) => ({
         id: g.id!,
         type: 'grievance',
         title: g.title,
         category: g.category,
-        submitted_by: g.submitted_by || 'Resident',
+        submitted_by: g.submitted_by || g.reporterName || 'Resident',
         coords: [g.latitude, g.longitude],
-        photoUrl: g.photoBase64,
+        photoUrl: g.photo_url || g.photoBase64,
         description: g.description,
-        status: g.status || 'pending_initial_approval',
+        status: g.status || 'reported',
         rawGrievance: g,
       }));
 
     return [...facilityItems, ...grievanceItems];
-  }, [facilities, allGrievances]);
+  }, [facilities, unifiedGrievances]);
 
-  // Step 2: Inspection Requests (pending_inspection_verification)
+  // Step 2: Inspection Requests (assigned, assigned_for_inspection, pending_inspection_verification)
   const step2Items: PendingSubmissionItem[] = useMemo(() => {
-    return allGrievances
-      .filter((g) => g.status === 'pending_inspection_verification')
+    return unifiedGrievances
+      .filter((g) => {
+        const st = (g.status || '').toLowerCase();
+        return (
+          st === 'assigned' ||
+          st === 'assigned_for_inspection' ||
+          st === 'pending_inspection_verification'
+        );
+      })
       .map((g) => ({
         id: g.id!,
         type: 'grievance',
@@ -147,33 +199,36 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
         category: g.category,
         submitted_by: g.reporterName || g.submitted_by || 'Field Officer',
         coords: [g.latitude, g.longitude],
-        photoUrl: g.photoBase64,
+        photoUrl: g.photo_url || g.photoBase64,
         description: g.description,
         status: g.status,
-        officer_notes: g.officer_notes || 'Officer requested field inspection authorization.',
+        officer_notes: g.officer_notes || 'Officer assigned for field inspection authorization.',
         rawGrievance: g,
       }));
-  }, [allGrievances]);
+  }, [unifiedGrievances]);
 
   // Step 3: Resolution Verifications (pending_resolution_approval)
   const step3Items: PendingSubmissionItem[] = useMemo(() => {
-    return allGrievances
-      .filter((g) => g.status === 'pending_resolution_approval')
+    return unifiedGrievances
+      .filter((g) => {
+        const st = (g.status || '').toLowerCase();
+        return st === 'pending_resolution_approval';
+      })
       .map((g) => ({
         id: g.id!,
         type: 'grievance',
         title: g.title,
         category: g.category,
-        submitted_by: g.assigned_to || 'Field Officer',
+        submitted_by: g.assigned_officer || g.assigned_to || 'Field Officer',
         coords: [g.latitude, g.longitude],
-        photoUrl: g.resolution_photo_url || g.photoBase64,
+        photoUrl: g.resolution_photo_url || g.photo_url || g.photoBase64,
         resolution_photo_url: g.resolution_photo_url,
         description: g.description,
         status: g.status,
         officer_notes: g.officer_notes,
         rawGrievance: g,
       }));
-  }, [allGrievances]);
+  }, [unifiedGrievances]);
 
   const totalPendingCount = step1Items.length + step2Items.length + step3Items.length;
 
@@ -185,6 +240,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
         await upsertFacility({ facility_id: item.id as string, approval_status: 'approved' });
         setActionSuccessMsg(`Approved facility "${item.title}" — Published to live map!`);
       } else {
+        await assignAndAdvanceIssue(String(item.id), 'Field Officer Rahul', 'assigned_for_inspection');
         await transitionToAssignedForInspection(item.id, 'Field Officer Rahul');
         setActionSuccessMsg(`Assigned "${item.title}" to Field Officer for ground inspection.`);
       }
@@ -199,6 +255,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
   // Step 2 Action: [Authorize Inspection Phase]
   const handleAuthorizeInspection = async (item: PendingSubmissionItem) => {
     try {
+      await updateIssueStatus(String(item.id), 'under_inspection');
       await transitionToUnderInspection(item.id);
       setActionSuccessMsg(`Inspection phase authorized for "${item.title}" — Pin rendered in AMBER!`);
       setTimeout(() => setActionSuccessMsg(null), 3500);
@@ -212,6 +269,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
   // Step 3 Action: [Verify & Mark Officially Resolved]
   const handleVerifyResolved = async (item: PendingSubmissionItem) => {
     try {
+      await updateIssueStatus(String(item.id), 'resolved');
       await transitionToResolved(item.id);
       setActionSuccessMsg(`Officially verified & resolved "${item.title}" — Pin rendered in GREEN!`);
       setTimeout(() => setActionSuccessMsg(null), 3500);

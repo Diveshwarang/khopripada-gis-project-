@@ -1921,22 +1921,18 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     // Only render if the issues layer toggle is active
     if (!showIssuesLayer) return;
 
-    const validIssues = (issues || []).filter((issue) => {
+    (issues || []).forEach((issue) => {
       const lat = Number(issue?.latitude);
       const lng = Number(issue?.longitude);
-      return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
-    });
+      if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
 
-    validIssues.forEach((issue) => {
-      const lat = Number(issue.latitude);
-      const lng = Number(issue.longitude);
-
+      const hasLabel = map.getZoom() >= 16;
       // Create an identifiable warning pin using getIssueDivIcon or a clean SVG badge
-      const icon = createIssueDivIcon(issue.title, issue.severity, true);
+      const icon = createIssueDivIcon(issue.title, issue.severity, hasLabel);
 
       const marker = L.marker([lat, lng], {
         icon,
-        zIndexOffset: 500, // Render issues prominently above standard base features
+        zIndexOffset: 800, // Render issues prominently above standard base features
       }).bindPopup(buildIssuePopupHTML(issue, userRole), {
         className: 'gis-dark-popup',
         autoPanPadding: [15, 80],
@@ -3469,7 +3465,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                     {/* Embedded Action Queue and ML Console */}
                     <ErrorBoundary>
                       <PanchayatAdminPanel
-                        issues={safeIssues}
+                        issues={issues as any}
                         facilities={safeFacilities}
                         onFlyToIssue={handleFlyToIssue}
                         isOpen={true}
@@ -5119,6 +5115,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         onFlyToGrievance={flyToCoords}
         userRole={userRole}
         onGrievanceStatusUpdated={refreshGrievanceMarkers}
+        issues={issues}
       />
 
       {/* 7.1 HIGH-RESOLUTION FIELD SURVEY PHOTO LIGHTBOX MODAL */}

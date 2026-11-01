@@ -24,7 +24,8 @@ import {
   transitionToResolutionApproval,
 } from '../services/dataService';
 import { compressImageToBase64 } from '../utils/imageUtils';
-import type { UserRole } from '../types';
+import type { UserRole, CivicIssue } from '../types';
+import { updateIssueStatus } from '../services/issueService';
 
 interface GrievanceListDrawerProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ interface GrievanceListDrawerProps {
   onFlyToGrievance: (coords: [number, number]) => void;
   userRole?: UserRole;
   onGrievanceStatusUpdated?: () => void;
+  issues?: CivicIssue[];
 }
 
 export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
@@ -40,6 +42,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
   onFlyToGrievance,
   userRole = 'user',
   onGrievanceStatusUpdated,
+  issues,
 }) => {
   const [grievances, setGrievances] = useState<OfflineGrievance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,15 +55,52 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
   const loadGrievances = async () => {
     setLoading(true);
     try {
-      const records = await db.offline_grievances.reverse().toArray();
+      const records = await db.offline_grievances.reverse().toArray().catch(() => []);
+      const mergedMap = new Map<string, any>();
+
+      for (const r of records) {
+        mergedMap.set(String(r.id), r);
+      }
+
+      for (const item of (issues || [])) {
+        const idStr = String(item.id || item.issue_id);
+        mergedMap.set(idStr, {
+          id: typeof item.id === 'number' ? item.id : parseInt(idStr.replace(/\D/g, '') || '0', 10) || idStr,
+          title: item.title,
+          category: item.category,
+          severity: item.severity,
+          status: item.status,
+          latitude: item.latitude,
+          longitude: item.longitude,
+          timestamp: (item as any).timestamp || (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
+          synced: true,
+          description: item.description || (item as any).notes || '',
+          reporterName: item.reported_by || item.reporter_name || 'Resident',
+          assigned_officer: item.assigned_officer || (item as any).assigned_to,
+          assigned_to: (item as any).assigned_to || item.assigned_officer,
+          officer_notes: item.resolution_notes || (item as any).officer_notes,
+          photoBase64: item.photoBase64,
+          resolution_photo_url: item.proof_image_url || item.photo_url,
+          approval_status: (item as any).approval_status || 'approved',
+        });
+      }
+
+      const allRecords = Array.from(mergedMap.values());
+
       if (userRole === 'officer') {
-        // Field Officer sees issues assigned to them or in-flight
-        const officerWorklist = records.filter((g) => {
-          const st = g.status || 'reported';
+        // Field Officer sees issues assigned to them, unassigned, or in-flight
+        const officerWorklist = allRecords.filter((g) => {
+          const st = (g.status || 'reported').toLowerCase();
+          const officer = g.assigned_officer || g.assigned_to;
           return (
+            officer === 'Field Officer' ||
+            officer === 'Field Officer Rahul' ||
+            officer === 'Panchayat Officer' ||
+            !officer ||
+            st === 'assigned' ||
             st === 'assigned_for_inspection' ||
-            st === 'pending_inspection_verification' ||
             st === 'under_inspection' ||
+            st === 'pending_inspection_verification' ||
             st === 'pending_resolution_approval' ||
             st === 'reported' ||
             st === 'in_progress'
@@ -68,10 +108,10 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
         });
         setGrievances(officerWorklist);
       } else {
-        setGrievances(records);
+        setGrievances(allRecords);
       }
     } catch (err) {
-      console.error('Failed to load grievances from IndexedDB:', err);
+      console.error('Failed to load grievances from DB:', err);
     } finally {
       setLoading(false);
     }
@@ -81,12 +121,13 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     if (isOpen) {
       loadGrievances();
     }
-  }, [isOpen, userRole]);
+  }, [isOpen, userRole, issues]);
 
 
   // Step 3 (Officer): Start Field Inspection -> updates status to pending_inspection_verification
   const handleStartFieldInspection = async (id: number) => {
     try {
+      await updateIssueStatus(String(id), 'pending_inspection_verification');
       await transitionToInspectionVerification(id, 'Officer requested inspection authorization.');
       setDrawerToast('Inspection request sent to Admin for sign-off');
       setTimeout(() => setDrawerToast(null), 3500);
@@ -102,6 +143,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     const photo = proofPhotoMap[id];
     const notes = officerNotesMap[id] || 'Field repair completed as per specifications.';
     try {
+      await updateIssueStatus(String(id), 'pending_resolution_approval', notes);
       await transitionToResolutionApproval(id, photo || '', notes);
       setDrawerToast('Resolution proof submitted! Awaiting Admin audit.');
       setTimeout(() => setDrawerToast(null), 3500);
