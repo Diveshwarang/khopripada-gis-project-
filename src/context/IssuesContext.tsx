@@ -93,19 +93,41 @@ export function useIssuesSync() {
           if (payload.eventType === 'INSERT') {
             const newRow = normalizeRealtimeIssue(payload.new);
             setIssues((prev) => {
-              if (prev.some((item) => String(item.id) === String(newRow.id))) return prev;
+              const idx = prev.findIndex(
+                (item) =>
+                  String(item.id) === String(newRow.id) ||
+                  (newRow.issue_id && item.issue_id === newRow.issue_id) ||
+                  (newRow.id && item.issue_id === String(newRow.id)) ||
+                  (newRow.issue_id && String(item.id) === newRow.issue_id)
+              );
+              if (idx >= 0) {
+                const updated = [...prev];
+                updated[idx] = newRow;
+                return updated;
+              }
               return [newRow, ...prev];
             });
           } else if (payload.eventType === 'UPDATE') {
             const updatedRow = normalizeRealtimeIssue(payload.new);
             setIssues((prev) =>
               prev.map((item) =>
-                String(item.id) === String(updatedRow.id) ? { ...item, ...updatedRow } : item
+                String(item.id) === String(updatedRow.id) ||
+                (updatedRow.issue_id && item.issue_id === updatedRow.issue_id) ||
+                (updatedRow.id && item.issue_id === String(updatedRow.id)) ||
+                (updatedRow.issue_id && String(item.id) === updatedRow.issue_id)
+                  ? { ...item, ...updatedRow }
+                  : item
               )
             );
           } else if (payload.eventType === 'DELETE') {
             const deletedId = String((payload.old as any).id || (payload.old as any).issue_id || '');
-            setIssues((prev) => prev.filter((item) => String(item.id) !== deletedId));
+            setIssues((prev) =>
+              prev.filter(
+                (item) =>
+                  String(item.id) !== deletedId &&
+                  item.issue_id !== deletedId
+              )
+            );
           }
         }
       )
@@ -113,8 +135,43 @@ export function useIssuesSync() {
         console.log('[Supabase Realtime Status]:', status);
       });
 
+    // 3. Local cross-tab broadcast receiver for instantaneous zero-latency multi-tab sync
+    const syncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+      ? new BroadcastChannel('panchayat-sync')
+      : null;
+
+    if (syncChannel) {
+      syncChannel.onmessage = (event) => {
+        if (event.data?.type === 'ISSUE_UPDATED') {
+          const { issueId, status, notes, assignedOfficer } = event.data;
+          setIssues((prev) =>
+            prev.map((item) =>
+              String(item.id) === String(issueId) || item.issue_id === String(issueId)
+                ? {
+                    ...item,
+                    status: status || item.status,
+                    assigned_officer: assignedOfficer !== undefined ? assignedOfficer : item.assigned_officer,
+                    assigned_to: assignedOfficer !== undefined ? assignedOfficer : item.assigned_to,
+                    resolution_notes: notes || item.resolution_notes,
+                    officer_notes: notes || item.officer_notes,
+                    updated_at: new Date().toISOString(),
+                  }
+                : item
+            )
+          );
+        } else if (event.data?.type === 'ISSUE_CREATED' && event.data.issue) {
+          const newRow = normalizeRealtimeIssue(event.data.issue);
+          setIssues((prev) => {
+            if (prev.some((item) => String(item.id) === String(newRow.id) || (newRow.issue_id && item.issue_id === newRow.issue_id))) return prev;
+            return [newRow, ...prev];
+          });
+        }
+      };
+    }
+
     return () => {
       supabase.removeChannel(channel);
+      syncChannel?.close();
     };
   }, [reloadIssues]);
 

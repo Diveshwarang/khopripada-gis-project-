@@ -8,6 +8,7 @@ import {
   Building2,
   Locate,
   AlertTriangle,
+  AlertCircle,
   FileSpreadsheet,
   Plus,
   Flame,
@@ -2742,64 +2743,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       });
     };
 
-    const handlePopupDomChange = async (e: Event) => {
-      const target = e.target as HTMLSelectElement;
-      if (
-        target &&
-        (target.classList.contains('issue-status-dropdown') ||
-          target.classList.contains('issue-status-select'))
-      ) {
-        const issueId = target.getAttribute('data-issue-id');
-        const newStatus = target.value as IssueStatus;
-
-        if (!issueId) return;
-
-        target.disabled = true;
-        const originalBg = target.style.backgroundColor;
-        target.style.backgroundColor = '#E2E8F0';
-
-        const result = await updateIssueStatus(issueId, newStatus);
-
-        if (result.success) {
-          if (propSetIssues) {
-            propSetIssues((prev) =>
-              prev.map((item) =>
-                String(item.id) === issueId || item.issue_id === issueId
-                  ? { ...item, status: newStatus, updated_at: new Date().toISOString() }
-                  : item
-              )
-            );
-          }
-          setIssuesList((prev) =>
-            prev.map((item) =>
-              String((item as any).id) === issueId || item.issue_id === issueId
-                ? { ...item, status: newStatus, updated_at: new Date().toISOString() }
-                : item
-            )
-          );
-          allIssuesRef.current = allIssuesRef.current.map((item) =>
-            String((item as any).id) === issueId || item.issue_id === issueId
-              ? { ...item, status: newStatus }
-              : item
-          );
-          try {
-            await db.cached_issues.update(issueId, { status: newStatus });
-          } catch {
-            // ignore
-          }
-          map.closePopup();
-          showToast(`Status updated to "${newStatus.replace(/_/g, ' ')}"!`);
-        } else {
-          alert('Failed to update status: ' + result.error);
-          target.disabled = false;
-          target.style.backgroundColor = originalBg;
-        }
-      }
-    };
-
-    const mapDomContainer = map.getContainer();
-    mapDomContainer.addEventListener('change', handlePopupDomChange);
-
     map.on('moveend', updateMeta);
     map.on('zoomend', updateMeta);
     map.on('mousemove', handleMouseMove);
@@ -2819,7 +2762,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     }, 150);
 
     return () => {
-      mapDomContainer.removeEventListener('change', handlePopupDomChange);
       unsubscribeSync();
       map.off('zoomend', onZoom);
       map.off('moveend', updateMeta);
@@ -2858,7 +2800,11 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
     const handlePopupDomChange = async (e: Event) => {
       const target = e.target as HTMLSelectElement;
-      if (target && target.classList.contains('issue-status-dropdown')) {
+      if (
+        target &&
+        (target.classList.contains('issue-status-dropdown') ||
+          target.classList.contains('issue-status-select'))
+      ) {
         const issueId = target.getAttribute('data-issue-id');
         const newStatus = target.value as IssueStatus;
 
@@ -2899,6 +2845,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
             // ignore
           }
           map.closePopup();
+          showToast(`Status updated to "${newStatus.replace(/_/g, ' ')}"!`);
         } else {
           alert('Failed to update status: ' + result.error);
           target.disabled = false;
@@ -3094,7 +3041,22 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   // Fly to Grievance from Drawer
   const flyToCoords = (coords: [number, number]) => {
     if (!mapInstanceRef.current) return;
-    mapInstanceRef.current.flyTo(coords, 18, { duration: 1.5 });
+    const map = mapInstanceRef.current;
+    map.flyTo(coords, 18, { duration: 1.2 });
+
+    // Ensure issues layer is visible
+    setShowIssuesLayer(true);
+
+    setTimeout(() => {
+      issuesLayerRef.current.eachLayer((layer: any) => {
+        if (layer.getLatLng) {
+          const pos = layer.getLatLng();
+          if (Math.abs(pos.lat - coords[0]) < 0.0006 && Math.abs(pos.lng - coords[1]) < 0.0006) {
+            layer.openPopup();
+          }
+        }
+      });
+    }, 1300);
   };
 
   // Fly to coords with smooth Leaflet animation and temporary pulsing ping marker
@@ -3191,6 +3153,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           }
         }}
         onOpenGrievanceModal={() => setIsGrievanceModalOpen(true)}
+        onOpenGrievanceListDrawer={() => setIsGrievanceDrawerOpen(true)}
         onOpenExportAuditModal={handleExportAuditSummary}
         onOfficerExportWorklist={handleOfficerExportWorklist}
         onPortalSwitch={handlePortalSwitch}
@@ -3198,6 +3161,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         onOpenMobileSheet={(sheet) => setMobileSheet(sheet)}
         mobileSheet={mobileSheet}
         facilityCount={facilitiesList.length}
+        issueCount={issues.length}
       />
 
       {/* 2. MAIN DASHBOARD VIEWPORT (MAP + SIDEBAR SPLIT) */}
@@ -3393,9 +3357,20 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                         Reported Grievances & Issues
                       </span>
                     </div>
-                    <span className="text-[10px] font-mono text-red-400 bg-red-950/60 border border-red-800/60 px-1.5 py-0.5 rounded">
-                      {issues.length} Active
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsGrievanceDrawerOpen(true);
+                        }}
+                        className="text-[10px] font-mono text-cyan-300 bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-700/60 px-2 py-0.5 rounded cursor-pointer transition shadow-xs"
+                        title="Open All Issues Registry"
+                      >
+                        View All ({issues.length})
+                      </button>
+                    </div>
                   </label>
                   <label className="flex items-center justify-between p-2 rounded-lg bg-[#081018]/60 border border-[#1D3B52] hover:border-[#00E5FF]/40 cursor-pointer transition">
                     <span className="text-xs font-medium text-[#F1F5F9] flex items-center gap-2">
@@ -3713,6 +3688,27 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         >
           <Plus className="w-4 h-4 text-[#00E5FF]" />
           <span className="text-[9px] font-semibold tracking-wider mt-0.5">Facility</span>
+        </button>
+
+        {/* [ ⚠️ Issues Registry ] */}
+        <button
+          onClick={() => setIsGrievanceDrawerOpen(true)}
+          className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl active:scale-95 transition cursor-pointer ${
+            isGrievanceDrawerOpen
+              ? 'bg-[#EF4444]/25 text-[#FCA5A5] border border-[#EF4444]/60 font-bold'
+              : 'hover:bg-[#142C3F] text-[#8CB0C9] hover:text-[#F1F5F9]'
+          }`}
+          title="View All Issues"
+        >
+          <div className="relative">
+            <AlertCircle className="w-4 h-4 text-[#EF4444]" />
+            {issues.length > 0 && (
+              <span className="absolute -top-1 -right-2 px-1 rounded-full bg-[#EF4444] text-white text-[8px] font-mono font-bold leading-none">
+                {issues.length}
+              </span>
+            )}
+          </div>
+          <span className="text-[9px] font-semibold tracking-wider mt-0.5">Issues</span>
         </button>
 
         {/* [ ⚠️ Report ] */}

@@ -104,6 +104,10 @@ export async function fetchAllIssues(): Promise<CivicIssue[]> {
   }
 }
 
+const syncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('panchayat-sync')
+  : null;
+
 /**
  * Report a new grievance directly to Supabase cloud
  */
@@ -111,7 +115,9 @@ export async function createGrievance(
   issue: Partial<CivicIssue>
 ): Promise<{ success: boolean; data?: CivicIssue; error?: string }> {
   try {
+    const issueId = issue.issue_id || issue.id || `khop-iss-${Date.now()}`;
     const payload: Record<string, any> = {
+      issue_id: String(issueId),
       title: issue.title || 'Civic Grievance',
       description: issue.description || issue.notes || '',
       category: issue.category || 'General',
@@ -120,7 +126,10 @@ export async function createGrievance(
       latitude: Number(issue.latitude),
       longitude: Number(issue.longitude),
       reported_by: issue.reported_by || issue.reporter_name || 'Resident',
+      reporter_name: issue.reporter_name || issue.reported_by || 'Resident',
+      submitted_by: issue.submitted_by || issue.reported_by || 'Resident',
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     if (issue.proof_image_url || issue.photo_url || issue.photoBase64) {
@@ -145,9 +154,11 @@ export async function createGrievance(
         .select()
         .single();
       if (retryError) throw retryError;
+      syncChannel?.postMessage({ type: 'ISSUE_CREATED', issue: retryData });
       return { success: true, data: retryData };
     }
 
+    syncChannel?.postMessage({ type: 'ISSUE_CREATED', issue: data });
     return { success: true, data };
   } catch (err: any) {
     console.error('[Supabase Insert Error]:', err);
@@ -165,6 +176,7 @@ export async function assignAndAdvanceIssue(
   notes?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(issueId);
     const updateBody: Record<string, any> = {
       assigned_officer: assignedOfficer,
       assigned_to: assignedOfficer,
@@ -176,18 +188,60 @@ export async function assignAndAdvanceIssue(
       updateBody.officer_notes = notes;
     }
 
-    const { error } = await supabase
-      .from('issues')
-      .update(updateBody)
-      .eq('id', issueId);
-
-    if (error) {
-      const { error: error2 } = await supabase
+    let updatedRows: any[] = [];
+    if (isUUID) {
+      const { data, error } = await supabase
         .from('issues')
         .update(updateBody)
-        .eq('issue_id', issueId);
-      if (error2) throw error2;
+        .eq('id', issueId)
+        .select();
+      if (!error && data) updatedRows = data;
     }
+
+    if (updatedRows.length === 0) {
+      const { data, error } = await supabase
+        .from('issues')
+        .update(updateBody)
+        .eq('issue_id', issueId)
+        .select();
+      if (!error && data) updatedRows = data;
+    }
+
+    // If row wasn't present in Supabase yet (e.g. from local seed baseline), insert it now!
+    if (updatedRows.length === 0) {
+      const seedItem = PREDEFINED_SURVEY_ISSUES.find(
+        (s) => s.id === issueId || s.issue_id === issueId
+      );
+      if (seedItem) {
+        const insertPayload: Record<string, any> = {
+          issue_id: seedItem.issue_id || seedItem.id,
+          title: seedItem.title,
+          description: seedItem.description,
+          category: seedItem.category,
+          severity: seedItem.severity,
+          status: newStatus,
+          latitude: seedItem.latitude,
+          longitude: seedItem.longitude,
+          reported_by: seedItem.reported_by || 'Field Survey Team',
+          assigned_officer: assignedOfficer,
+          assigned_to: assignedOfficer,
+          resolution_notes: notes || seedItem.resolution_notes || '',
+          officer_notes: notes || seedItem.officer_notes || '',
+          created_at: seedItem.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        await supabase.from('issues').insert([insertPayload]);
+      }
+    }
+
+    syncChannel?.postMessage({
+      type: 'ISSUE_UPDATED',
+      issueId,
+      status: newStatus,
+      assignedOfficer,
+      notes,
+    });
+
     return { success: true };
   } catch (err: any) {
     console.error('[Supabase Update Error]:', err);
@@ -204,6 +258,7 @@ export async function updateIssueStatus(
   officerNotes?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(issueId);
     const updatePayload: Record<string, any> = {
       status: newStatus,
       updated_at: new Date().toISOString(),
@@ -214,19 +269,58 @@ export async function updateIssueStatus(
       updatePayload.officer_notes = officerNotes;
     }
 
-    const { error } = await supabase
-      .from('issues')
-      .update(updatePayload)
-      .eq('id', issueId);
-
-    if (error) {
-      const { error: error2 } = await supabase
+    let updatedRows: any[] = [];
+    if (isUUID) {
+      const { data, error } = await supabase
         .from('issues')
         .update(updatePayload)
-        .eq('issue_id', issueId);
-
-      if (error2) throw error2;
+        .eq('id', issueId)
+        .select();
+      if (!error && data) updatedRows = data;
     }
+
+    if (updatedRows.length === 0) {
+      const { data, error } = await supabase
+        .from('issues')
+        .update(updatePayload)
+        .eq('issue_id', issueId)
+        .select();
+      if (!error && data) updatedRows = data;
+    }
+
+    // If row wasn't present in Supabase yet (e.g. from local seed baseline), insert it now!
+    if (updatedRows.length === 0) {
+      const seedItem = PREDEFINED_SURVEY_ISSUES.find(
+        (s) => s.id === issueId || s.issue_id === issueId
+      );
+      if (seedItem) {
+        const insertPayload: Record<string, any> = {
+          issue_id: seedItem.issue_id || seedItem.id,
+          title: seedItem.title,
+          description: seedItem.description,
+          category: seedItem.category,
+          severity: seedItem.severity,
+          status: newStatus,
+          latitude: seedItem.latitude,
+          longitude: seedItem.longitude,
+          reported_by: seedItem.reported_by || 'Field Survey Team',
+          assigned_officer: seedItem.assigned_officer || null,
+          assigned_to: seedItem.assigned_to || null,
+          resolution_notes: officerNotes || seedItem.resolution_notes || '',
+          officer_notes: officerNotes || seedItem.officer_notes || '',
+          created_at: seedItem.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        await supabase.from('issues').insert([insertPayload]);
+      }
+    }
+
+    syncChannel?.postMessage({
+      type: 'ISSUE_UPDATED',
+      issueId,
+      status: newStatus,
+      officerNotes,
+    });
 
     return { success: true };
   } catch (err: any) {

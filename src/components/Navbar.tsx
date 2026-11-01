@@ -5,6 +5,7 @@ import {
   Layers,
   Plus,
   AlertTriangle,
+  AlertCircle,
   ChevronDown,
   User,
   Shield,
@@ -33,6 +34,7 @@ export interface NavbarProps {
   isAddFacilityMode: boolean;
   onToggleAddFacilityMode: () => void;
   onOpenGrievanceModal: () => void;
+  onOpenGrievanceListDrawer?: () => void;
   onOpenExportAuditModal?: () => void;
   onOfficerExportWorklist?: () => void;
   onPortalSwitch: (targetRole: Role, roleLabel?: string) => void;
@@ -40,6 +42,7 @@ export interface NavbarProps {
   onOpenMobileSheet?: (sheet: 'role' | 'layers' | null) => void;
   mobileSheet?: string | null;
   facilityCount?: number;
+  issueCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -56,12 +59,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   isAddFacilityMode,
   onToggleAddFacilityMode,
   onOpenGrievanceModal,
+  onOpenGrievanceListDrawer,
   onOpenExportAuditModal,
   onPortalSwitch,
   onMobileLogout,
   onOpenMobileSheet,
   mobileSheet,
   facilityCount = 22,
+  issueCount,
 }) => {
   const [isPortalSwitcherOpen, setIsPortalSwitcherOpen] = useState<boolean>(false);
   const portalSwitcherRef = useRef<HTMLDivElement>(null);
@@ -149,6 +154,21 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right: Quick Tools */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {onOpenGrievanceListDrawer && (
+            <button
+              onClick={onOpenGrievanceListDrawer}
+              className="relative w-7 h-7 rounded-md border border-[#EF4444]/60 bg-[#EF4444]/15 text-[#FCA5A5] flex items-center justify-center cursor-pointer active:scale-95 shadow-xs"
+              title="View All Issues & Grievances"
+            >
+              <AlertCircle className="w-3.5 h-3.5 text-[#EF4444]" />
+              {issueCount !== undefined && issueCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-[#EF4444] text-white text-[8px] font-mono font-bold flex items-center justify-center shadow-xs">
+                  {issueCount}
+                </span>
+              )}
+            </button>
+          )}
+
           <button
             onClick={onLocateMe}
             disabled={isLocating}
@@ -301,6 +321,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Plus className={`w-3.5 h-3.5 ${isAddFacilityMode ? 'rotate-45' : ''}`} />
             <span>{isAddFacilityMode ? 'Cancel' : '+ Add Facility'}</span>
           </button>
+
+          {/* View All Issues Registry (Live Database) */}
+          {onOpenGrievanceListDrawer && (
+            <button
+              onClick={onOpenGrievanceListDrawer}
+              className="bg-[#EF4444]/15 hover:bg-[#EF4444]/25 text-[#FCA5A5] hover:text-white border border-[#EF4444]/50 px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm"
+              title="View All Issues in Database & Live Field Registry"
+            >
+              <AlertCircle className="w-3.5 h-3.5 text-[#EF4444]" />
+              <span>Issues</span>
+              {issueCount !== undefined && (
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-[#EF4444] text-white shadow-xs">
+                  {issueCount}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Report Grievance (Clean Amber/Red-Bordered Pill) */}
           <button

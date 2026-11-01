@@ -1,10 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   X,
-  Database,
   Trash2,
   MapPin,
-  Calendar,
   AlertCircle,
   FileDown,
   Navigation,
@@ -12,10 +10,12 @@ import {
   CheckCircle2,
   Camera,
   ShieldCheck,
+  Search,
+  User,
+  Clock,
 } from 'lucide-react';
 import {
   db,
-  type OfflineGrievance,
   exportGrievancesToGeoJson,
   exportGrievancesToCsv,
 } from '../services/offlineDb';
@@ -24,8 +24,31 @@ import {
   transitionToResolutionApproval,
 } from '../services/dataService';
 import { compressImageToBase64 } from '../utils/imageUtils';
-import type { UserRole, CivicIssue } from '../types';
+import type { UserRole, CivicIssue, IssueStatus } from '../types';
 import { updateIssueStatus } from '../services/issueService';
+import { PREDEFINED_SURVEY_ISSUES } from '../data/seedIssues';
+
+export interface DrawerGrievanceItem {
+  id: string;
+  issue_id?: string;
+  title: string;
+  category: string;
+  severity: string;
+  status: string;
+  latitude: number;
+  longitude: number;
+  timestamp: number;
+  synced: boolean;
+  description?: string;
+  reporterName?: string;
+  assigned_officer?: string | null;
+  assigned_to?: string | null;
+  officer_notes?: string;
+  photoBase64?: string;
+  resolution_photo_url?: string;
+  approval_status?: string;
+  created_at?: string;
+}
 
 interface GrievanceListDrawerProps {
   isOpen: boolean;
@@ -44,11 +67,13 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
   onGrievanceStatusUpdated,
   issues,
 }) => {
-  const [grievances, setGrievances] = useState<OfflineGrievance[]>([]);
+  const [grievances, setGrievances] = useState<DrawerGrievanceItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activePhotoUploadId, setActivePhotoUploadId] = useState<number | null>(null);
-  const [officerNotesMap, setOfficerNotesMap] = useState<Record<number, string>>({});
-  const [proofPhotoMap, setProofPhotoMap] = useState<Record<number, string>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [activePhotoUploadId, setActivePhotoUploadId] = useState<string | null>(null);
+  const [officerNotesMap, setOfficerNotesMap] = useState<Record<string, string>>({});
+  const [proofPhotoMap, setProofPhotoMap] = useState<Record<string, string>>({});
   const [drawerToast, setDrawerToast] = useState<string | null>(null);
   const officerFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -56,60 +81,61 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     setLoading(true);
     try {
       const records = await db.offline_grievances.reverse().toArray().catch(() => []);
-      const mergedMap = new Map<string, any>();
+      const mergedMap = new Map<string, DrawerGrievanceItem>();
 
+      // 1. Add Dexie offline records
       for (const r of records) {
-        mergedMap.set(String(r.id), r);
+        const idStr = String(r.id);
+        mergedMap.set(idStr, {
+          id: idStr,
+          issue_id: idStr,
+          title: r.title,
+          category: r.category,
+          severity: r.severity,
+          status: r.status || 'reported',
+          latitude: r.latitude,
+          longitude: r.longitude,
+          timestamp: r.timestamp || Date.now(),
+          synced: r.synced,
+          description: r.description || '',
+          reporterName: r.reporterName || r.submitted_by || 'Resident',
+          assigned_officer: (r as any).assigned_officer || null,
+          assigned_to: (r as any).assigned_to || null,
+          officer_notes: (r as any).officer_notes || '',
+          photoBase64: r.photoBase64,
+          resolution_photo_url: r.resolution_photo_url,
+          approval_status: r.approval_status || 'approved',
+        });
       }
 
-      for (const item of (issues || [])) {
-        const idStr = String(item.id || item.issue_id);
+      // 2. Add live database issues (or baseline seed)
+      const currentList = issues && issues.length > 0 ? issues : PREDEFINED_SURVEY_ISSUES;
+      for (const item of currentList) {
+        const idStr = String(item.id || item.issue_id || `iss-${Math.random()}`);
         mergedMap.set(idStr, {
-          id: typeof item.id === 'number' ? item.id : parseInt(idStr.replace(/\D/g, '') || '0', 10) || idStr,
+          id: idStr,
+          issue_id: String(item.issue_id || item.id || idStr),
           title: item.title,
           category: item.category,
           severity: item.severity,
-          status: item.status,
-          latitude: item.latitude,
-          longitude: item.longitude,
+          status: item.status || 'reported',
+          latitude: Number(item.latitude),
+          longitude: Number(item.longitude),
           timestamp: (item as any).timestamp || (item.created_at ? new Date(item.created_at).getTime() : Date.now()),
           synced: true,
           description: item.description || (item as any).notes || '',
           reporterName: item.reported_by || item.reporter_name || 'Resident',
-          assigned_officer: item.assigned_officer || (item as any).assigned_to,
-          assigned_to: (item as any).assigned_to || item.assigned_officer,
-          officer_notes: item.resolution_notes || (item as any).officer_notes,
+          assigned_officer: item.assigned_officer || (item as any).assigned_to || null,
+          assigned_to: (item as any).assigned_to || item.assigned_officer || null,
+          officer_notes: item.resolution_notes || (item as any).officer_notes || '',
           photoBase64: item.photoBase64,
-          resolution_photo_url: item.proof_image_url || item.photo_url,
+          resolution_photo_url: item.proof_image_url || item.photo_url || (item as any).resolution_photo_url,
           approval_status: (item as any).approval_status || 'approved',
+          created_at: item.created_at,
         });
       }
 
-      const allRecords = Array.from(mergedMap.values());
-
-      if (userRole === 'officer') {
-        // Field Officer sees issues assigned to them, unassigned, or in-flight
-        const officerWorklist = allRecords.filter((g) => {
-          const st = (g.status || 'reported').toLowerCase();
-          const officer = g.assigned_officer || g.assigned_to;
-          return (
-            officer === 'Field Officer' ||
-            officer === 'Field Officer Rahul' ||
-            officer === 'Panchayat Officer' ||
-            !officer ||
-            st === 'assigned' ||
-            st === 'assigned_for_inspection' ||
-            st === 'under_inspection' ||
-            st === 'pending_inspection_verification' ||
-            st === 'pending_resolution_approval' ||
-            st === 'reported' ||
-            st === 'in_progress'
-          );
-        });
-        setGrievances(officerWorklist);
-      } else {
-        setGrievances(allRecords);
-      }
+      setGrievances(Array.from(mergedMap.values()));
     } catch (err) {
       console.error('Failed to load grievances from DB:', err);
     } finally {
@@ -123,31 +149,53 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     }
   }, [isOpen, userRole, issues]);
 
-
-  // Step 3 (Officer): Start Field Inspection -> updates status to pending_inspection_verification
-  const handleStartFieldInspection = async (id: number) => {
+  // Handle direct status change for Officer and Admin
+  const handleStatusChange = async (id: string, newStatus: string) => {
     try {
-      await updateIssueStatus(String(id), 'pending_inspection_verification');
-      await transitionToInspectionVerification(id, 'Officer requested inspection authorization.');
-      setDrawerToast('Inspection request sent to Admin for sign-off');
+      const res = await updateIssueStatus(id, newStatus as IssueStatus);
+      if (res.success) {
+        setGrievances((prev) =>
+          prev.map((g) => (g.id === id || g.issue_id === id ? { ...g, status: newStatus } : g))
+        );
+        setDrawerToast(`Status updated to "${newStatus.replace(/_/g, ' ')}"`);
+        setTimeout(() => setDrawerToast(null), 3000);
+        if (onGrievanceStatusUpdated) onGrievanceStatusUpdated();
+      } else {
+        alert('Failed to update status: ' + res.error);
+      }
+    } catch (err) {
+      console.error('Failed to change status:', err);
+    }
+  };
+
+  // Step 3 (Officer): Start Field Inspection -> updates status to under_inspection
+  const handleStartFieldInspection = async (id: string) => {
+    try {
+      await updateIssueStatus(id, 'under_inspection');
+      await transitionToInspectionVerification(parseInt(id.replace(/\D/g, '') || '0', 10) || 0, 'Officer requested inspection authorization.').catch(() => {});
+      setGrievances((prev) =>
+        prev.map((g) => (g.id === id || g.issue_id === id ? { ...g, status: 'under_inspection' } : g))
+      );
+      setDrawerToast('Field inspection started for this issue.');
       setTimeout(() => setDrawerToast(null), 3500);
-      await loadGrievances();
       if (onGrievanceStatusUpdated) onGrievanceStatusUpdated();
     } catch (err) {
       console.error('Failed to start inspection:', err);
     }
   };
 
-  // Step 5 (Officer): Submit Resolution & Photo -> updates status to pending_resolution_approval
-  const handleSubmitResolutionAndPhoto = async (id: number) => {
+  // Step 4 (Officer): Submit Resolution & Photo -> updates status to resolved
+  const handleSubmitResolutionAndPhoto = async (id: string) => {
     const photo = proofPhotoMap[id];
     const notes = officerNotesMap[id] || 'Field repair completed as per specifications.';
     try {
-      await updateIssueStatus(String(id), 'pending_resolution_approval', notes);
-      await transitionToResolutionApproval(id, photo || '', notes);
-      setDrawerToast('Resolution proof submitted! Awaiting Admin audit.');
+      await updateIssueStatus(id, 'resolved', notes);
+      await transitionToResolutionApproval(parseInt(id.replace(/\D/g, '') || '0', 10) || 0, photo || '', notes).catch(() => {});
+      setGrievances((prev) =>
+        prev.map((g) => (g.id === id || g.issue_id === id ? { ...g, status: 'resolved', officer_notes: notes } : g))
+      );
+      setDrawerToast('Issue marked Resolved! Changes synced to cloud.');
       setTimeout(() => setDrawerToast(null), 3500);
-      await loadGrievances();
       if (onGrievanceStatusUpdated) onGrievanceStatusUpdated();
     } catch (err) {
       console.error('Failed to submit resolution:', err);
@@ -160,7 +208,10 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     try {
       const compressed = await compressImageToBase64(file, 800, 800, 0.75);
       setProofPhotoMap((prev) => ({ ...prev, [activePhotoUploadId]: compressed }));
-      await db.offline_grievances.update(activePhotoUploadId, { resolution_photo_url: compressed });
+      const numId = parseInt(activePhotoUploadId.replace(/\D/g, '') || '0', 10);
+      if (numId) {
+        await db.offline_grievances.update(numId, { resolution_photo_url: compressed }).catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to attach proof photo:', err);
     } finally {
@@ -171,10 +222,13 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     }
   };
 
-  const handleDelete = async (id?: number) => {
+  const handleDelete = async (id?: string) => {
     if (!id) return;
     try {
-      await db.offline_grievances.delete(id);
+      const numId = parseInt(id.replace(/\D/g, '') || '0', 10);
+      if (numId) {
+        await db.offline_grievances.delete(numId).catch(() => {});
+      }
       setGrievances((prev) => prev.filter((g) => g.id !== id));
     } catch (err) {
       console.error('Failed to delete grievance:', err);
@@ -182,7 +236,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
   };
 
   const handleExportGeoJson = () => {
-    const geoJsonStr = exportGrievancesToGeoJson(grievances);
+    const geoJsonStr = exportGrievancesToGeoJson(grievances as any);
     const dataStr = 'data:application/geo+json;charset=utf-8,' + encodeURIComponent(geoJsonStr);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
@@ -193,7 +247,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
   };
 
   const handleExportCsv = () => {
-    const csvStr = exportGrievancesToCsv(grievances);
+    const csvStr = exportGrievancesToCsv(grievances as any);
     const dataStr = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvStr);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
@@ -203,26 +257,83 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
     downloadAnchor.remove();
   };
 
+  // Filtered grievances based on status tabs & search query
+  const filteredGrievances = useMemo(() => {
+    return grievances.filter((g) => {
+      // 1. Status Filter
+      if (statusFilter !== 'all') {
+        const st = (g.status || 'reported').toLowerCase();
+        if (statusFilter === 'reported' && st !== 'reported' && st !== 'pending_initial_approval') return false;
+        if (statusFilter === 'assigned' && st !== 'assigned' && st !== 'assigned_for_inspection') return false;
+        if (statusFilter === 'under_inspection' && st !== 'under_inspection' && st !== 'pending_inspection_verification') return false;
+        if (statusFilter === 'resolved' && st !== 'resolved' && st !== 'pending_resolution_approval' && st !== 'verified_closed') return false;
+      }
+
+      // 2. Search Query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesTitle = (g.title || '').toLowerCase().includes(q);
+        const matchesCategory = (g.category || '').toLowerCase().includes(q);
+        const matchesDesc = (g.description || '').toLowerCase().includes(q);
+        const matchesOfficer = (g.assigned_officer || g.assigned_to || '').toLowerCase().includes(q);
+        const matchesReporter = (g.reporterName || '').toLowerCase().includes(q);
+        return matchesTitle || matchesCategory || matchesDesc || matchesOfficer || matchesReporter;
+      }
+
+      return true;
+    });
+  }, [grievances, statusFilter, searchQuery]);
+
+  // Status counts for badge tabs
+  const statusCounts = useMemo(() => {
+    const counts = { all: grievances.length, reported: 0, assigned: 0, under_inspection: 0, resolved: 0 };
+    for (const g of grievances) {
+      const st = (g.status || 'reported').toLowerCase();
+      if (st === 'reported' || st === 'pending_initial_approval') counts.reported++;
+      else if (st === 'assigned' || st === 'assigned_for_inspection') counts.assigned++;
+      else if (st === 'under_inspection' || st === 'pending_inspection_verification') counts.under_inspection++;
+      else if (st === 'resolved' || st === 'pending_resolution_approval' || st === 'verified_closed') counts.resolved++;
+    }
+    return counts;
+  }, [grievances]);
+
   if (!isOpen) return null;
 
-  const severityColors = {
-    low: 'text-[#6EE7B7] bg-[#10B981]/20 border-[#10B981]/50',
-    medium: 'text-[#FDE68A] bg-[#F59E0B]/20 border-[#F59E0B]/50',
-    high: 'text-[#FCA5A5] bg-[#E05A47]/30 border-[#E05A47]/60',
-    critical: 'text-[#FCA5A5] bg-[#E05A47]/40 border-[#E05A47]',
+  const severityColors: Record<string, string> = {
+    low: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80',
+    medium: 'text-amber-300 bg-amber-950/60 border-amber-800/80',
+    high: 'text-rose-400 bg-rose-950/60 border-rose-800/80',
+    critical: 'text-rose-300 bg-rose-900/80 border-rose-600',
+  };
+
+  const getStatusBadge = (status?: string) => {
+    const st = (status || 'reported').toLowerCase();
+    if (st === 'assigned' || st === 'assigned_for_inspection') {
+      return { label: 'Step 2: Assigned', bg: 'bg-amber-950/60 text-amber-300 border-amber-700/60' };
+    }
+    if (st === 'under_inspection' || st === 'pending_inspection_verification') {
+      return { label: 'Step 3: Field Inspection', bg: 'bg-blue-950/60 text-blue-300 border-blue-700/60' };
+    }
+    if (st === 'resolved' || st === 'pending_resolution_approval') {
+      return { label: 'Step 4: Work Repaired', bg: 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60' };
+    }
+    if (st === 'verified_closed') {
+      return { label: 'Step 5: Verified & Closed', bg: 'bg-teal-950/60 text-teal-300 border-teal-700/60' };
+    }
+    return { label: 'Step 1: Registered', bg: 'bg-rose-950/60 text-rose-300 border-rose-700/60' };
   };
 
   return (
     <>
       {/* Mobile Backdrop */}
       <div
-        className="sm:hidden fixed inset-0 z-[2400] bg-black/60 backdrop-blur-sm animate-in fade-in"
+        className="sm:hidden fixed inset-0 z-[2400] bg-black/60 backdrop-blur-xs animate-in fade-in"
         onClick={onClose}
       />
 
-      <div className="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:left-auto sm:right-0 z-[2500] sm:z-[2000] w-full max-w-lg sm:max-w-md max-h-[85dvh] sm:max-h-full bg-white dark:bg-[#0F1D24] border-t sm:border-t-0 sm:border-l border-slate-200 dark:border-[#2C4654] rounded-t-3xl sm:rounded-none shadow-2xl flex flex-col text-slate-800 dark:text-[#F1F5F9] animate-in slide-in-from-bottom sm:slide-in-from-right duration-200 overflow-hidden">
-        {/* Mobile touch-drag handle pill */}
-        <div className="w-10 h-1 bg-slate-400 dark:bg-slate-600 rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
+      <div className="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:left-auto sm:right-0 z-[2500] sm:z-[2000] w-full max-w-lg sm:max-w-md max-h-[90dvh] sm:max-h-full bg-[#081018] border-t sm:border-t-0 sm:border-l border-[#1D3B52] rounded-t-3xl sm:rounded-none shadow-2xl flex flex-col text-[#F1F5F9] animate-in slide-in-from-bottom sm:slide-in-from-right duration-200 overflow-hidden">
+        {/* Mobile drag handle */}
+        <div className="w-10 h-1 bg-[#1D3B52] rounded-full mx-auto my-2 sm:hidden flex-shrink-0" />
 
         {/* Hidden file input for officer photo evidence */}
         <input
@@ -234,320 +345,337 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
           className="hidden"
         />
 
-      {/* Header */}
-      <div className="p-4 border-b border-slate-200 dark:border-[#2C4654] bg-slate-50 dark:bg-[#0F1D24] flex flex-col gap-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              userRole === 'officer'
-                ? 'bg-[#0284C7]/20 border border-[#0284C7]/50 text-[#0284C7] dark:text-[#38BDF8]'
-                : 'bg-slate-100 dark:bg-[#172A33] border border-slate-200 dark:border-[#2C4654] text-[#0284C7]'
-            }`}>
-              {userRole === 'officer' ? <ShieldCheck className="w-4 h-4" /> : <Database className="w-4 h-4" />}
+        {/* 1. Header with Cloud Live Indicator */}
+        <div className="p-4 border-b border-[#1D3B52] bg-[#0D1C2A] flex flex-col gap-2.5 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#EF4444]/20 border border-[#EF4444]/50 text-[#EF4444] flex items-center justify-center shadow-xs">
+                <AlertCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                  Village Issues Registry
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-[#EF4444]/20 border border-[#EF4444]/50 text-[#FCA5A5] font-mono font-bold">
+                    {grievances.length} Total
+                  </span>
+                </h2>
+                <div className="flex items-center gap-1.5 text-[11px] text-[#8CB0C9] mt-0.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>Live Supabase Cloud Database • Real-Time Sync</span>
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-[#F1F5F9] tracking-tight flex items-center gap-2">
-                {userRole === 'officer' ? (
-                  <>
-                    Officer Field Worklist
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-[#0284C7]/20 border border-[#0284C7]/50 text-[#0284C7] dark:text-[#38BDF8] font-mono">
-                      {grievances.length} Active Tasks
-                    </span>
-                  </>
-                ) : userRole === 'admin' ? (
-                  <>
-                    Offline Field Records
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-[#172A33] border border-slate-200 dark:border-[#2C4654] text-[#0284C7] dark:text-[#38BDF8] font-mono">
-                      {grievances.length}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    Citizen Field Grievances
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 font-mono">
-                      {grievances.length}
-                    </span>
-                  </>
-                )}
-              </h2>
-              <p className="text-[11px] text-slate-500 dark:text-[#94A3B8]">
-                {userRole === 'officer'
-                  ? 'Officially Approved Panchayat Tasks • Update Status & Proof'
-                  : 'Persistent in IndexedDB • Zero Cloud Dependency'}
-              </p>
-            </div>
+
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#8CB0C9] hover:text-white hover:bg-[#142C3F] transition cursor-pointer"
+              title="Close Drawer"
+              aria-label="Close drawer"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
-          <button
-            onClick={onClose}
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-500 dark:text-[#94A3B8] hover:text-slate-900 dark:hover:text-[#F1F5F9] hover:bg-slate-100 dark:hover:bg-[#172A33] transition cursor-pointer"
-            title="Close Drawer"
-            aria-label="Close drawer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+          {/* Search Bar */}
+          <div className="relative mt-1">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#5A7C93]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search issues by title, category, officer..."
+              className="w-full bg-[#081018] border border-[#1D3B52] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[#F1F5F9] placeholder-[#5A7C93] focus:outline-none focus:border-[#00E5FF] transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-2 text-[#5A7C93] hover:text-white text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
-        {/* Dual Export Bar (GeoJSON for QGIS + CSV for Gram Panchayat) */}
-        {grievances.length > 0 && userRole !== 'user' && (
-          <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#334B56]/50">
-            <span className="text-[10px] text-[#94A3B8] font-medium">Export Formats:</span>
+          {/* Status Filter Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1">
+            {[
+              { id: 'all', label: 'All', count: statusCounts.all },
+              { id: 'reported', label: 'Reported', count: statusCounts.reported },
+              { id: 'assigned', label: 'Assigned', count: statusCounts.assigned },
+              { id: 'under_inspection', label: 'Inspecting', count: statusCounts.under_inspection },
+              { id: 'resolved', label: 'Resolved', count: statusCounts.resolved },
+            ].map((tab) => {
+              const isActive = statusFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    isActive
+                      ? 'bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/60 shadow-[0_0_8px_rgba(0,229,255,0.25)]'
+                      : 'bg-[#081018] text-[#8CB0C9] border border-[#1D3B52] hover:text-white hover:border-[#1D3B52]/80'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
+                      isActive ? 'bg-[#00E5FF]/30 text-[#00E5FF]' : 'bg-[#142C3F] text-[#5A7C93]'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Export Bar */}
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#1D3B52]/60">
+            <span className="text-[10px] text-[#5A7C93] font-mono uppercase tracking-wider">
+              {filteredGrievances.length} displayed
+            </span>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleExportGeoJson}
-                className="px-2.5 py-1 rounded-lg text-[#38BDF8] hover:text-[#F8FAFC] bg-[#1B2F38] hover:bg-[#233B46] border border-[#38BDF8]/40 text-[11px] font-semibold transition cursor-pointer flex items-center gap-1 active:scale-95 shadow-sm"
-                title="Export as standard GeoJSON for QGIS/ArcGIS"
+                className="px-2 py-0.5 rounded-md text-[#38BDF8] bg-[#081018] hover:bg-[#142C3F] border border-[#38BDF8]/40 text-[10px] font-semibold transition cursor-pointer flex items-center gap-1 active:scale-95"
+                title="Export GeoJSON for GIS software"
               >
-                <FileDown className="w-3.5 h-3.5" />
-                <span>GeoJSON (QGIS)</span>
+                <FileDown className="w-3 h-3" />
+                <span>GeoJSON</span>
               </button>
 
               <button
                 onClick={handleExportCsv}
-                className="px-2.5 py-1 rounded-lg text-[#FCD34D] hover:text-[#F8FAFC] bg-[#1B2F38] hover:bg-[#233B46] border border-[#FCD34D]/40 text-[11px] font-semibold transition cursor-pointer flex items-center gap-1 active:scale-95 shadow-sm"
-                title="Export as CSV for Bapane Gram Panchayat administration"
+                className="px-2 py-0.5 rounded-md text-[#FCD34D] bg-[#081018] hover:bg-[#142C3F] border border-[#FCD34D]/40 text-[10px] font-semibold transition cursor-pointer flex items-center gap-1 active:scale-95"
+                title="Export CSV for Gram Panchayat records"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>CSV (Panchayat)</span>
+                <FileSpreadsheet className="w-3 h-3" />
+                <span>CSV</span>
               </button>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Toast Notice */}
-      {drawerToast && (
-        <div className="mx-4 mt-2 px-3 py-2 rounded-xl bg-[#10B981]/20 border border-[#10B981]/50 text-[#6EE7B7] text-xs font-semibold animate-in fade-in">
-          {drawerToast}
         </div>
-      )}
 
-      {/* List Content */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-        {loading ? (
-          <div className="text-center py-12 text-[#94A3B8] text-xs">
-            Loading IndexedDB records...
+        {/* Toast Notice */}
+        {drawerToast && (
+          <div className="mx-4 mt-2 px-3 py-2 rounded-xl bg-emerald-950/80 border border-emerald-600/80 text-emerald-300 text-xs font-semibold animate-in fade-in flex items-center gap-2 shadow-md">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{drawerToast}</span>
           </div>
-        ) : grievances.length === 0 ? (
-          <div className="text-center py-16 flex flex-col items-center gap-2 text-[#94A3B8]">
-            <AlertCircle className="w-8 h-8 text-[#334B56]" />
-            <p className="text-xs">
-              {userRole === 'officer'
-                ? 'No pending verified tasks assigned in your worklist.'
-                : 'No offline grievances logged yet.'}
-            </p>
-            <p className="text-[11px] text-[#94A3B8]/80 max-w-xs">
-              {userRole === 'officer'
-                ? 'Tasks appear here when approved by the Panchayat Admin.'
-                : 'Click "Report Grievance" on the map to log issues while surveying Khopripada.'}
-            </p>
-          </div>
-        ) : (
-          grievances.map((g) => {
-            const hasPhoto = Boolean(g.photoBase64);
-            const isFloods = (g.description || '').toLowerCase().includes('flood') || (g.description || '').toLowerCase().includes('inundat') || g.severity === 'critical';
-            const monsoonBadge = isFloods ? 'Floods / Isolated' : 'Year-round';
-            const isApproved = g.approval_status === 'approved' || g.approval_status === undefined;
-            const currentStatus = g.status || 'reported';
+        )}
 
-            return (
-              <div
-                key={g.id}
-                className="p-3.5 rounded-xl bg-[#F1F5F9] dark:bg-[#172A33] border border-slate-200 dark:border-[#2C4654] hover:border-[#0284C7] transition flex flex-col gap-2 text-slate-800 dark:text-[#F1F5F9]"
-              >
-                {/* Photo Thumbnail */}
-                {hasPhoto ? (
-                  <div className="relative w-full h-28 rounded-lg overflow-hidden border border-[#334B56] bg-[#0C171C]">
-                    <img
-                      src={g.photoBase64}
-                      alt={g?.title || 'Grievance'}
-                      className="w-full h-full object-cover"
-                    />
-                    <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-[#132228]/95 text-[#38BDF8] border border-[#38BDF8]/40">
-                      Photo Evidence
-                    </span>
-                  </div>
-                ) : null}
+        {/* List Content */}
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+          {loading ? (
+            <div className="text-center py-12 text-[#8CB0C9] text-xs animate-pulse">
+              Syncing live issues from database...
+            </div>
+          ) : filteredGrievances.length === 0 ? (
+            <div className="text-center py-16 flex flex-col items-center gap-2 text-[#8CB0C9]">
+              <AlertCircle className="w-8 h-8 text-[#1D3B52]" />
+              <p className="text-xs font-semibold text-slate-300">
+                No issues match your filter criteria.
+              </p>
+              <p className="text-[11px] text-[#5A7C93] max-w-xs">
+                Switch filters to "All" or tap "Report Grievance" on the map to log a new civic complaint.
+              </p>
+            </div>
+          ) : (
+            filteredGrievances.map((g) => {
+              const hasPhoto = Boolean(g.photoBase64 || g.resolution_photo_url);
+              const statusBadge = getStatusBadge(g.status);
+              const isOfficerOrAdmin = userRole === 'officer' || userRole === 'admin';
+              const rawStatus = (g.status || 'reported').toLowerCase();
 
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    {/* Category Badge & Status Pill */}
-                    <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                      <span
-                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                          severityColors[g.severity] || severityColors.medium
-                        }`}
-                      >
-                        ● {(g?.severity || 'medium').toUpperCase()}
-                      </span>
-                      <span className="text-[10px] uppercase font-semibold text-[#94A3B8] px-1.5 py-0.5 rounded bg-[#0C171C] border border-[#334B56]">
-                        {g?.category || 'General'}
-                      </span>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
-                        isFloods ? 'text-[#FCA5A5] bg-[#E05A47]/20 border-[#E05A47]/50' : 'text-[#6EE7B7] bg-[#10B981]/20 border-[#10B981]/50'
-                      }`}>
-                        {monsoonBadge}
-                      </span>
-                      {/* Approval Status Badge */}
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border font-mono ${
-                        isApproved
-                          ? 'bg-[#10B981]/20 text-[#6EE7B7] border-[#10B981]/60'
-                          : g.approval_status === 'rejected'
-                          ? 'bg-[#E05A47]/30 text-[#FCA5A5] border-[#E05A47]'
-                          : 'bg-[#F59E0B]/20 text-[#FDE68A] border-[#F59E0B]/50'
-                      }`}>
-                        {isApproved ? 'Verified' : g.approval_status === 'rejected' ? 'Rejected' : 'Pending Approval'}
+              return (
+                <div
+                  key={g.id}
+                  className="p-3.5 rounded-xl bg-[#0D1C2A] border border-[#1D3B52] hover:border-[#00E5FF]/40 transition flex flex-col gap-2.5 text-[#F1F5F9] shadow-md"
+                >
+                  {/* Photo Evidence Thumbnail if present */}
+                  {hasPhoto && (
+                    <div className="relative w-full h-28 rounded-lg overflow-hidden border border-[#1D3B52] bg-[#081018]">
+                      <img
+                        src={g.photoBase64 || g.resolution_photo_url}
+                        alt={g?.title || 'Grievance Photo'}
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-black/80 text-[#00E5FF] border border-[#00E5FF]/40">
+                        Photo Evidence
                       </span>
                     </div>
+                  )}
 
-                    {/* Incident Title */}
-                    <h4 className="text-xs font-bold text-[#F8FAFC]">{g?.title || 'Civic Issue'}</h4>
-                  </div>
+                  {/* Header Row: Severity, Category, Status Badge */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Severity */}
+                        <span
+                          className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
+                            severityColors[g.severity] || severityColors.medium
+                          }`}
+                        >
+                          ● {g.severity.toUpperCase()}
+                        </span>
 
-                  <div className="flex items-center gap-1">
+                        {/* Category */}
+                        <span className="text-[9px] font-semibold text-[#8CB0C9] px-1.5 py-0.5 rounded bg-[#081018] border border-[#1D3B52]">
+                          {g.category || 'General'}
+                        </span>
+
+                        {/* Status Step Badge */}
+                        <span
+                          className={`text-[9px] font-semibold font-mono px-2 py-0.5 rounded border ${statusBadge.bg}`}
+                        >
+                          {statusBadge.label}
+                        </span>
+                      </div>
+
+                      {/* Title */}
+                      <h4 className="text-xs font-bold text-white leading-snug pt-0.5">
+                        {g.title}
+                      </h4>
+                    </div>
+
+                    {/* Fly to Map Location Button */}
                     <button
                       onClick={() => {
                         onFlyToGrievance([g.latitude, g.longitude]);
                         onClose();
                       }}
-                      className="p-1 rounded text-[#94A3B8] hover:text-[#38BDF8] hover:bg-[#233B46] transition cursor-pointer"
-                      title="Fly to Location"
+                      className="p-1.5 rounded-lg bg-[#081018] border border-[#1D3B52] text-[#00E5FF] hover:bg-[#142C3F] hover:border-[#00E5FF]/60 transition cursor-pointer shrink-0 active:scale-95 shadow-sm"
+                      title="Fly directly to this issue on the map"
                     >
                       <Navigation className="w-4 h-4" />
                     </button>
-                    {userRole === 'admin' && (
-                      <button
-                        onClick={() => handleDelete(g.id)}
-                        className="p-1 rounded text-[#94A3B8] hover:text-[#FCA5A5] hover:bg-[#233B46] transition cursor-pointer"
-                        title="Delete Record"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
                   </div>
-                </div>
 
-                {g.description && (
-                  <p className="text-[11px] text-[#94A3B8] leading-relaxed bg-[#0C171C] p-2 rounded-lg border border-[#334B56] line-clamp-2">
-                    {g.description}
-                  </p>
-                )}
+                  {/* Description */}
+                  {g.description && (
+                    <p className="text-[11px] text-[#8CB0C9] leading-relaxed bg-[#081018] p-2 rounded-lg border border-[#1D3B52]">
+                      {g.description}
+                    </p>
+                  )}
 
-                {/* Officer Action Bar: Multi-Tier Verification Lifecycle */}
-                {userRole === 'officer' && (
-                  <div className="p-2.5 rounded-xl bg-[#0C171C] border border-[#334B56] space-y-2 mt-1">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-[#94A3B8] font-medium">Lifecycle Stage:</span>
-                      <span className="font-mono text-[#38BDF8] font-bold uppercase">
-                        {currentStatus.replace(/_/g, ' ')}
+                  {/* Officer Notes if any */}
+                  {g.officer_notes && (
+                    <div className="text-[10px] text-sky-300 bg-sky-950/40 p-2 rounded-lg border border-sky-800/60 leading-relaxed">
+                      <b className="text-sky-400">Officer Note:</b> {g.officer_notes}
+                    </div>
+                  )}
+
+                  {/* Metadata Row: Assigned Officer & Reported By */}
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-[#5A7C93] pt-0.5 border-t border-[#1D3B52]/60">
+                    <div className="flex items-center gap-1 truncate">
+                      <User className="w-3 h-3 text-[#00E5FF] shrink-0" />
+                      <span className="truncate">
+                        Officer: <b className="text-[#8CB0C9]">{g.assigned_officer || g.assigned_to || 'Unassigned'}</b>
                       </span>
                     </div>
+                    <div className="flex items-center gap-1 truncate justify-end">
+                      <Clock className="w-3 h-3 text-[#5A7C93] shrink-0" />
+                      <span className="truncate text-[#8CB0C9]">
+                        {g.created_at ? new Date(g.created_at).toLocaleDateString() : 'Survey Active'}
+                      </span>
+                    </div>
+                  </div>
 
-                    {/* Stage A: assigned_for_inspection -> [Start Field Inspection] */}
-                    {(currentStatus === 'assigned_for_inspection' || currentStatus === 'reported') && (
-                      <button
-                        type="button"
-                        onClick={() => handleStartFieldInspection(g.id!)}
-                        className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#D97706] to-[#F59E0B] hover:brightness-110 text-[#0C171C] font-bold text-xs shadow-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Start Field Inspection</span>
-                      </button>
-                    )}
-
-                    {/* Stage B: pending_inspection_verification -> Awaiting Admin Authorization */}
-                    {currentStatus === 'pending_inspection_verification' && (
-                      <div className="p-2 rounded-lg bg-[#F59E0B]/15 border border-[#F59E0B]/50 text-[#FDE68A] text-[10px] font-semibold text-center animate-pulse">
-                        Inspection request sent to Admin for sign-off
+                  {/* Interactive Status Changer (Officer & Admin) */}
+                  {isOfficerOrAdmin && (
+                    <div className="mt-1 pt-2 border-t border-[#1D3B52] bg-[#081018]/80 -mx-3.5 -mb-3.5 p-3 rounded-b-xl flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-[#8CB0C9] uppercase tracking-wider">
+                          Live Status Control:
+                        </span>
+                        <select
+                          value={
+                            rawStatus === 'assigned_for_inspection' ? 'assigned' :
+                            rawStatus === 'pending_inspection_verification' ? 'under_inspection' :
+                            rawStatus === 'pending_resolution_approval' ? 'resolved' :
+                            rawStatus
+                          }
+                          onChange={(e) => handleStatusChange(g.id, e.target.value)}
+                          className="bg-[#0D1C2A] border border-[#1D3B52] text-[#00E5FF] text-[11px] font-bold rounded-lg px-2 py-1 focus:outline-none focus:border-[#00E5FF] cursor-pointer"
+                        >
+                          <option value="reported">Step 1: Registered</option>
+                          <option value="assigned">Step 2: Assigned</option>
+                          <option value="under_inspection">Step 3: Field Inspection</option>
+                          <option value="resolved">Step 4: Work Repaired</option>
+                          <option value="verified_closed">Step 5: Verified & Closed</option>
+                        </select>
                       </div>
-                    )}
 
-                    {/* Stage C: under_inspection / in_progress -> Camera Upload + Notes + [Submit Resolution & Photo] */}
-                    {(currentStatus === 'under_inspection' || currentStatus === 'in_progress') && (
-                      <div className="space-y-2 pt-1 border-t border-[#334B56]/60">
-                        <div className="text-[10px] text-[#10B981] font-semibold flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Inspection Authorized — Proceed with Repair</span>
-                        </div>
+                      {/* Quick Action Buttons */}
+                      {(rawStatus === 'reported' || rawStatus === 'assigned') && (
+                        <button
+                          type="button"
+                          onClick={() => handleStartFieldInspection(g.id)}
+                          className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-white font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Start Field Inspection</span>
+                        </button>
+                      )}
 
-                        {/* Camera upload or preview */}
-                        {proofPhotoMap[g.id!] || g.resolution_photo_url ? (
-                          <div className="relative w-full h-20 rounded-lg overflow-hidden border border-[#10B981]/50 bg-[#132228]">
-                            <img
-                              src={proofPhotoMap[g.id!] || g.resolution_photo_url}
-                              alt="Repair proof"
-                              className="w-full h-full object-cover"
-                            />
-                            <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-[#132228]/95 text-[#10B981] border border-[#10B981]/40">
-                              Proof Photo Ready
-                            </span>
-                          </div>
-                        ) : (
+                      {(rawStatus === 'under_inspection' || rawStatus === 'in_progress') && (
+                        <div className="space-y-2">
                           <button
                             type="button"
                             onClick={() => {
-                              setActivePhotoUploadId(g.id!);
+                              setActivePhotoUploadId(g.id);
                               officerFileInputRef.current?.click();
                             }}
-                            className="w-full py-2 px-3 rounded-lg border border-dashed border-[#38BDF8]/60 bg-[#1B2F38] hover:bg-[#233B46] text-[#38BDF8] text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                            className="w-full py-1 px-2.5 rounded-lg border border-dashed border-[#00E5FF]/60 bg-[#0D1C2A] text-[#00E5FF] text-[10px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
                           >
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>Capture Repair Photo Proof</span>
+                            <Camera className="w-3 h-3" />
+                            <span>{proofPhotoMap[g.id] ? 'Photo Attached (Retake)' : 'Capture Repair Photo Proof'}</span>
                           </button>
-                        )}
+                          <input
+                            type="text"
+                            value={officerNotesMap[g.id] || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setOfficerNotesMap((prev) => ({ ...prev, [g.id]: val }));
+                            }}
+                            placeholder="Field repair completion notes..."
+                            className="w-full bg-[#0D1C2A] border border-[#1D3B52] rounded-lg px-2 py-1 text-white text-[11px] placeholder-[#5A7C93] focus:outline-none focus:border-[#00E5FF]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSubmitResolutionAndPhoto(g.id)}
+                            className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Mark Resolved & Submit Proof</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                        {/* Officer Repair Notes */}
-                        <input
-                          type="text"
-                          value={officerNotesMap[g.id!] || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setOfficerNotesMap((prev) => ({ ...prev, [g.id!]: val }));
-                          }}
-                          placeholder="e.g. Unblocked stormwater drain channel & reinforced culvert"
-                          className="w-full bg-[#132228] border border-[#334B56] rounded-lg px-2.5 py-1.5 text-[#F8FAFC] text-[11px] focus:outline-none focus:border-[#10B981]"
-                        />
-
-                        {/* Submit Resolution & Photo Button */}
-                        <button
-                          type="button"
-                          onClick={() => handleSubmitResolutionAndPhoto(g.id!)}
-                          className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#10B981] hover:brightness-110 text-[#F8FAFC] font-bold text-xs shadow-md transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Submit Resolution & Photo</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Stage D: pending_resolution_approval */}
-                    {currentStatus === 'pending_resolution_approval' && (
-                      <div className="p-2 rounded-lg bg-[#10B981]/15 border border-[#10B981]/50 text-[#6EE7B7] text-[10px] font-semibold text-center">
-                        Resolution & photo submitted • Awaiting Sarpanch/Admin audit
-                      </div>
+                  {/* Coordinates Footer */}
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[#5A7C93] pt-1">
+                    <span className="flex items-center gap-1 text-[#00E5FF]">
+                      <MapPin className="w-3 h-3" />
+                      {g.latitude.toFixed(4)}°N, {g.longitude.toFixed(4)}°E
+                    </span>
+                    {userRole === 'admin' && (
+                      <button
+                        onClick={() => handleDelete(g.id)}
+                        className="text-red-400 hover:text-red-300 transition cursor-pointer p-0.5"
+                        title="Delete record from local database"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     )}
                   </div>
-                )}
-
-                <div className="flex items-center justify-between pt-1 border-t border-[#334B56]/50 text-[10px] font-mono text-[#94A3B8]">
-                  <span className="flex items-center gap-1 text-[#38BDF8]">
-                    <MapPin className="w-3 h-3" />
-                    {g.latitude.toFixed(5)}°N, {g.longitude.toFixed(5)}°E
-                  </span>
-                  <span className="flex items-center gap-1 text-[#94A3B8]">
-                    <Calendar className="w-3 h-3" />
-                    {new Date(g.timestamp).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
                 </div>
-              </div>
-            );
-          })
-        )}
+              );
+            })
+          )}
+        </div>
       </div>
-    </div>
     </>
   );
 };
