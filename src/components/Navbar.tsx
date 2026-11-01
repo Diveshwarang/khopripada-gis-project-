@@ -10,9 +10,7 @@ import {
   Shield,
   ClipboardCheck,
   LogOut,
-  Building2,
   FileText,
-  BarChart3,
 } from 'lucide-react';
 import type { Role } from '../types/auth';
 import {

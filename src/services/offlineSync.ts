@@ -403,9 +403,7 @@ export const precacheKhopripadaMapTiles = async (
       for (let y = minY; y <= maxY; y++) {
         // 1. OpenStreetMap
         tileUrls.push(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
-        // 2. CartoDB Dark
-        tileUrls.push(`https://a.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`);
-        // 3. Esri World Imagery (Satellite)
+        // 2. Esri World Imagery (Satellite)
         tileUrls.push(
           `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
         );

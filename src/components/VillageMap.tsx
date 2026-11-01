@@ -6,7 +6,6 @@ import {
   Layers,
   MapPin,
   Building2,
-  ChevronDown,
   Locate,
   AlertTriangle,
   FileSpreadsheet,
@@ -24,7 +23,7 @@ import {
   ShieldCheck,
   Download,
   LogOut,
-  Map,
+  Map as MapIcon,
   User,
   Shield,
   SlidersHorizontal,
@@ -41,14 +40,11 @@ import {
 } from '../services/geolocation';
 import {
   runDBSCANClustering,
-  type DBSCANClusterResult,
   type ClusterPoint,
 } from '../services/dbscanService';
 import {
   db,
-  seedFacilitiesFromCsv,
   saveFacilityToOfflineDb,
-  seedIssuesFromCsv,
   approveFacility,
   rejectFacility,
   rejectGrievance,
@@ -162,7 +158,7 @@ const VILLAGE_BOUNDARY_COORDS: [number, number][] = [
   [19.370, 72.880],
 ];
 
-type BasemapType = 'esri' | 'osm' | 'dark' | 'opentopo' | 'satellite';
+type BasemapType = 'satellite' | 'osm' | 'esri';
 export type FacilityCategoryFilter = 'all' | 'water' | 'education' | 'commerce' | 'health' | 'civic' | 'issues';
 
 export interface VillageMapProps {
@@ -189,11 +185,14 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const inspectMarkerRef = useRef<L.Marker | null>(null);
   const esriLayerRef = useRef<L.TileLayer | null>(null);
   const osmLayerRef = useRef<L.TileLayer | null>(null);
-  const darkLayerRef = useRef<L.TileLayer | null>(null);
-  const opentopoLayerRef = useRef<L.TileLayer | null>(null);
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
   const heatmapGroupRef = useRef<L.LayerGroup>(L.layerGroup());
-  const heatmapLayerRef = heatmapGroupRef;
+
+  // Dedicated LayerGroups for Level-of-Detail (LOD) Semantic Zooming
+  const majorLandmarksGroupRef = useRef<L.LayerGroup>(L.layerGroup());
+  const secondaryAssetsGroupRef = useRef<L.LayerGroup>(L.layerGroup());
+  const microAssetsGroupRef = useRef<L.LayerGroup>(L.layerGroup());
+
   const allFacilitiesRef = useRef<CachedFacility[]>([]);
   const allIssuesRef = useRef<CachedIssue[]>([]);
 
@@ -264,7 +263,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const heatmapActive = propHeatmapActive !== undefined ? propHeatmapActive : internalHeatmapActive;
   const setHeatmapActive = propSetHeatmapActive || setInternalHeatmapActive;
   const showHeatmap = heatmapActive;
-  const setShowHeatmap = setHeatmapActive;
   const handleUpdateIssueStatusRef = useRef<((id: string, st: string) => Promise<void>) | null>(null);
   const refreshGrievanceMarkersRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -272,7 +270,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const [currentZoom, setCurrentZoom] = useState<number>(DEFAULT_ZOOM);
   const [centerCoords, setCenterCoords] = useState<[number, number]>(KHOPRIPADA_CORE);
   const [cursorCoords, setCursorCoords] = useState<[number, number] | null>(null);
-  const [activeBasemap, setActiveBasemap] = useState<BasemapType>('esri');
+  const [activeBasemap, setActiveBasemap] = useState<BasemapType>('satellite');
   const [showBoundary, setShowBoundary] = useState<boolean>(true);
   const [showLandmarks, setShowLandmarks] = useState<boolean>(true);
   const [showFacilities, setShowFacilities] = useState<boolean>(true);
@@ -281,7 +279,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const [facilityFilter, setFacilityFilter] = useState<FacilityCategoryFilter>('all');
   const [facilitiesList, setFacilitiesList] = useState<CachedFacility[]>([]);
   const [issuesList, setIssuesList] = useState<CachedIssue[]>([]);
-  const [activeDataset, setActiveDataset] = useState<'survey' | 'unified'>('survey');
 
   // Defensive safe arrays & unified issues list
   const safeIssues = useMemo(() => (Array.isArray(issuesList) ? issuesList.filter(Boolean) : []), [issuesList]);
@@ -325,11 +322,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     category: undefined,
     coords: null,
   });
-
-  // Drawer Accordion States
-  const [activeLayersOpen, setActiveLayersOpen] = useState<boolean>(true);
-  const [categoryFiltersOpen, setCategoryFiltersOpen] = useState<boolean>(true);
-  const [analyticsHealthOpen, setAnalyticsHealthOpen] = useState<boolean>(true);
 
   // Offline and Field Modals
   const [isLocating, setIsLocating] = useState(false);
@@ -1281,7 +1273,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           severityBadge = 'bg-[#10B981]/20 text-[#6EE7B7] border border-[#10B981]/60 font-semibold text-xs px-2.5 py-0.5 rounded-full';
         }
 
-        const cat = (iss.category || '').toLowerCase();
         const glyphSvg = `<svg class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`;
 
         const customIcon = L.divIcon({
@@ -1628,47 +1619,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   };
 
   // Switch dataset between field surveyed assets (22 fac + 3 iss) and unified village model assets (172 fac + 203 iss)
-  const handleSwitchDataset = async (dataset: 'survey' | 'unified') => {
-    setActiveDataset(dataset);
-    const facPath = dataset === 'unified' ? '/data/unified_facilities.csv' : '/data/facilities.csv';
-    const issPath = dataset === 'unified' ? '/data/unified_issues.csv' : '/data/issues.csv';
-
-    const [facilities, issues] = await Promise.all([
-      seedFacilitiesFromCsv(true, facPath),
-      seedIssuesFromCsv(true, issPath),
-    ]);
-
-    allFacilitiesRef.current = facilities;
-    setFacilitiesList(facilities);
-    setFacilityCount(facilities.length);
-    renderFacilityMarkers(facilities, facilityFilter);
-
-    allIssuesRef.current = issues;
-    setIssuesList(issues);
-    renderIssueMarkers(issues, facilityFilter);
-
-    showToast(
-      dataset === 'unified'
-        ? `Loaded All ${facilities.length} Facilities & ${issues.length} Issues (Digital Twin Model)`
-        : `Loaded ${facilities.length} Survey Facilities & ${issues.length} Field Survey Issues`
-    );
-
-    const validCoords = (facilityFilter === 'issues' ? issues : facilities)
-      .filter((f) => !isNaN(f.latitude) && !isNaN(f.longitude) && f.latitude !== 0 && f.longitude !== 0)
-      .map((f) => [f.latitude, f.longitude] as [number, number]);
-
-    if (validCoords.length > 0 && mapInstanceRef.current) {
-      const bounds = L.latLngBounds(validCoords);
-      if (bounds.isValid()) {
-        try {
-          mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-        } catch {
-          // ignore transient container size errors
-        }
-      }
-    }
-  };
-
   // Handle saving newly registered facility
   const handleFacilitySaved = async (newFacility: CachedFacility) => {
     try {
@@ -1843,7 +1793,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       if (!heatmapActive) return;
 
       // 2. Validate all historical issues (do NOT filter out old or resolved issues from the heatmap)
-      const validIssues = (issues || []).filter((issue) => {
+      const validIssues = (issues || []).filter((issue: any) => {
         const lat = Number(issue?.latitude);
         const lng = Number(issue?.longitude);
         return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
@@ -1852,7 +1802,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       console.log(`[Heatmap Engine] Plotting full density for ${validIssues.length} issues (historical + latest)`);
 
       // 3. Iterate through EVERY issue in the database
-      validIssues.forEach((issue) => {
+      validIssues.forEach((issue: any) => {
         const lat = Number(issue.latitude);
         const lng = Number(issue.longitude);
         const isCritical =
@@ -1908,6 +1858,191 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     },
     [setHeatmapActive]
   );
+
+  // Categorize and populate Level-of-Detail (LOD) semantic zoom groups
+  useEffect(() => {
+    majorLandmarksGroupRef.current.clearLayers();
+    secondaryAssetsGroupRef.current.clearLayers();
+    microAssetsGroupRef.current.clearLayers();
+
+    // Populate Facilities based on tier
+    if (showFacilities) {
+      (safeFacilities || []).forEach((fac) => {
+        if (!fac?.latitude || !fac?.longitude) return;
+
+        if (facilityFilter !== 'all') {
+          const cat = (fac.category || '').toLowerCase();
+          const name = (fac.name || '').toLowerCase();
+          if (facilityFilter === 'water' && !cat.includes('water') && !name.includes('water') && !name.includes('pump') && !name.includes('tank')) return;
+          if (facilityFilter === 'education' && !cat.includes('education') && !cat.includes('school') && !name.includes('school')) return;
+          if (facilityFilter === 'commerce' && !cat.includes('commerce') && !cat.includes('shop') && !name.includes('shop') && !name.includes('store')) return;
+          if (facilityFilter === 'health' && !cat.includes('health') && !cat.includes('hospital') && !cat.includes('clinic') && !cat.includes('anganwadi')) return;
+          if (facilityFilter === 'civic' && !cat.includes('civic') && !cat.includes('mandir') && !cat.includes('temple') && !cat.includes('panchayat')) return;
+          if (facilityFilter === 'issues') return;
+        }
+
+        const cat = (fac.category || '').toLowerCase();
+        const name = (fac.name || '').toLowerCase();
+
+        const isMajor =
+          cat.includes('health') ||
+          cat.includes('education') ||
+          cat.includes('panchayat') ||
+          name.includes('school') ||
+          name.includes('hospital') ||
+          name.includes('gram panchayat') ||
+          name.includes('anganwadi') ||
+          name.includes('phc');
+
+        const isSecondary =
+          cat.includes('water') ||
+          cat.includes('mandir') ||
+          cat.includes('temple') ||
+          cat.includes('commerce') ||
+          cat.includes('shop') ||
+          name.includes('handpump') ||
+          name.includes('tank');
+
+        const marker = L.circleMarker([fac.latitude, fac.longitude], {
+          radius: isMajor ? 8 : isSecondary ? 6 : 4,
+          fillColor: isMajor ? '#00E5FF' : isSecondary ? '#38BDF8' : '#8CB0C9',
+          color: '#FFFFFF',
+          weight: 1.5,
+          fillOpacity: 0.85,
+        }).bindPopup(
+          `<div class="p-2 text-xs font-sans text-[#F1F5F9] bg-[#0D1C2A] rounded border border-[#1D3B52] shadow-xl">
+            <strong class="text-sm font-bold text-[#F1F5F9] block mb-1">${fac.name}</strong>
+            <span class="text-[#8CB0C9] block mb-1">Category: ${fac.category || 'General'}</span>
+            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+              fac.operational_status === 'non_functional'
+                ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+            }">Status: ${fac.operational_status || 'functional'}</span>
+          </div>`,
+          { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
+        );
+
+        marker.on('click', () => {
+          setInspectedPoint({
+            lat: fac.latitude,
+            lng: fac.longitude,
+            distKm: parseFloat((mapInstanceRef.current ? mapInstanceRef.current.distance([fac.latitude, fac.longitude], KHOPRIPADA_CORE) / 1000 : 0).toFixed(2)),
+          });
+        });
+
+        if (isMajor) {
+          majorLandmarksGroupRef.current.addLayer(marker);
+        } else if (isSecondary) {
+          secondaryAssetsGroupRef.current.addLayer(marker);
+        } else {
+          microAssetsGroupRef.current.addLayer(marker);
+        }
+      });
+    }
+
+    // Populate Grievances / Issues based on severity tier
+    if (showIssues) {
+      (issues || []).forEach((issue: any) => {
+        if (!issue?.latitude || !issue?.longitude) return;
+
+        const isCritical =
+          issue.severity === 'high' ||
+          issue.severity === 'critical' ||
+          (issue.priority_score && issue.priority_score > 70) ||
+          issue.urgency === 'urgent';
+        const isMedium = issue.severity === 'medium';
+
+        const issueMarker = L.circleMarker([issue.latitude, issue.longitude], {
+          radius: isCritical ? 9 : 6,
+          fillColor: isCritical ? '#EF4444' : isMedium ? '#F59E0B' : '#38BDF8',
+          color: '#FFFFFF',
+          weight: 2,
+          fillOpacity: 0.9,
+        }).bindPopup(
+          `<div class="p-2 text-xs font-sans text-[#F1F5F9] bg-[#0D1C2A] rounded border border-[#1D3B52] shadow-xl">
+            <strong class="text-sm font-bold text-[#F1F5F9] block mb-1">${issue.title || 'Civic Issue'}</strong>
+            <span class="text-[#8CB0C9] block mb-1">Severity: <span class="uppercase font-semibold ${
+              isCritical ? 'text-red-400' : isMedium ? 'text-amber-400' : 'text-sky-400'
+            }">${issue.severity || 'Medium'}</span></span>
+            <span class="text-[#8CB0C9] block">Category: ${issue.category || 'Civic'}</span>
+          </div>`,
+          { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
+        );
+
+        issueMarker.on('click', () => {
+          setInspectedPoint({
+            lat: issue.latitude,
+            lng: issue.longitude,
+            distKm: parseFloat((mapInstanceRef.current ? mapInstanceRef.current.distance([issue.latitude, issue.longitude], KHOPRIPADA_CORE) / 1000 : 0).toFixed(2)),
+          });
+        });
+
+        if (isCritical) {
+          majorLandmarksGroupRef.current.addLayer(issueMarker);
+        } else if (isMedium) {
+          secondaryAssetsGroupRef.current.addLayer(issueMarker);
+        } else {
+          microAssetsGroupRef.current.addLayer(issueMarker);
+        }
+      });
+    }
+
+    // Synchronize LOD visibility with current zoom level
+    const map = mapInstanceRef.current;
+    if (map) {
+      const z = map.getZoom();
+      if (z < 16) {
+        if (map.hasLayer(secondaryAssetsGroupRef.current)) map.removeLayer(secondaryAssetsGroupRef.current);
+        if (map.hasLayer(microAssetsGroupRef.current)) map.removeLayer(microAssetsGroupRef.current);
+        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
+      } else if (z >= 16 && z < 18) {
+        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
+        if (!map.hasLayer(secondaryAssetsGroupRef.current)) secondaryAssetsGroupRef.current.addTo(map);
+        if (map.hasLayer(microAssetsGroupRef.current)) map.removeLayer(microAssetsGroupRef.current);
+      } else {
+        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
+        if (!map.hasLayer(secondaryAssetsGroupRef.current)) secondaryAssetsGroupRef.current.addTo(map);
+        if (!map.hasLayer(microAssetsGroupRef.current)) microAssetsGroupRef.current.addTo(map);
+      }
+    }
+  }, [safeFacilities, issues, facilityFilter, showFacilities, showIssues]);
+
+  // Listen to zoomend and filter visibility dynamically based on Semantic Zooming tiers
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const handleZoomUpdate = () => {
+      const z = map.getZoom();
+      setCurrentZoom(z);
+
+      // Macro View (< 16): Only major landmarks & DBSCAN hotspots
+      if (z < 16) {
+        if (map.hasLayer(secondaryAssetsGroupRef.current)) map.removeLayer(secondaryAssetsGroupRef.current);
+        if (map.hasLayer(microAssetsGroupRef.current)) map.removeLayer(microAssetsGroupRef.current);
+        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
+      } 
+      // Meso View (16-17): Major + Secondary assets
+      else if (z >= 16 && z < 18) {
+        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
+        if (!map.hasLayer(secondaryAssetsGroupRef.current)) secondaryAssetsGroupRef.current.addTo(map);
+        if (map.hasLayer(microAssetsGroupRef.current)) map.removeLayer(microAssetsGroupRef.current);
+      } 
+      // Micro View (18+): All granular assets & streetlights
+      else {
+        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
+        if (!map.hasLayer(secondaryAssetsGroupRef.current)) secondaryAssetsGroupRef.current.addTo(map);
+        if (!map.hasLayer(microAssetsGroupRef.current)) microAssetsGroupRef.current.addTo(map);
+      }
+    };
+
+    map.on('zoomend', handleZoomUpdate);
+    handleZoomUpdate();
+
+    return () => {
+      map.off('zoomend', handleZoomUpdate);
+    };
+  }, []);
 
   // Export Handlers for Client-Side Audit & Reporting Engine
   const handleDownloadPanchayatPdf = useCallback(() => {
@@ -2124,7 +2259,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       mapInstanceRef.current = null;
     }
 
-    // 1. Standard Clean Tile Layers: ESRI Satellite, OSM, Dark Matter, OpenTopo
+    // 1. Standard Clean Tile Layers: ESRI Satellite (Default) & OSM Street
     esriLayerRef.current = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       { maxZoom: 19, attribution: 'Tiles &copy; Esri' }
@@ -2134,16 +2269,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     osmLayerRef.current = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
-    });
-
-    darkLayerRef.current = L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      { maxZoom: 19, subdomains: ['a', 'b', 'c', 'd'], attribution: '&copy; CARTO' }
-    );
-
-    opentopoLayerRef.current = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-      maxZoom: 17,
-      attribution: '&copy; OpenTopoMap contributors',
     });
 
     // 2. Initialize Map Instance centered at Khopripada Core with ESRI Satellite default
@@ -2205,17 +2330,22 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     const landmarksGroup = L.layerGroup().addTo(map);
     landmarksLayerRef.current = landmarksGroup;
 
-    const facilitiesGroup = L.layerGroup().addTo(map);
+    const facilitiesGroup = L.layerGroup();
     facilitiesLayerRef.current = facilitiesGroup;
 
-    const issuesGroup = L.layerGroup().addTo(map);
+    const issuesGroup = L.layerGroup();
     issuesLayerRef.current = issuesGroup;
 
-    const grievancesGroup = L.layerGroup().addTo(map);
+    const grievancesGroup = L.layerGroup();
     grievancesLayerRef.current = grievancesGroup;
 
     const gpsGroup = L.layerGroup().addTo(map);
     gpsLocationLayerRef.current = gpsGroup;
+
+    // Dedicated Level-of-Detail (LOD) Layer Groups
+    if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
+    if (!map.hasLayer(secondaryAssetsGroupRef.current)) secondaryAssetsGroupRef.current.addTo(map);
+    if (!map.hasLayer(microAssetsGroupRef.current)) microAssetsGroupRef.current.addTo(map);
 
     // DBSCAN & Heatmap Layers
     if (!map.hasLayer(dbscanLayerRef.current)) {
@@ -2637,7 +2767,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     });
   }, []);
 
-  // Switch Basemap across the 4 providers (Requirement 4 & 6)
+  // Switch Basemap between ESRI Satellite and OSM Street
   const changeBasemap = useCallback((type: BasemapType) => {
     setActiveBasemap(type);
     const map = mapInstanceRef.current;
@@ -2646,8 +2776,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     const allLayers = [
       esriLayerRef.current,
       osmLayerRef.current,
-      darkLayerRef.current,
-      opentopoLayerRef.current,
       satelliteLayerRef.current,
     ];
 
@@ -2661,10 +2789,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       esriLayerRef.current?.addTo(map);
     } else if (type === 'osm') {
       osmLayerRef.current?.addTo(map);
-    } else if (type === 'dark') {
-      darkLayerRef.current?.addTo(map);
-    } else if (type === 'opentopo') {
-      opentopoLayerRef.current?.addTo(map);
     }
 
     setTimeout(() => map.invalidateSize(), 80);
@@ -2713,41 +2837,18 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
   // Toggle Facilities Layer
   const toggleFacilities = () => {
-    if (!mapInstanceRef.current || !facilitiesLayerRef.current) return;
-    const map = mapInstanceRef.current;
-    if (showFacilities) {
-      map.removeLayer(facilitiesLayerRef.current);
-      setShowFacilities(false);
-    } else {
-      map.addLayer(facilitiesLayerRef.current);
-      setShowFacilities(true);
-    }
+    setShowFacilities((prev) => !prev);
   };
 
   // Toggle Issues Layer
   const toggleIssues = () => {
-    if (!mapInstanceRef.current || !issuesLayerRef.current) return;
-    const map = mapInstanceRef.current;
-    if (showIssues) {
-      map.removeLayer(issuesLayerRef.current);
-      setShowIssues(false);
-    } else {
-      map.addLayer(issuesLayerRef.current);
-      setShowIssues(true);
-    }
+    setShowIssues((prev) => !prev);
   };
 
   // Toggle Grievances Layer
   const toggleGrievancePins = () => {
-    if (!mapInstanceRef.current || !grievancesLayerRef.current) return;
-    const map = mapInstanceRef.current;
-    if (showGrievancePins) {
-      map.removeLayer(grievancesLayerRef.current);
-      setShowGrievancePins(false);
-    } else {
-      map.addLayer(grievancesLayerRef.current);
-      setShowGrievancePins(true);
-    }
+    setShowGrievancePins((prev) => !prev);
+    setShowIssues((prev) => !prev);
   };
 
 
@@ -2897,17 +2998,15 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'esri', label: 'ESRI Satellite' },
-                    { id: 'osm', label: 'OpenStreetMap' },
-                    { id: 'dark', label: 'Dark Matter' },
-                    { id: 'opentopo', label: 'OpenTopo' },
+                    { id: 'osm', label: 'OSM Street' },
+                    { id: 'satellite', label: 'ESRI Satellite' },
                   ].map((bm) => (
                     <button
                       key={bm.id}
                       type="button"
                       onClick={() => changeBasemap(bm.id as BasemapType)}
                       className={`py-2 px-3 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
-                        activeBasemap === bm.id || (bm.id === 'esri' && activeBasemap === 'satellite')
+                        activeBasemap === bm.id || (bm.id === 'satellite' && activeBasemap === 'esri')
                           ? 'bg-[#00E5FF]/20 border border-[#00E5FF] text-[#00E5FF] shadow-[0_0_10px_rgba(0,229,255,0.25)]'
                           : 'bg-[#0D1C2A] border border-[#1D3B52] text-[#8CB0C9] hover:border-[#00E5FF]/50 hover:text-[#F1F5F9]'
                       }`}
@@ -3369,7 +3468,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           }`}
           title="Map View"
         >
-          <Map className="w-4 h-4" />
+          <MapIcon className="w-4 h-4" />
           <span className="text-[10px] mt-1 font-semibold tracking-wider uppercase">Map</span>
         </button>
 
@@ -4415,15 +4514,15 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                     <div className="grid grid-cols-2 gap-1.5">
                       {[
                         { id: 'osm', label: 'OSM Street' },
-                        { id: 'satellite', label: 'Satellite' },
+                        { id: 'satellite', label: 'ESRI Satellite' },
                       ].map((b) => (
                         <button
                           key={b.id}
                           onClick={() => changeBasemap(b.id as BasemapType)}
                           className={`py-2 px-1 min-h-[44px] rounded-xl font-bold text-xs text-center transition cursor-pointer active:scale-95 truncate ${
-                            activeBasemap === b.id
-                              ? 'bg-[#10B981] text-white font-semibold shadow-sm'
-                              : 'bg-slate-100 text-slate-700 border border-slate-300'
+                            activeBasemap === b.id || (b.id === 'satellite' && activeBasemap === 'esri')
+                              ? 'bg-[#00E5FF]/25 border border-[#00E5FF] text-[#00E5FF] font-semibold shadow-sm'
+                              : 'bg-[#0D1C2A] text-[#8CB0C9] border border-[#1D3B52]'
                           }`}
                           title={b.label}
                         >
