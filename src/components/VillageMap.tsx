@@ -188,10 +188,21 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
   const heatmapGroupRef = useRef<L.LayerGroup>(L.layerGroup());
 
-  // Dedicated LayerGroups for Level-of-Detail (LOD) Semantic Zooming
-  const majorLandmarksGroupRef = useRef<L.LayerGroup>(L.layerGroup());
-  const secondaryAssetsGroupRef = useRef<L.LayerGroup>(L.layerGroup());
-  const microAssetsGroupRef = useRef<L.LayerGroup>(L.layerGroup());
+  // 1. Maintain stable references for Level-of-Detail LayerGroups
+  const lodLayersRef = useRef<{
+    major: L.LayerGroup;
+    secondary: L.LayerGroup;
+    micro: L.LayerGroup;
+  } | null>(null);
+
+  // Initialize LayerGroups once
+  if (!lodLayersRef.current) {
+    lodLayersRef.current = {
+      major: L.layerGroup(),
+      secondary: L.layerGroup(),
+      micro: L.layerGroup(),
+    };
+  }
 
   const allFacilitiesRef = useRef<CachedFacility[]>([]);
   const allIssuesRef = useRef<CachedIssue[]>([]);
@@ -1859,16 +1870,51 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     [setHeatmapActive]
   );
 
-  // Categorize and populate Level-of-Detail (LOD) semantic zoom groups
-  useEffect(() => {
-    majorLandmarksGroupRef.current.clearLayers();
-    secondaryAssetsGroupRef.current.clearLayers();
-    microAssetsGroupRef.current.clearLayers();
+  // 2. Safe Zoom Handler with Defensive Checks
+  const updateLODVisibility = useCallback((map: L.Map) => {
+    if (!map || !lodLayersRef.current) return;
+    const { major, secondary, micro } = lodLayersRef.current;
 
-    // Populate Facilities based on tier
+    try {
+      const zoom = map.getZoom();
+      setCurrentZoom(zoom);
+
+      if (zoom < 16) {
+        // Macro View: Major landmarks only
+        if (!map.hasLayer(major)) map.addLayer(major);
+        if (map.hasLayer(secondary)) map.removeLayer(secondary);
+        if (map.hasLayer(micro)) map.removeLayer(micro);
+      } else if (zoom >= 16 && zoom < 18) {
+        // Meso View: Major + Secondary assets
+        if (!map.hasLayer(major)) map.addLayer(major);
+        if (!map.hasLayer(secondary)) map.addLayer(secondary);
+        if (map.hasLayer(micro)) map.removeLayer(micro);
+      } else {
+        // Micro View: Everything visible
+        if (!map.hasLayer(major)) map.addLayer(major);
+        if (!map.hasLayer(secondary)) map.addLayer(secondary);
+        if (!map.hasLayer(micro)) map.addLayer(micro);
+      }
+    } catch (err) {
+      console.warn('LOD layer transition caught safely:', err);
+    }
+  }, []);
+
+  // 4. Safely Categorize Features when data loads
+  useEffect(() => {
+    if (!lodLayersRef.current) return;
+    const { major, secondary, micro } = lodLayersRef.current;
+
+    major.clearLayers();
+    secondary.clearLayers();
+    micro.clearLayers();
+
+    // Populate Facilities safely
     if (showFacilities) {
       (safeFacilities || []).forEach((fac) => {
-        if (!fac?.latitude || !fac?.longitude) return;
+        const lat = Number(fac?.latitude);
+        const lng = Number(fac?.longitude);
+        if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return;
 
         if (facilityFilter !== 'all') {
           const cat = (fac.category || '').toLowerCase();
@@ -1890,159 +1936,78 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           cat.includes('panchayat') ||
           name.includes('school') ||
           name.includes('hospital') ||
-          name.includes('gram panchayat') ||
-          name.includes('anganwadi') ||
-          name.includes('phc');
+          name.includes('gram panchayat');
 
         const isSecondary =
           cat.includes('water') ||
           cat.includes('mandir') ||
           cat.includes('temple') ||
-          cat.includes('commerce') ||
-          cat.includes('shop') ||
-          name.includes('handpump') ||
-          name.includes('tank');
+          cat.includes('commerce');
 
-        const marker = L.circleMarker([fac.latitude, fac.longitude], {
+        const marker = L.circleMarker([lat, lng], {
           radius: isMajor ? 8 : isSecondary ? 6 : 4,
-          fillColor: isMajor ? '#00E5FF' : isSecondary ? '#38BDF8' : '#8CB0C9',
+          fillColor: '#00E5FF',
           color: '#FFFFFF',
           weight: 1.5,
           fillOpacity: 0.85,
         }).bindPopup(
-          `<div class="p-2 text-xs font-sans text-[#F1F5F9] bg-[#0D1C2A] rounded border border-[#1D3B52] shadow-xl">
-            <strong class="text-sm font-bold text-[#F1F5F9] block mb-1">${fac.name}</strong>
-            <span class="text-[#8CB0C9] block mb-1">Category: ${fac.category || 'General'}</span>
-            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-              fac.operational_status === 'non_functional'
-                ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-            }">Status: ${fac.operational_status || 'functional'}</span>
-          </div>`,
+          `<div style="font-size:12px; font-family:sans-serif;"><b>${fac.name || 'Facility'}</b><br/>${fac.category || ''}</div>`,
           { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
         );
 
         marker.on('click', () => {
           setInspectedPoint({
-            lat: fac.latitude,
-            lng: fac.longitude,
-            distKm: parseFloat((mapInstanceRef.current ? mapInstanceRef.current.distance([fac.latitude, fac.longitude], KHOPRIPADA_CORE) / 1000 : 0).toFixed(2)),
+            lat,
+            lng,
+            distKm: parseFloat((mapInstanceRef.current ? mapInstanceRef.current.distance([lat, lng], KHOPRIPADA_CORE) / 1000 : 0).toFixed(2)),
           });
         });
 
-        if (isMajor) {
-          majorLandmarksGroupRef.current.addLayer(marker);
-        } else if (isSecondary) {
-          secondaryAssetsGroupRef.current.addLayer(marker);
-        } else {
-          microAssetsGroupRef.current.addLayer(marker);
-        }
+        if (isMajor) major.addLayer(marker);
+        else if (isSecondary) secondary.addLayer(marker);
+        else micro.addLayer(marker);
       });
     }
 
-    // Populate Grievances / Issues based on severity tier
+    // Populate Grievances safely
     if (showIssues) {
       (issues || []).forEach((issue: any) => {
-        if (!issue?.latitude || !issue?.longitude) return;
+        const lat = Number(issue?.latitude);
+        const lng = Number(issue?.longitude);
+        if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return;
 
-        const isCritical =
-          issue.severity === 'high' ||
-          issue.severity === 'critical' ||
-          (issue.priority_score && issue.priority_score > 70) ||
-          issue.urgency === 'urgent';
+        const isCritical = issue.severity === 'high' || (issue.priority_score && issue.priority_score > 70);
         const isMedium = issue.severity === 'medium';
 
-        const issueMarker = L.circleMarker([issue.latitude, issue.longitude], {
+        const issueMarker = L.circleMarker([lat, lng], {
           radius: isCritical ? 9 : 6,
           fillColor: isCritical ? '#EF4444' : isMedium ? '#F59E0B' : '#38BDF8',
           color: '#FFFFFF',
           weight: 2,
           fillOpacity: 0.9,
         }).bindPopup(
-          `<div class="p-2 text-xs font-sans text-[#F1F5F9] bg-[#0D1C2A] rounded border border-[#1D3B52] shadow-xl">
-            <strong class="text-sm font-bold text-[#F1F5F9] block mb-1">${issue.title || 'Civic Issue'}</strong>
-            <span class="text-[#8CB0C9] block mb-1">Severity: <span class="uppercase font-semibold ${
-              isCritical ? 'text-red-400' : isMedium ? 'text-amber-400' : 'text-sky-400'
-            }">${issue.severity || 'Medium'}</span></span>
-            <span class="text-[#8CB0C9] block">Category: ${issue.category || 'Civic'}</span>
-          </div>`,
+          `<div style="font-size:12px; font-family:sans-serif;"><b>${issue.title || 'Civic Issue'}</b><br/>Severity: ${issue.severity || 'low'}</div>`,
           { className: 'gis-dark-popup', autoPanPadding: [15, 80] }
         );
 
         issueMarker.on('click', () => {
           setInspectedPoint({
-            lat: issue.latitude,
-            lng: issue.longitude,
-            distKm: parseFloat((mapInstanceRef.current ? mapInstanceRef.current.distance([issue.latitude, issue.longitude], KHOPRIPADA_CORE) / 1000 : 0).toFixed(2)),
+            lat,
+            lng,
+            distKm: parseFloat((mapInstanceRef.current ? mapInstanceRef.current.distance([lat, lng], KHOPRIPADA_CORE) / 1000 : 0).toFixed(2)),
           });
         });
 
-        if (isCritical) {
-          majorLandmarksGroupRef.current.addLayer(issueMarker);
-        } else if (isMedium) {
-          secondaryAssetsGroupRef.current.addLayer(issueMarker);
-        } else {
-          microAssetsGroupRef.current.addLayer(issueMarker);
-        }
+        if (isCritical) major.addLayer(issueMarker);
+        else if (isMedium) secondary.addLayer(issueMarker);
+        else micro.addLayer(issueMarker);
       });
     }
 
-    // Synchronize LOD visibility with current zoom level
-    const map = mapInstanceRef.current;
-    if (map) {
-      const z = map.getZoom();
-      if (z < 16) {
-        if (map.hasLayer(secondaryAssetsGroupRef.current)) map.removeLayer(secondaryAssetsGroupRef.current);
-        if (map.hasLayer(microAssetsGroupRef.current)) map.removeLayer(microAssetsGroupRef.current);
-        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
-      } else if (z >= 16 && z < 18) {
-        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
-        if (!map.hasLayer(secondaryAssetsGroupRef.current)) secondaryAssetsGroupRef.current.addTo(map);
-        if (map.hasLayer(microAssetsGroupRef.current)) map.removeLayer(microAssetsGroupRef.current);
-      } else {
-        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
-        if (!map.hasLayer(secondaryAssetsGroupRef.current)) secondaryAssetsGroupRef.current.addTo(map);
-        if (!map.hasLayer(microAssetsGroupRef.current)) microAssetsGroupRef.current.addTo(map);
-      }
+    if (mapInstanceRef.current) {
+      updateLODVisibility(mapInstanceRef.current);
     }
-  }, [safeFacilities, issues, facilityFilter, showFacilities, showIssues]);
-
-  // Listen to zoomend and filter visibility dynamically based on Semantic Zooming tiers
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    const handleZoomUpdate = () => {
-      const z = map.getZoom();
-      setCurrentZoom(z);
-
-      // Macro View (< 16): Only major landmarks & DBSCAN hotspots
-      if (z < 16) {
-        if (map.hasLayer(secondaryAssetsGroupRef.current)) map.removeLayer(secondaryAssetsGroupRef.current);
-        if (map.hasLayer(microAssetsGroupRef.current)) map.removeLayer(microAssetsGroupRef.current);
-        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
-      } 
-      // Meso View (16-17): Major + Secondary assets
-      else if (z >= 16 && z < 18) {
-        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
-        if (!map.hasLayer(secondaryAssetsGroupRef.current)) secondaryAssetsGroupRef.current.addTo(map);
-        if (map.hasLayer(microAssetsGroupRef.current)) map.removeLayer(microAssetsGroupRef.current);
-      } 
-      // Micro View (18+): All granular assets & streetlights
-      else {
-        if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
-        if (!map.hasLayer(secondaryAssetsGroupRef.current)) secondaryAssetsGroupRef.current.addTo(map);
-        if (!map.hasLayer(microAssetsGroupRef.current)) microAssetsGroupRef.current.addTo(map);
-      }
-    };
-
-    map.on('zoomend', handleZoomUpdate);
-    handleZoomUpdate();
-
-    return () => {
-      map.off('zoomend', handleZoomUpdate);
-    };
-  }, []);
+  }, [safeFacilities, issues, facilityFilter, showFacilities, showIssues, updateLODVisibility]);
 
   // Export Handlers for Client-Side Audit & Reporting Engine
   const handleDownloadPanchayatPdf = useCallback(() => {
@@ -2342,10 +2307,15 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     const gpsGroup = L.layerGroup().addTo(map);
     gpsLocationLayerRef.current = gpsGroup;
 
-    // Dedicated Level-of-Detail (LOD) Layer Groups
-    if (!map.hasLayer(majorLandmarksGroupRef.current)) majorLandmarksGroupRef.current.addTo(map);
-    if (!map.hasLayer(secondaryAssetsGroupRef.current)) secondaryAssetsGroupRef.current.addTo(map);
-    if (!map.hasLayer(microAssetsGroupRef.current)) microAssetsGroupRef.current.addTo(map);
+    // Add initial LOD layers safely
+    if (lodLayersRef.current) {
+      map.addLayer(lodLayersRef.current.major);
+      map.addLayer(lodLayersRef.current.secondary);
+    }
+
+    // Bind zoom listener
+    const onZoom = () => updateLODVisibility(map);
+    map.on('zoomend', onZoom);
 
     // DBSCAN & Heatmap Layers
     if (!map.hasLayer(dbscanLayerRef.current)) {
@@ -2637,6 +2607,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
     return () => {
       unsubscribeSync();
+      map.off('zoomend', onZoom);
       map.off('moveend', updateMeta);
       map.off('zoomend', updateMeta);
       map.off('mousemove', handleMouseMove);
@@ -2646,7 +2617,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [refreshGrievanceMarkers, renderFacilityMarkers, renderIssueMarkers]);
+  }, [refreshGrievanceMarkers, renderFacilityMarkers, renderIssueMarkers, updateLODVisibility]);
 
   // Synchronize layer visibility and marker popups whenever user role or filter changes
   useEffect(() => {
