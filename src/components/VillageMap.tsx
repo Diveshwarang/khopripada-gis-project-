@@ -46,6 +46,7 @@ import {
   classifyFacilityTier,
   createPOIDivIcon,
   createIssueDivIcon,
+  resolveFacilityAttributes,
 } from '../utils/mapIconHelper';
 import {
   db,
@@ -168,6 +169,8 @@ type BasemapType = 'satellite' | 'osm' | 'esri';
 export type FacilityCategoryFilter = 'all' | 'water' | 'education' | 'commerce' | 'health' | 'civic' | 'issues';
 
 function buildFacilityPopupHTML(fac: FacilityAsset | any): string {
+  const attrs = resolveFacilityAttributes(fac);
+
   const cond =
     fac.condition ||
     (fac.operational_status === 'non_functional'
@@ -185,8 +188,16 @@ function buildFacilityPopupHTML(fac: FacilityAsset | any): string {
 
   const conditionLabel = (cond || 'functional').toUpperCase();
 
+  const paymentBadges = (attrs.payment_modes || [])
+    .map(
+      (mode) =>
+        `<span style="background: #E2E8F0; color: #1E293B; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-right: 4px; margin-bottom: 2px;">${mode}</span>`
+    )
+    .join('');
+
   return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; width: 240px; padding: 4px; color: #0F172A; background: #FFFFFF; border-radius: 8px;">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; width: 275px; padding: 4px; color: #0F172A; background: #FFFFFF; border-radius: 8px;">
+      <!-- Category Badge & Condition -->
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
         <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #0284C7; background: #E0F2FE; padding: 2px 6px; border-radius: 4px;">
           ${fac.category || 'Public Amenity'}
@@ -196,18 +207,49 @@ function buildFacilityPopupHTML(fac: FacilityAsset | any): string {
         </span>
       </div>
 
+      <!-- Title & Core Description -->
       <div style="font-size: 14px; font-weight: 700; color: #0F172A; line-height: 1.25; margin-bottom: 4px;">
         ${fac.name}
       </div>
-
       <p style="font-size: 11px; color: #475569; margin: 0 0 8px 0; line-height: 1.4;">
-        ${fac.description || fac.notes || 'Public village asset logged under Bapane Gram Panchayat GIS registry.'}
+        ${fac.description || fac.notes || 'Public facility mapped under Bapane Gram Panchayat GIS registry.'}
       </p>
 
+      <!-- Practical Utility Details Section -->
+      <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 6px 8px; font-size: 10.5px; color: #334155; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px;">
+        ${
+          attrs.operating_hours
+            ? `<div><span style="color: #64748B;">Hours:</span> <b style="color: #0F172A;">${attrs.operating_hours}</b></div>`
+            : ''
+        }
+        ${
+          attrs.water_facility
+            ? `<div><span style="color: #64748B;">Drinking Water:</span> <b style="color: #0369A1;">${attrs.water_facility}</b></div>`
+            : ''
+        }
+        ${
+          attrs.sanitation_facility
+            ? `<div><span style="color: #64748B;">Sanitation:</span> <b style="color: #0F172A;">${attrs.sanitation_facility}</b></div>`
+            : ''
+        }
+        ${
+          attrs.power_backup
+            ? `<div><span style="color: #64748B;">Power Backup:</span> <b style="color: #0F172A;">${attrs.power_backup}</b></div>`
+            : ''
+        }
+        ${
+          attrs.payment_modes && attrs.payment_modes.length > 0
+            ? `<div style="margin-top: 2px;"><span style="color: #64748B; display: block; margin-bottom: 3px;">Accepted Payment Modes:</span><div>${paymentBadges}</div></div>`
+            : ''
+        }
+      </div>
+
+      <!-- Administrative & Contact Footer -->
       <div style="font-size: 10px; color: #64748B; border-top: 1px solid #E2E8F0; padding-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
         <div>Scheme: <b style="color: #1E293B;">${fac.scheme_name || 'ZP Gram Nidhi'}</b></div>
         <div>Ward: <b style="color: #1E293B;">${fac.ward_no ? 'Ward ' + fac.ward_no : 'General'}</b></div>
-        ${fac.beneficiaries_served ? `<div style="grid-column: span 2;">Coverage: <b style="color: #1E293B;">~${fac.beneficiaries_served} villagers</b></div>` : ''}
+        ${attrs.contact_person ? `<div style="grid-column: span 2;">Contact: <b style="color: #1E293B;">${attrs.contact_person}</b></div>` : ''}
+        ${attrs.emergency_number ? `<div style="grid-column: span 2; color: #DC2626; font-weight: 700;">Emergency: ${attrs.emergency_number}</div>` : ''}
       </div>
     </div>
   `;

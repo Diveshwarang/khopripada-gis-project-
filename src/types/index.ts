@@ -10,6 +10,16 @@ export type IssueStatus =
   | 'resolved'          // Step 4: Repair complete, photo uploaded
   | 'verified_closed';  // Step 5: Sarpanch / Admin verified & closed
 
+export interface FacilityMetadata {
+  payment_modes?: string[]; // e.g. ['UPI / QR Code', 'Cash Only']
+  water_facility?: 'Available (RO / Filtered)' | 'Tap Water Available' | 'No Drinking Water' | 'Nearby Community Standpost' | string;
+  sanitation_facility?: 'Separate Boys/Girls Toilets' | 'Staff Only' | 'Community Toilet Adjacent' | 'Under Maintenance' | string;
+  power_backup?: 'Solar Inverter Backup' | 'Grid Only' | 'Diesel Generator' | string;
+  operating_hours?: string; // e.g. '07:30 AM - 01:30 PM' or '24/7 Emergency'
+  contact_person?: string; // e.g. 'Headmaster' or 'ASHA Worker'
+  emergency_number?: string;
+}
+
 export interface FacilityAsset {
   id: string;
   name: string;
@@ -22,6 +32,7 @@ export interface FacilityAsset {
   latitude: number;
   longitude: number;
   operational_status?: string;
+  metadata?: FacilityMetadata;
 }
 
 export interface BaseEntity {

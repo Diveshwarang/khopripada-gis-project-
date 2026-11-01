@@ -36,3 +36,4 @@ export async function updateIssueStatus(
     return { success: false, error: err.message || 'Database update failed' };
   }
 }
+

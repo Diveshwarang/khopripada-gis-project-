@@ -1,4 +1,80 @@
 import L from 'leaflet';
+import type { FacilityAsset, FacilityMetadata } from '../types';
+
+export function resolveFacilityAttributes(fac: FacilityAsset | any): FacilityMetadata {
+  const cat = (fac?.category || '').toLowerCase();
+  const name = (fac?.name || '').toLowerCase();
+  const existing = fac?.metadata || {};
+
+  // 1. Schools & Educational Institutions
+  if (cat.includes('edu') || cat.includes('school') || name.includes('school')) {
+    return {
+      payment_modes: existing.payment_modes || ['Direct Bank Transfer (DBT)', 'Zero Fee (Govt ZP)'],
+      water_facility: existing.water_facility || 'Available (RO / Filtered Standpost)',
+      sanitation_facility: existing.sanitation_facility || 'Separate Boys/Girls Toilets (Functional)',
+      power_backup: existing.power_backup || 'Solar Powered Rooftop Backup',
+      operating_hours: existing.operating_hours || '07:30 AM - 01:30 PM (Mon - Sat)',
+      contact_person: existing.contact_person || 'School Headmaster / ZP Coordinator',
+      ...existing,
+    };
+  }
+
+  // 2. Health Centers, Sub-Centers & Anganwadis
+  if (cat.includes('health') || cat.includes('anganwadi') || cat.includes('clinic') || name.includes('hospital')) {
+    return {
+      payment_modes: existing.payment_modes || ['Ayushman Bharat / Free Govt Care', 'Cash'],
+      water_facility: existing.water_facility || 'Continuous Filtered Water Supply (24/7)',
+      sanitation_facility: existing.sanitation_facility || 'Sanitized Medical Waste / Attached Washroom',
+      power_backup: existing.power_backup || 'Dedicated Inverter Backup (Vaccine Cold Chain Active)',
+      operating_hours: existing.operating_hours || '09:00 AM - 05:00 PM (Emergency on-call)',
+      contact_person: existing.contact_person || 'ASHA Worker / Primary Medical Officer',
+      emergency_number: existing.emergency_number || '108 (Ambulance Helpline)',
+      ...existing,
+    };
+  }
+
+  // 3. Shops, Kirana Stores & Rural Commerce
+  if (cat.includes('shop') || cat.includes('commerce') || cat.includes('kirana') || cat.includes('market')) {
+    return {
+      payment_modes: existing.payment_modes || ['UPI (PhonePe / GPay)', 'Cash Accepted'],
+      water_facility: existing.water_facility || 'Nearby Public Handpump (~30m)',
+      operating_hours: existing.operating_hours || '07:00 AM - 09:30 PM (Daily)',
+      contact_person: existing.contact_person || 'Store Owner',
+      ...existing,
+    };
+  }
+
+  // 4. Drinking Water Infrastructure (Tanks, Taps, Borewells)
+  if (cat.includes('water') || cat.includes('tap') || cat.includes('well')) {
+    return {
+      payment_modes: ['Free Public Service (Jal Jeevan Mission)'],
+      water_facility: 'Potable Drinking Water (Chlorinated Supply)',
+      operating_hours: 'Supply Hours: 06:00 AM - 09:00 AM & 05:00 PM - 07:00 PM',
+      contact_person: 'Panchayat Jal Surakshak',
+      ...existing,
+    };
+  }
+
+  // 5. Civic, Religious & Community Spaces (Panchayat Office, Mandirs)
+  if (cat.includes('civic') || cat.includes('panchayat') || cat.includes('mandir') || cat.includes('temple')) {
+    return {
+      payment_modes: existing.payment_modes || ['UPI Donations / Seva Box', 'Cash'],
+      water_facility: existing.water_facility || 'Community Drinking Water Tap Active',
+      sanitation_facility: existing.sanitation_facility || 'Public Urinal Adjacent',
+      operating_hours: existing.operating_hours || '06:00 AM - 08:30 PM',
+      contact_person: existing.contact_person || 'Gram Sevak / Trustee',
+      ...existing,
+    };
+  }
+
+  // Default fallback
+  return {
+    payment_modes: ['Cash / Standard'],
+    water_facility: 'Nearby Community Source',
+    operating_hours: 'Regular Daytime Access',
+    ...existing,
+  };
+}
 
 export type FacilityTier = 'tier1_anchor' | 'tier2_civic' | 'tier3_local' | 'tier4_micro';
 
