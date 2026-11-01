@@ -3622,11 +3622,6 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                         isOpen={true}
                         hideHeader={true}
                         onClose={() => {}}
-                        onExportAudit={() => setIsExportAuditModalOpen(true)}
-                        onOpenSingleIssueAudit={(iss) => {
-                          setSelectedAuditIssue(iss);
-                          setIsSingleAuditModalOpen(true);
-                        }}
                         onApproveSubmission={(item) => {
                           if (item.type === 'facility') {
                             const updated = allFacilitiesRef.current.map((f) =>

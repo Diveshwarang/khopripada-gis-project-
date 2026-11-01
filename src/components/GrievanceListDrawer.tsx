@@ -677,14 +677,25 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                             placeholder="Field repair completion notes..."
                             className="w-full bg-[#0D1C2A] border border-[#1D3B52] rounded-lg px-2 py-1 text-white text-[11px] placeholder-[#5A7C93] focus:outline-none focus:border-[#00E5FF]"
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleSubmitResolutionAndPhoto(g.id)}
-                            className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-[#0C171C] font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Submit Repair Audit to Admin</span>
-                          </button>
+                          {userRole === 'admin' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleAdminVerifyResolution(g.id, officerNotesMap[g.id])}
+                              className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Verify & Mark Officially Resolved</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSubmitResolutionAndPhoto(g.id)}
+                              className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-[#0C171C] font-bold text-xs shadow-xs transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Submit Repair Audit to Admin</span>
+                            </button>
+                          )}
                         </div>
                       )}
 
