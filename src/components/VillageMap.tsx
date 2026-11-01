@@ -42,7 +42,11 @@ import {
   runDBSCANClustering,
   type ClusterPoint,
 } from '../services/dbscanService';
-import { getFacilityDivIcon, getIssueDivIcon } from '../utils/mapIconHelper';
+import {
+  classifyFacilityTier,
+  createPOIDivIcon,
+  createIssueDivIcon,
+} from '../utils/mapIconHelper';
 import {
   db,
   saveFacilityToOfflineDb,
@@ -189,19 +193,24 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
   const heatmapGroupRef = useRef<L.LayerGroup>(L.layerGroup());
 
-  // 1. Maintain stable references for Level-of-Detail LayerGroups
-  const lodLayersRef = useRef<{
-    major: L.LayerGroup;
-    secondary: L.LayerGroup;
-    micro: L.LayerGroup;
+  // Isolated Tiered LayerGroups for Google Maps style progressive density throttling
+  const tierGroupsRef = useRef<{
+    tier1: L.LayerGroup;
+    tier2: L.LayerGroup;
+    tier3: L.LayerGroup;
+    tier4: L.LayerGroup;
+    issuesHigh: L.LayerGroup;
+    issuesNormal: L.LayerGroup;
   } | null>(null);
 
-  // Initialize LayerGroups once
-  if (!lodLayersRef.current) {
-    lodLayersRef.current = {
-      major: L.layerGroup(),
-      secondary: L.layerGroup(),
-      micro: L.layerGroup(),
+  if (!tierGroupsRef.current) {
+    tierGroupsRef.current = {
+      tier1: L.layerGroup(),
+      tier2: L.layerGroup(),
+      tier3: L.layerGroup(),
+      tier4: L.layerGroup(),
+      issuesHigh: L.layerGroup(),
+      issuesNormal: L.layerGroup(),
     };
   }
 
@@ -1871,46 +1880,75 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     [setHeatmapActive]
   );
 
-  // 2. Safe Zoom Handler with Defensive Checks
-  const updateLODVisibility = useCallback((map: L.Map) => {
-    if (!map || !lodLayersRef.current) return;
-    const { major, secondary, micro } = lodLayersRef.current;
-
+  // Zoom visibility coordinator
+  const syncLODLayers = useCallback((map: L.Map) => {
+    if (!map || !tierGroupsRef.current) return;
     try {
       const zoom = map.getZoom();
       setCurrentZoom(zoom);
+      const { tier1, tier2, tier3, tier4, issuesHigh, issuesNormal } = tierGroupsRef.current;
 
-      if (zoom < 16) {
-        // Macro View: Major landmarks only
-        if (!map.hasLayer(major)) map.addLayer(major);
-        if (map.hasLayer(secondary)) map.removeLayer(secondary);
-        if (map.hasLayer(micro)) map.removeLayer(micro);
-      } else if (zoom >= 16 && zoom < 18) {
-        // Meso View: Major + Secondary assets
-        if (!map.hasLayer(major)) map.addLayer(major);
-        if (!map.hasLayer(secondary)) map.addLayer(secondary);
-        if (map.hasLayer(micro)) map.removeLayer(micro);
-      } else {
-        // Micro View: Everything visible
-        if (!map.hasLayer(major)) map.addLayer(major);
-        if (!map.hasLayer(secondary)) map.addLayer(secondary);
-        if (!map.hasLayer(micro)) map.addLayer(micro);
+      // Zoom < 15: Macro View (Only Tier 1 anchor landmarks & critical issues)
+      if (zoom < 15) {
+        if (!map.hasLayer(tier1)) map.addLayer(tier1);
+        if (map.hasLayer(tier2)) map.removeLayer(tier2);
+        if (map.hasLayer(tier3)) map.removeLayer(tier3);
+        if (map.hasLayer(tier4)) map.removeLayer(tier4);
+
+        if (!map.hasLayer(issuesHigh)) map.addLayer(issuesHigh);
+        if (map.hasLayer(issuesNormal)) map.removeLayer(issuesNormal);
+      }
+      // Zoom 15 - 16: Meso View (Anchors + Civic Facilities + High/Medium Issues)
+      else if (zoom >= 15 && zoom < 17) {
+        if (!map.hasLayer(tier1)) map.addLayer(tier1);
+        if (!map.hasLayer(tier2)) map.addLayer(tier2);
+        if (map.hasLayer(tier3)) map.removeLayer(tier3);
+        if (map.hasLayer(tier4)) map.removeLayer(tier4);
+
+        if (!map.hasLayer(issuesHigh)) map.addLayer(issuesHigh);
+        if (!map.hasLayer(issuesNormal)) map.addLayer(issuesNormal);
+      }
+      // Zoom 17: Local View (Add local utilities, water taps, shops)
+      else if (zoom === 17) {
+        if (!map.hasLayer(tier1)) map.addLayer(tier1);
+        if (!map.hasLayer(tier2)) map.addLayer(tier2);
+        if (!map.hasLayer(tier3)) map.addLayer(tier3);
+        if (map.hasLayer(tier4)) map.removeLayer(tier4);
+
+        if (!map.hasLayer(issuesHigh)) map.addLayer(issuesHigh);
+        if (!map.hasLayer(issuesNormal)) map.addLayer(issuesNormal);
+      }
+      // Zoom 18+: Granular Micro-Twin View (Reveal streetlights, meters, all details)
+      else {
+        if (!map.hasLayer(tier1)) map.addLayer(tier1);
+        if (!map.hasLayer(tier2)) map.addLayer(tier2);
+        if (!map.hasLayer(tier3)) map.addLayer(tier3);
+        if (!map.hasLayer(tier4)) map.addLayer(tier4);
+
+        if (!map.hasLayer(issuesHigh)) map.addLayer(issuesHigh);
+        if (!map.hasLayer(issuesNormal)) map.addLayer(issuesNormal);
       }
     } catch (err) {
       console.warn('LOD layer transition caught safely:', err);
     }
   }, []);
 
-  // 4. Safely Categorize Features when data loads
+  // Populate LOD Layers when Facilities or Issues update
   useEffect(() => {
-    if (!lodLayersRef.current) return;
-    const { major, secondary, micro } = lodLayersRef.current;
+    if (!tierGroupsRef.current) return;
+    const { tier1, tier2, tier3, tier4, issuesHigh, issuesNormal } = tierGroupsRef.current;
 
-    major.clearLayers();
-    secondary.clearLayers();
-    micro.clearLayers();
+    tier1.clearLayers();
+    tier2.clearLayers();
+    tier3.clearLayers();
+    tier4.clearLayers();
+    issuesHigh.clearLayers();
+    issuesNormal.clearLayers();
 
-    // Populate Facilities safely with rich category icons
+    const currentZoom = mapInstanceRef.current ? mapInstanceRef.current.getZoom() : 16;
+    const showTextLabels = currentZoom >= 16; // Show inline name only when zoom >= 16
+
+    // Populate Facilities
     if (showFacilities) {
       (safeFacilities || []).forEach((fac) => {
         const lat = Number(fac?.latitude);
@@ -1928,11 +1966,15 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           if (facilityFilter === 'issues') return;
         }
 
-        const icon = getFacilityDivIcon(fac.category, fac.name);
+        const tier = classifyFacilityTier(fac.category, fac.name);
+        // Labels shown for Tier 1 & 2 at zoom 16+; Tier 3 & 4 at zoom 17+
+        const hasLabel = tier === 'tier1_anchor' || tier === 'tier2_civic' ? showTextLabels : currentZoom >= 17;
+
+        const icon = createPOIDivIcon(fac.name, fac.category, tier, hasLabel);
         const marker = L.marker([lat, lng], { icon }).bindPopup(`
-          <div style="font-family: Inter, sans-serif; padding: 4px; color: #0F172A;">
-            <div style="font-weight: 700; font-size: 13px;">${fac.name || 'Public Facility'}</div>
-            <div style="font-size: 11px; color: #64748B; margin-top: 2px;">${fac.category || 'Asset'}</div>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; padding: 4px;">
+            <div style="font-weight: 700; color: #0F172A;">${fac.name}</div>
+            <div style="color: #64748B; font-size: 11px; margin-top: 2px;">${fac.category}</div>
           </div>
         `, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
 
@@ -1944,34 +1986,33 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           });
         });
 
-        const cat = (fac.category || '').toLowerCase();
-        const name = (fac.name || '').toLowerCase();
-        const isMajor = cat.includes('health') || cat.includes('edu') || name.includes('school') || name.includes('panchayat');
-        const isSecondary = cat.includes('water') || cat.includes('temple') || cat.includes('commerce');
-
-        if (isMajor) major.addLayer(marker);
-        else if (isSecondary) secondary.addLayer(marker);
-        else micro.addLayer(marker);
+        if (tier === 'tier1_anchor') tier1.addLayer(marker);
+        else if (tier === 'tier2_civic') tier2.addLayer(marker);
+        else if (tier === 'tier3_local') tier3.addLayer(marker);
+        else tier4.addLayer(marker);
       });
     }
 
-    // Populate Issues with severity-coded warning badges
+    // Populate Issues
     if (showIssues) {
       (issues || []).forEach((issue: any) => {
         const lat = Number(issue?.latitude);
         const lng = Number(issue?.longitude);
         if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return;
 
-        const icon = getIssueDivIcon(issue.severity);
-        const issueMarker = L.marker([lat, lng], { icon }).bindPopup(`
-          <div style="font-family: Inter, sans-serif; padding: 4px; color: #0F172A;">
-            <div style="font-weight: 700; font-size: 13px; color: #DC2626;">${issue.title || 'Civic Grievance'}</div>
-            <div style="font-size: 11px; color: #64748B; margin-top: 2px;">Category: ${issue.category || 'General'}</div>
+        const isHigh = issue.severity === 'high' || issue.severity === 'critical' || (issue.priority_score && issue.priority_score > 70);
+        const hasLabel = currentZoom >= 16;
+
+        const icon = createIssueDivIcon(issue.title, issue.severity, hasLabel);
+        const marker = L.marker([lat, lng], { icon }).bindPopup(`
+          <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; padding: 4px;">
+            <div style="font-weight: 700; color: #DC2626;">${issue.title}</div>
+            <div style="font-size: 11px; color: #64748B;">Category: ${issue.category || 'General'}</div>
             <div style="font-size: 11px; margin-top: 4px;">Severity: <b>${(issue.severity || 'low').toUpperCase()}</b></div>
           </div>
         `, { className: 'gis-dark-popup', autoPanPadding: [15, 80] });
 
-        issueMarker.on('click', () => {
+        marker.on('click', () => {
           setInspectedPoint({
             lat,
             lng,
@@ -1979,19 +2020,15 @@ export const VillageMap: React.FC<VillageMapProps> = ({
           });
         });
 
-        const isCritical = issue.severity === 'high' || (issue.priority_score && issue.priority_score > 70);
-        const isMedium = issue.severity === 'medium';
-
-        if (isCritical) major.addLayer(issueMarker);
-        else if (isMedium) secondary.addLayer(issueMarker);
-        else micro.addLayer(issueMarker);
+        if (isHigh) issuesHigh.addLayer(marker);
+        else issuesNormal.addLayer(marker);
       });
     }
 
     if (mapInstanceRef.current) {
-      updateLODVisibility(mapInstanceRef.current);
+      syncLODLayers(mapInstanceRef.current);
     }
-  }, [safeFacilities, issues, facilityFilter, showFacilities, showIssues, updateLODVisibility]);
+  }, [safeFacilities, issues, facilityFilter, showFacilities, showIssues, syncLODLayers, currentZoom]);
 
   // Export Handlers for Client-Side Audit & Reporting Engine
   const handleDownloadPanchayatPdf = useCallback(() => {
@@ -2292,13 +2329,15 @@ export const VillageMap: React.FC<VillageMapProps> = ({
     gpsLocationLayerRef.current = gpsGroup;
 
     // Add initial LOD layers safely
-    if (lodLayersRef.current) {
-      map.addLayer(lodLayersRef.current.major);
-      map.addLayer(lodLayersRef.current.secondary);
+    if (tierGroupsRef.current) {
+      map.addLayer(tierGroupsRef.current.tier1);
+      map.addLayer(tierGroupsRef.current.tier2);
+      map.addLayer(tierGroupsRef.current.issuesHigh);
+      map.addLayer(tierGroupsRef.current.issuesNormal);
     }
 
     // Bind zoom listener
-    const onZoom = () => updateLODVisibility(map);
+    const onZoom = () => syncLODLayers(map);
     map.on('zoomend', onZoom);
 
     // DBSCAN & Heatmap Layers
@@ -2601,7 +2640,7 @@ export const VillageMap: React.FC<VillageMapProps> = ({
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [refreshGrievanceMarkers, renderFacilityMarkers, renderIssueMarkers, updateLODVisibility]);
+  }, [refreshGrievanceMarkers, renderFacilityMarkers, renderIssueMarkers, syncLODLayers]);
 
   // Synchronize layer visibility and marker popups whenever user role or filter changes
   useEffect(() => {
