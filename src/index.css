@@ -344,3 +344,39 @@
   }
 }
 
+/* Printable Official Audit Sheet for Physical Record Archive */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Hide all app chrome, map canvases, sidebars, and dialog overlays */
+  body * {
+    visibility: hidden !important;
+  }
+
+  #printable-audit-certificate,
+  #printable-audit-certificate * {
+    visibility: visible !important;
+  }
+
+  #printable-audit-certificate {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 6mm !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+}
+

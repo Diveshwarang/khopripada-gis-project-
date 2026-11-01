@@ -64,6 +64,7 @@ interface PanchayatAdminPanelProps {
   onOpenPhotoLightbox?: (data: { photoUrl: string; title: string; category?: string; coords?: [number, number] }) => void;
   onFlyToCoords?: (coords: [number, number]) => void;
   onExportAudit?: () => void;
+  onOpenSingleIssueAudit?: (issue: any) => void;
   hideHeader?: boolean;
 }
 
@@ -78,6 +79,7 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
   onOpenPhotoLightbox,
   onFlyToCoords,
   onExportAudit,
+  onOpenSingleIssueAudit,
   hideHeader = false,
 }) => {
   const [isDecisionSupportOpen, setIsDecisionSupportOpen] = useState(true);
@@ -799,6 +801,15 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Verify & Mark Officially Resolved</span>
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => onOpenSingleIssueAudit && onOpenSingleIssueAudit(item)}
+                            className="py-1.5 px-2.5 rounded-lg bg-[#0C171C] hover:bg-[#1B2F38] border border-[#38BDF8]/40 hover:border-[#38BDF8] text-[#38BDF8] text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer active:scale-95"
+                            title="Preview or Download Official Audit Certificate for Physical Sarpanch Sign-off"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Audit Sheet</span>
+                          </button>
                         </div>
                       </div>
                     ))
@@ -943,18 +954,32 @@ export const PanchayatAdminPanel: React.FC<PanchayatAdminPanelProps> = ({
                       <span className="font-mono text-[#38BDF8] font-medium text-[10px]">
                         {issue.latitude.toFixed(4)}°N, {issue.longitude.toFixed(4)}°E
                       </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedIssueId(issue.issue_id);
-                          onFlyToIssue(issue);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-[#F8FAFC] text-[10px] font-semibold transition flex items-center gap-1 cursor-pointer active:scale-95"
-                      >
-                        <Navigation className="w-2.5 h-2.5 text-[#38BDF8]" />
-                        <span>Fly to Asset</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onOpenSingleIssueAudit) onOpenSingleIssueAudit(issue);
+                          }}
+                          className="px-2 py-1 rounded-lg bg-[#0C171C] hover:bg-[#233B46] border border-[#38BDF8]/40 text-[#38BDF8] text-[10px] font-semibold transition flex items-center gap-1 cursor-pointer active:scale-95"
+                          title="Generate Official Audit Certificate"
+                        >
+                          <FileText className="w-2.5 h-2.5 text-[#38BDF8]" />
+                          <span>Audit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedIssueId(issue.issue_id);
+                            onFlyToIssue(issue);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-[#1B2F38] hover:bg-[#233B46] border border-[#334B56] text-[#F8FAFC] text-[10px] font-semibold transition flex items-center gap-1 cursor-pointer active:scale-95"
+                        >
+                          <Navigation className="w-2.5 h-2.5 text-[#38BDF8]" />
+                          <span>Fly to Asset</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

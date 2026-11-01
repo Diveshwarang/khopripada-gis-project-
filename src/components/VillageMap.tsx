@@ -84,6 +84,7 @@ import type { Role } from '../types/auth';
 import { PanchayatAdminPanel } from './PanchayatAdminPanel';
 import { PhotoLightboxModal } from './PhotoLightboxModal';
 import { ExportAuditModal } from './ExportAuditModal';
+import { SingleIssueAuditModal } from './SingleIssueAuditModal';
 import { DEFAULT_INSPECTION_PLACEHOLDER, compressImageToBase64 } from '../utils/imageUtils';
 import {
   generatePanchayatPDF,
@@ -386,6 +387,16 @@ function buildIssuePopupHTML(issue: CivicIssue | any, userRole: string): string 
         </div>
       `
       }
+
+      <!-- Official Audit Sheet Download/Print Button -->
+      <button 
+        type="button" 
+        data-issue-id="${issueId}" 
+        class="print-single-issue-audit-btn"
+        style="width: 100%; margin-top: 8px; background: #0F172A; color: #38BDF8; font-size: 11px; font-weight: 700; padding: 6px 10px; border: 1px solid #38BDF8; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: background 0.15s ease;"
+      >
+        📄 Official Audit Sheet (Print / PDF)
+      </button>
     </div>
   `;
 }
@@ -595,6 +606,8 @@ export const VillageMap: React.FC<VillageMapProps> = ({
   const [isAddFacilityModalOpen, setIsAddFacilityModalOpen] = useState<boolean>(false);
   const [newFacilityCoords, setNewFacilityCoords] = useState<[number, number] | null>(null);
   const [isExportAuditModalOpen, setIsExportAuditModalOpen] = useState<boolean>(false);
+  const [selectedAuditIssue, setSelectedAuditIssue] = useState<any | null>(null);
+  const [isSingleAuditModalOpen, setIsSingleAuditModalOpen] = useState<boolean>(false);
   const tempFacilityMarkerRef = useRef<L.Marker | null>(null);
   const isAddFacilityModeRef = useRef<boolean>(false);
   isAddFacilityModeRef.current = isAddFacilityMode;
@@ -2951,6 +2964,25 @@ export const VillageMap: React.FC<VillageMapProps> = ({
 
     const handlePopupClick = async (e: MouseEvent) => {
       const target = e.target as HTMLElement;
+
+      const auditBtn = target.closest('.print-single-issue-audit-btn') as HTMLButtonElement;
+      if (auditBtn) {
+        const issueId = auditBtn.getAttribute('data-issue-id');
+        if (issueId) {
+          const currentList = (allIssuesRef.current && allIssuesRef.current.length > 0)
+            ? allIssuesRef.current
+            : PREDEFINED_SURVEY_ISSUES;
+          const found = currentList.find(
+            (i) => String((i as any).id) === issueId || i.issue_id === issueId
+          ) || (issues && issues.find((i) => String(i.id) === issueId || i.issue_id === issueId));
+          if (found) {
+            setSelectedAuditIssue(found);
+            setIsSingleAuditModalOpen(true);
+          }
+        }
+        return;
+      }
+
       const verifyBtn = target.closest('.admin-verify-resolution-btn') as HTMLButtonElement;
       if (verifyBtn) {
         const issueId = verifyBtn.getAttribute('data-issue-id');
@@ -3591,6 +3623,10 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                         hideHeader={true}
                         onClose={() => {}}
                         onExportAudit={() => setIsExportAuditModalOpen(true)}
+                        onOpenSingleIssueAudit={(iss) => {
+                          setSelectedAuditIssue(iss);
+                          setIsSingleAuditModalOpen(true);
+                        }}
                         onApproveSubmission={(item) => {
                           if (item.type === 'facility') {
                             const updated = allFacilitiesRef.current.map((f) =>
@@ -4048,18 +4084,31 @@ export const VillageMap: React.FC<VillageMapProps> = ({
                               </div>
                             </div>
 
-                            {/* Right: [ Focus on Map ] button */}
-                            <button
-                              onClick={() => {
-                                setMobileSheet(null);
-                                flyToCoordsWithPing([coordsLat, coordsLng]);
-                              }}
-                              className="shrink-0 px-2.5 py-2 min-h-[40px] rounded-lg bg-[#1B2F38] hover:bg-[#233B46] border border-[#38BDF8]/40 text-[#38BDF8] hover:text-[#F8FAFC] text-[10px] font-semibold flex items-center gap-1 active:scale-95 transition cursor-pointer"
-                              title="Focus on Map"
-                            >
-                              <Locate className="w-3.5 h-3.5" />
-                              <span>Focus on Map</span>
-                            </button>
+                            {/* Right: Actions */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                onClick={() => {
+                                  setSelectedAuditIssue(issue);
+                                  setIsSingleAuditModalOpen(true);
+                                }}
+                                className="px-2 py-2 min-h-[40px] rounded-lg bg-[#0C171C] hover:bg-[#233B46] border border-[#38BDF8]/40 text-[#38BDF8] hover:text-[#F8FAFC] text-[10px] font-semibold flex items-center justify-center gap-1 active:scale-95 transition cursor-pointer"
+                                title="Download or Print Official Audit Sheet"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Audit</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setMobileSheet(null);
+                                  flyToCoordsWithPing([coordsLat, coordsLng]);
+                                }}
+                                className="px-2.5 py-2 min-h-[40px] rounded-lg bg-[#1B2F38] hover:bg-[#233B46] border border-[#38BDF8]/40 text-[#38BDF8] hover:text-[#F8FAFC] text-[10px] font-semibold flex items-center gap-1 active:scale-95 transition cursor-pointer"
+                                title="Focus on Map"
+                              >
+                                <Locate className="w-3.5 h-3.5" />
+                                <span>Focus</span>
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
@@ -5236,6 +5285,10 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         userRole={userRole}
         onGrievanceStatusUpdated={refreshGrievanceMarkers}
         issues={issues}
+        onOpenSingleIssueAudit={(iss) => {
+          setSelectedAuditIssue(iss);
+          setIsSingleAuditModalOpen(true);
+        }}
       />
 
       {/* 7.1 HIGH-RESOLUTION FIELD SURVEY PHOTO LIGHTBOX MODAL */}
@@ -5308,6 +5361,14 @@ export const VillageMap: React.FC<VillageMapProps> = ({
         currentUser={session || undefined}
         onDownloadPdf={handleDownloadPanchayatPdf}
         onExportCsv={handleExportMasterCsv}
+      />
+
+      {/* 9.1 OFFICIAL SINGLE ISSUE AUDIT RECORD MODAL (FOR PHYSICAL SARPANCH SIGN-OFF) */}
+      <SingleIssueAuditModal
+        isOpen={isSingleAuditModalOpen}
+        onClose={() => setIsSingleAuditModalOpen(false)}
+        issue={selectedAuditIssue}
+        currentUser={{ name: 'Sarpanch Rajesh Patil', role: userRole }}
       />
     </div>
   );

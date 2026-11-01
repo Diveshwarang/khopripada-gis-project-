@@ -803,3 +803,434 @@ export function generateOfficerWorklistPDF(
   const dateStr = new Date().toISOString().split('T')[0];
   doc.save(`Khopripada_Field_Worklist_${dateStr}.pdf`);
 }
+
+/**
+ * Convert any image URL or Base64 string into a sanitized Data URL suitable for jsPDF addImage.
+ */
+async function resolveImageDataUrl(src?: string | null): Promise<string | null> {
+  if (!src) return null;
+  if (src.startsWith('data:image/')) return src;
+  try {
+    return await new Promise<string | null>((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+            return;
+          }
+        } catch {
+          // Cross-origin canvas security restriction fallback
+        }
+        resolve(null);
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  } catch {
+    return null;
+  }
+}
+
+function renderPhotoPlaceholder(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  title: string,
+  instruction: string
+): void {
+  doc.setFillColor(248, 250, 252);
+  doc.rect(x, y, w, h, 'F');
+
+  doc.setLineDashPattern([2, 1.5], 0);
+  doc.setDrawColor(148, 163, 184);
+  doc.rect(x + 1.5, y + 1.5, w - 3, h - 3, 'D');
+  doc.setLineDashPattern([], 0);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(71, 85, 105);
+  doc.text(title, x + w / 2, y + h / 2 - 2, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(148, 163, 184);
+  doc.text(instruction, x + w / 2, y + h / 2 + 3, { align: 'center' });
+  doc.text('[ 4" x 6" Physical Evidence Attachment Frame ]', x + w / 2, y + h / 2 + 7, { align: 'center' });
+}
+
+/**
+ * Generate an official single-issue audit record PDF for physical archiving and Sarpanch signature.
+ * Strictly formatted under statutory Maharashtra Village Panchayats Public Works standards.
+ */
+export async function generateSingleIssueAuditPDF(
+  issue: any,
+  currentUser?: UserSessionInfo
+): Promise<void> {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth(); // 210mm
+  const pageHeight = doc.internal.pageSize.getHeight(); // 297mm
+  const margin = 12;
+  const contentWidth = pageWidth - margin * 2; // 186mm
+  let currentY = margin;
+
+  // Resolve photos asynchronously
+  const reportedPhoto = await resolveImageDataUrl(issue.photoBase64 || issue.photo_url);
+  const resolutionPhoto = await resolveImageDataUrl(issue.resolution_photo_url || issue.proof_image_url);
+
+  const formattedDate = new Date().toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const formattedTime = new Date().toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  const issueId = String(issue.issue_id || issue.id || 'KHOP-ISS-001');
+  const rawStatus = (issue.status || 'reported').toLowerCase();
+  const isResolved = rawStatus === 'resolved' || rawStatus === 'verified_closed';
+  const statusLabel = isResolved
+    ? 'VERIFIED & OFFICIALLY RESOLVED'
+    : rawStatus === 'pending_resolution_approval'
+    ? 'AUDIT PENDING SARPANCH SIGN-OFF'
+    : rawStatus === 'under_inspection'
+    ? 'UNDER FIELD INSPECTION'
+    : 'REGISTERED & ACTIVE';
+
+  // 1. Double Outer Certificate Border (Government Archive Standard)
+  doc.setDrawColor(30, 41, 59); // slate-800
+  doc.setLineWidth(0.8);
+  doc.rect(margin - 2, margin - 2, contentWidth + 4, pageHeight - (margin - 2) * 2);
+  doc.setDrawColor(203, 213, 225); // slate-300
+  doc.setLineWidth(0.3);
+  doc.rect(margin, margin, contentWidth, pageHeight - margin * 2);
+
+  // 2. Executive Government Header Banner
+  doc.setFillColor(15, 23, 42); // slate-900
+  doc.rect(margin, currentY, contentWidth, 23, 'F');
+
+  // Emerald Accent line
+  doc.setFillColor(16, 185, 129); // emerald-500
+  doc.rect(margin, currentY + 23, contentWidth, 1.5, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('GOVERNMENT OF MAHARASHTRA • PALGHAR DISTRICT ADMINISTRATION', pageWidth / 2, currentY + 6, { align: 'center' });
+
+  doc.setFontSize(11.5);
+  doc.setTextColor(56, 189, 248); // sky-400
+  doc.text('BAPANE GRAM PANCHAYAT — VILLAGE KHOPRIPADA', pageWidth / 2, currentY + 12, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(226, 232, 240); // slate-200
+  doc.text('OFFICIAL CIVIC GRIEVANCE & INFRASTRUCTURE RESOLUTION AUDIT RECORD', pageWidth / 2, currentY + 17, { align: 'center' });
+  doc.setFontSize(6.5);
+  doc.setTextColor(148, 163, 184); // slate-400
+  doc.text('[ Statutory Form 12-B • Section 4B Maharashtra Village Panchayats Act • Gram Sabha Works Register ]', pageWidth / 2, currentY + 21, { align: 'center' });
+
+  currentY += 27;
+
+  // 3. Document Identification & Audit Barcode Metadata Box
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(margin, currentY, contentWidth, 13, 1.5, 1.5, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`AUDIT FILE NO: GPB/KHOP/AUDIT/2026/${issueId.toUpperCase()}`, margin + 3.5, currentY + 5.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(71, 85, 105);
+  const createdDateStr = issue.created_at ? new Date(issue.created_at).toLocaleDateString('en-IN') : formattedDate;
+  doc.text(`Recorded Date: ${createdDateStr} | Audit Timestamp: ${formattedDate} ${formattedTime} | Auditor: ${currentUser?.name || 'Sarpanch Rajesh Patil'}`, margin + 3.5, currentY + 10);
+
+  // Status Badge on Right
+  const badgeColor = isResolved ? [16, 185, 129] : [245, 158, 11];
+  doc.setFillColor(badgeColor[0], badgeColor[1], badgeColor[2]);
+  doc.roundedRect(pageWidth - margin - 65, currentY + 2.5, 62, 8, 1, 1, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.text(statusLabel, pageWidth - margin - 34, currentY + 7.5, { align: 'center' });
+
+  currentY += 15.5;
+
+  // 4. Issue Profile & Geodetic Telemetry Table
+  autoTable(doc, {
+    startY: currentY,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 7.5,
+      cellPadding: 1.8,
+    },
+    bodyStyles: {
+      fontSize: 7,
+      textColor: [15, 23, 42],
+      cellPadding: 1.8,
+      lineColor: [226, 232, 240],
+    },
+    head: [['PARAMETER', 'SURVEY SPECIFICATION', 'PARAMETER', 'SURVEY SPECIFICATION']],
+    body: [
+      [
+        'Incident / Defect Title',
+        issue.title || 'Civic Infrastructure Fault',
+        'Category / Sector',
+        (issue.category || 'General').toUpperCase(),
+      ],
+      [
+        'GPS Latitude & Longitude',
+        `${Number(issue.latitude || 19.3542).toFixed(5)}° N, ${Number(issue.longitude || 72.8845).toFixed(5)}° E`,
+        'Priority Severity Level',
+        (issue.severity || 'Medium').toUpperCase(),
+      ],
+      [
+        'Reported By / Source',
+        issue.reported_by || issue.reporter_name || 'Resident Field Survey',
+        'Assigned Field Officer',
+        issue.assigned_officer || issue.assigned_to || 'Panchayat Engineering Division',
+      ],
+      [
+        'Verification Lifecycle',
+        `Stage: ${statusLabel}`,
+        'Statutory Filing Class',
+        'Gram Panchayat Public Works Permanent Record',
+      ],
+    ],
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 3;
+
+  // 5. Section: Citizen Grievance & Defect Statement
+  doc.setFillColor(241, 245, 249);
+  doc.setDrawColor(203, 213, 225);
+  doc.rect(margin, currentY, contentWidth, 4.5, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text('1. CITIZEN GRIEVANCE & GROUND DEFECT STATEMENT', margin + 3, currentY + 3.4);
+  currentY += 4.5;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(226, 232, 240);
+  const descText = issue.description || 'No additional narrative description submitted during baseline intake.';
+  const splitDesc = doc.splitTextToSize(descText, contentWidth - 6);
+  const descHeight = Math.max(10, splitDesc.length * 3.8 + 3);
+  doc.rect(margin, currentY, contentWidth, descHeight, 'FD');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(51, 65, 85);
+  doc.text(splitDesc, margin + 3, currentY + 4);
+  currentY += descHeight + 3;
+
+  // 6. Section: Technical Rectification & On-Site Repair Log
+  doc.setFillColor(241, 245, 249);
+  doc.setDrawColor(203, 213, 225);
+  doc.rect(margin, currentY, contentWidth, 4.5, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text('2. TECHNICAL RECTIFICATION & FIELD COMPLETION LOG', margin + 3, currentY + 3.4);
+  currentY += 4.5;
+
+  const notesText = issue.resolution_notes || issue.officer_notes || 'Field repair inspected and completed as per standard public works specifications. Verified operational and restored for village residents.';
+  const splitNotes = doc.splitTextToSize(notesText, contentWidth - 6);
+  const notesHeight = Math.max(10, splitNotes.length * 3.8 + 3);
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(226, 232, 240);
+  doc.rect(margin, currentY, contentWidth, notesHeight, 'FD');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(51, 65, 85);
+  doc.text(splitNotes, margin + 3, currentY + 4);
+  currentY += notesHeight + 3;
+
+  // 7. Section: Dual Photographic Evidence Record
+  doc.setFillColor(241, 245, 249);
+  doc.setDrawColor(203, 213, 225);
+  doc.rect(margin, currentY, contentWidth, 4.5, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text('3. PHOTOGRAPHIC AUDIT EVIDENCE (REQUIRED BEFORE PHYSICAL SARPANCH SIGNATURE)', margin + 3, currentY + 3.4);
+  currentY += 5.5;
+
+  const photoFrameW = (contentWidth - 6) / 2; // ~90mm
+  const photoFrameH = 38; // 38mm
+
+  // Box 1: Initial Reported Damage Photo
+  const photo1X = margin;
+  doc.setDrawColor(148, 163, 184);
+  doc.setLineWidth(0.4);
+  if (reportedPhoto) {
+    try {
+      doc.addImage(reportedPhoto, 'JPEG', photo1X, currentY, photoFrameW, photoFrameH);
+      doc.rect(photo1X, currentY, photoFrameW, photoFrameH);
+    } catch {
+      renderPhotoPlaceholder(doc, photo1X, currentY, photoFrameW, photoFrameH, 'PHOTO 1: INITIAL REPORTED DEFECT', 'Attach physical photo of initial damage');
+    }
+  } else {
+    renderPhotoPlaceholder(doc, photo1X, currentY, photoFrameW, photoFrameH, 'PHOTO 1: INITIAL REPORTED DEFECT', 'Attach physical photo of initial damage');
+  }
+
+  // Box 2: Post-Repair Resolution Photo
+  const photo2X = margin + photoFrameW + 6;
+  if (resolutionPhoto) {
+    try {
+      doc.addImage(resolutionPhoto, 'JPEG', photo2X, currentY, photoFrameW, photoFrameH);
+      doc.rect(photo2X, currentY, photoFrameW, photoFrameH);
+    } catch {
+      renderPhotoPlaceholder(doc, photo2X, currentY, photoFrameW, photoFrameH, 'PHOTO 2: POST-REPAIR RESOLUTION PROOF', 'Attach verified completion photo proof');
+    }
+  } else {
+    renderPhotoPlaceholder(doc, photo2X, currentY, photoFrameW, photoFrameH, 'PHOTO 2: POST-REPAIR RESOLUTION PROOF', 'Attach verified completion photo proof');
+  }
+
+  currentY += photoFrameH + 3.5;
+
+  // 8. Section: Tripartite Physical Certification & Sarpanch Seal
+  doc.setFillColor(241, 245, 249);
+  doc.setDrawColor(203, 213, 225);
+  doc.rect(margin, currentY, contentWidth, 4.5, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text('4. STATUTORY PHYSICAL CERTIFICATION & FORMAL SARPANCH SIGN-OFF', margin + 3, currentY + 3.4);
+  currentY += 6.5;
+
+  const colW = (contentWidth - 8) / 3; // ~59mm each
+
+  // Col 1: Field Inspecting Officer
+  const col1X = margin;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(15, 23, 42);
+  doc.text('FIELD INSPECTING OFFICER', col1X, currentY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Technical Assessment & Work Completion', col1X, currentY + 3);
+
+  doc.setLineDashPattern([1, 1], 0);
+  doc.line(col1X, currentY + 14, col1X + colW - 4, currentY + 14);
+  doc.setLineDashPattern([], 0);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`Officer: ${issue.assigned_officer || 'Panchayat Inspector'}`, col1X, currentY + 17.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Signature & Date of Inspection', col1X, currentY + 21);
+
+  // Col 2: Gram Sevak / Development Officer
+  const col2X = margin + colW + 4;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(15, 23, 42);
+  doc.text('GRAM SEVAK / SECRETARY', col2X, currentY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Panchayat Public Works Registry Validation', col2X, currentY + 3);
+
+  doc.setLineDashPattern([1, 1], 0);
+  doc.line(col2X, currentY + 14, col2X + colW - 4, currentY + 14);
+  doc.setLineDashPattern([], 0);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Gram Sevak, Bapane GP', col2X, currentY + 17.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Register No: GPB/REG/2026/____', col2X, currentY + 21);
+
+  // Col 3: Sarpanch Formal Seal & Signature
+  const col3X = margin + (colW + 4) * 2;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(180, 83, 9); // amber-700
+  doc.text('SARPANCH (HEAD OF PANCHAYAT)', col3X, currentY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Statutory Closure & Physical Seal', col3X, currentY + 3);
+
+  // Official Seal Box
+  doc.setDrawColor(203, 213, 225);
+  doc.setFillColor(254, 252, 232); // amber-50
+  doc.roundedRect(col3X + colW - 24, currentY + 5, 22, 22, 1, 1, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(5);
+  doc.setTextColor(180, 83, 9);
+  doc.text('OFFICIAL GP', col3X + colW - 13, currentY + 12.5, { align: 'center' });
+  doc.text('SEAL & STAMP', col3X + colW - 13, currentY + 15.5, { align: 'center' });
+  doc.text('HERE', col3X + colW - 13, currentY + 18.5, { align: 'center' });
+
+  doc.setLineDashPattern([1, 1], 0);
+  doc.line(col3X, currentY + 17, col3X + colW - 27, currentY + 17);
+  doc.setLineDashPattern([], 0);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Sarpanch Signature', col3X, currentY + 20.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Date of Sign-off: ________', col3X, currentY + 24);
+
+  // 9. Mandatory Archival Notice in Footer
+  currentY += 27.5;
+  doc.setDrawColor(226, 232, 240);
+  doc.line(margin, currentY, pageWidth - margin, currentY);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6);
+  doc.setTextColor(15, 23, 42);
+  doc.text(
+    'MANDATORY PHYSICAL RECORD KEEPING NOTICE: Under Section 4B of the Maharashtra Village Panchayats Act, this signed & sealed document',
+    margin,
+    currentY + 3.5
+  );
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text(
+    'must be permanently archived in the Gram Panchayat Office Public Works File along with photographic prints for statutory District and AG Audit.',
+    margin,
+    currentY + 6.5
+  );
+
+  const cleanId = issueId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const dateStr = new Date().toISOString().split('T')[0];
+  doc.save(`Audit_Record_GP_Khopripada_${cleanId}_${dateStr}.pdf`);
+}

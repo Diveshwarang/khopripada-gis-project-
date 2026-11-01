@@ -13,6 +13,7 @@ import {
   Search,
   User,
   Clock,
+  FileText,
 } from 'lucide-react';
 import {
   db,
@@ -57,6 +58,7 @@ interface GrievanceListDrawerProps {
   userRole?: UserRole;
   onGrievanceStatusUpdated?: () => void;
   issues?: CivicIssue[];
+  onOpenSingleIssueAudit?: (issue: any) => void;
 }
 
 export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
@@ -66,6 +68,7 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
   userRole = 'user',
   onGrievanceStatusUpdated,
   issues,
+  onOpenSingleIssueAudit,
 }) => {
   const [grievances, setGrievances] = useState<DrawerGrievanceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -722,21 +725,33 @@ export const GrievanceListDrawer: React.FC<GrievanceListDrawerProps> = ({
                     </div>
                   )}
 
-                  {/* Coordinates Footer */}
-                  <div className="flex items-center justify-between text-[10px] font-mono text-[#5A7C93] pt-1">
-                    <span className="flex items-center gap-1 text-[#00E5FF]">
-                      <MapPin className="w-3 h-3" />
-                      {g.latitude.toFixed(4)}°N, {g.longitude.toFixed(4)}°E
-                    </span>
-                    {userRole === 'admin' && (
-                      <button
-                        onClick={() => handleDelete(g.id)}
-                        className="text-red-400 hover:text-red-300 transition cursor-pointer p-0.5"
-                        title="Delete record from local database"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                  {/* Action Bar: Official Audit Sheet & Coordinates Footer */}
+                  <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-[#1D3B52]/40 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => onOpenSingleIssueAudit && onOpenSingleIssueAudit(g)}
+                      className="px-2.5 py-1 rounded-lg bg-[#081018] border border-[#38BDF8]/40 hover:border-[#38BDF8] text-[#38BDF8] hover:text-white text-[10px] font-semibold flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm"
+                      title="Download or Print Official Audit Certificate for Sarpanch Sign-off"
+                    >
+                      <FileText className="w-3 h-3 text-[#38BDF8]" />
+                      <span>Official Audit Sheet (Print/PDF)</span>
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1 text-[10px] font-mono text-[#00E5FF]">
+                        <MapPin className="w-3 h-3" />
+                        {g.latitude.toFixed(4)}°N, {g.longitude.toFixed(4)}°E
+                      </span>
+                      {userRole === 'admin' && (
+                        <button
+                          onClick={() => handleDelete(g.id)}
+                          className="text-red-400 hover:text-red-300 transition cursor-pointer p-0.5"
+                          title="Delete record from local database"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
